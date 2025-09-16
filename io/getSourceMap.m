@@ -12,7 +12,7 @@ IK= result.ImagingKernel;
 F=datafile.F;
 F=F(chans,:);
 
-sourceTS = IK * F;
+S = IK * F;
 time = datafile.Time;
 
 for k = 2:2:10
@@ -29,7 +29,7 @@ nFreqBlocks = 8;                % Initial frequency subdivision
 threshold = 0.01;               % Threshold for complexity
 vertexID = 1;                   % Vertex to process for demo
 
-signal = sourceTS(vertexID, :);
+signal = S(vertexID, :);
 fb = cwtfilterbank('SignalLength', length(signal), ...
                    'VoicesPerOctave', 12, ...
                    'SamplingFrequency', fs, ...

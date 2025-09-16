@@ -1,8 +1,6 @@
-addpath(genpath(pwd))
-anat=load('Subject_068_anat\tess_cortex_pial_low.mat');
+anat=load('tess_cortex_pial_low.mat');
 V=anat.Vertices;
 W=anat.VertConn;
-Faces=anat.Faces;
 Faces=anat.Faces;
 result=load('results_dSPM-unscaled_MEG_KERNEL_210314_2210.mat');
 datafile=load('data_block002.mat');
@@ -18,7 +16,37 @@ F=F(chans,:);
 
 S = IK * F;
 time = datafile.Time;
-signalLength=length(time);
+
+%% Compute Wavelet Transform
+fs = 2400;                      % Sampling frequency (Hz)
+frequencies = linspace(1,100,30); % Frequency range
+nTimeBlocks = 8;                % Initial time subdivision
+nFreqBlocks = 8;                % Initial frequency subdivision
+threshold = 0.01;               % Threshold for complexity
+vertexID = 1;                   % Vertex to process for demo
+
+signal = S(vertexID, :);
+fb = cwtfilterbank('SignalLength', length(signal), ...
+                   'VoicesPerOctave', 12, ...
+                   'SamplingFrequency', fs, ...
+                   'FrequencyLimits', [1 100]);
+
+[cfs, f] = cwt(signal, FilterBank=fb);      % Complex wavelet transform
+powerMap = abs(cfs).^2;         % Power at each freq × time
+time = (0:length(signal)-1)/fs; % Time vector
+
+
+data = {chirp(t,300,t(end),800).*exp(2j*pi*10*cos(2*pi*2*t)); ...
+        2*chirp(t,200,t(end),1000,'quadratic',[],'concave'); ...
+        vco(sin(2*pi*t),[0.1 0.4]*fs,fs)};
+
+for k = 1:length(f)
+Members{k}=cfs(k,:);
+MemberNames(k,:)=string(f(k,:));
+end
+sds = signalDatastore(Members,'SampleRate',fs);
+sds.MemberNames=MemberNames;
+
 %%
 % Graph Laplacian
 d = sum(W, 2);         % Degree for each vertex
