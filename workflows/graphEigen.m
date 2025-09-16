@@ -1,0 +1,174 @@
+addpath(genpath(pwd))
+anat=load('Subject_068_anat\tess_cortex_pial_low.mat');
+V=anat.Vertices;
+W=anat.VertConn;
+Faces=anat.Faces;
+Faces=anat.Faces;
+result=load('results_dSPM-unscaled_MEG_KERNEL_210314_2210.mat');
+datafile=load('data_block002.mat');
+chanfile=load("channel_ctf_acc1.mat");
+chanflag=load("chan_flags_v1.mat");
+megInd = find(strcmp({chanfile.Channel.Type}, 'MEG'));
+flagInd = find(datafile.ChannelFlag==1);
+chans=intersect(megInd, flagInd);
+fs=2400;
+IK= result.ImagingKernel;
+F=datafile.F;
+F=F(chans,:);
+
+S = IK * F;
+time = datafile.Time;
+signalLength=length(time);
+%%
+% Graph Laplacian
+d = sum(W, 2);         % Degree for each vertex
+D = spdiags(d, 0, size(W,1), size(W,2));  % Sparse diagonal matrix
+L = D - W;             % Unnormalized Laplacian
+% Unnormalized
+D_inv_sqrt = spdiags(1./sqrt(d), 0, size(W,1), size(W,2));
+L_norm = speye(size(W,1)) - D_inv_sqrt * W * D_inv_sqrt;
+
+%% Eigenvectors
+k = 100;  % Number of eigenvectors
+opts.isreal = 1;
+opts.issym = 1;
+[U, lambda] = eigs(L, k, 'SM', opts);  % 'SM' = smallest magnitude eigenvalues
+%%
+for i = 1:6
+    figure;
+    patch('Faces', F, 'Vertices', V, ...
+          'FaceVertexCData', U(:,i), 'FaceColor', 'interp', ...
+          'EdgeColor', 'none');
+    axis equal off;
+    title(['Eigenvector ', num2str(i), ', Eigenvalue = ', num2str(lambda(i,i))]);
+    colorbar;
+end
+
+%%
+
+% Example: low-pass filter g(lambda) = exp(-tau*lambda)
+tau = 0.1;
+g = exp(-tau * diag(lambda));
+
+% Apply to a signal f (e.g., delta at a vertex)
+v_idx = 1000;
+f = zeros(size(V,1), 1); f(v_idx) = 1;
+
+f_hat = U' * f;         % Graph Fourier Transform
+f_filtered = U * (g .* f_hat);  % Inverse Graph Fourier Transform
+
+% Visualize result
+figure;
+patch('Faces', F, 'Vertices', V, ...
+      'FaceVertexCData', f_filtered, 'FaceColor', 'interp', ...
+      'EdgeColor', 'none');
+axis equal off;
+title(['Wavelet response at vertex ', num2str(v_idx)]);
+colorbar;
+%% 
+fs = 2400;  % Sampling frequency in Hz (adjust if different)
+signalLength = size(S, 2);
+numVertices = size(S, 1);
+
+fb = cwtfilterbank('SignalLength', signalLength, ...
+                   'SamplingFrequency', fs, ...
+                   'VoicesPerOctave', 12, ...
+                   'FrequencyLimits', [1 fs/2]);  % adjust for your band of interest
+
+[~, freq]=cwt(S(1,:), FilterBank=fb);
+numFreqs = numel(freq);
+
+% You may store summary results, like max power per vertex/frequency
+maxPower = zeros(numVertices, numFreqs, 'single');
+
+
+% Loop through in blocks of 50 vertices
+for startIdx = 1:blockSize:numVertices
+    endIdx = min(startIdx + blockSize - 1, numVertices);
+    blockRange = startIdx:endIdx;
+
+    fprintf('Processing vertices %d to %d...\n', startIdx, endIdx);
+    
+    for i = 1:numel(blockRange)
+        v = blockRange(i);
+
+[wt_v, ~] = cwt(S(v,:), FilterBank=fb);  % wt_v: [numFreqs x signalLength]
+power_v = abs(wt_v).^2;
+
+        % OPTIONAL: Store to disk or analyze on-the-fly here if needed
+    end
+end
+%% 
+
+
+% Optional: Bandpass filter (e.g., alpha band)
+f_band = [8 12];  % Hz
+S_band = bandpass(S', f_band, fs)';  % Output is still [15000 × 9600]
+nVertices=size(S,1);
+% Compute analytic signal
+analytic = hilbert(S_band')';  % Output is [15000 × 9600]
+
+% Extract amplitude and phase
+amplitude = abs(analytic);      % [V × T]
+phase = angle(analytic);        % [V × T]
+phase = unwrap(phase, [], 2);  % unwrap along time
+nT = size(phase, 2);              % number of time samples
+grad_phi = zeros(nVertices, 3, nT);   % allocate 3D array: vertex × (x,y,z) × time
+%% 
+c = parcluster('local');
+c.NumWorkers = 16;
+saveProfile(c);  % Save the updated local cluster profile
+%% 
+
+parpool(15)
+parfor t = 1:nT
+    phi_t = phase(:,t);  % get phase at time t
+    grad_phi(:,:,t) = compute_phase_gradient_on_mesh(V, Faces, phi_t);
+end
+%% 
+t_idx = 1000;  % arbitrary time point
+
+% Get gradient vectors
+U = grad_phi(:,1,t_idx);
+V_ = grad_phi(:,2,t_idx);
+W = grad_phi(:,3,t_idx);
+
+% Plot on cortical mesh
+figure;
+trisurf(Faces, V(:,1), V(:,2), V(:,3), phase(:,t_idx), 'EdgeColor', 'none');
+hold on;
+quiver3(V(:,1), V(:,2), V(:,3), U, V_, W, 0.5, 'k');
+title(sprintf('Phase and Propagation Vectors at t = %.3f s', t_idx/fs));
+axis equal off; colorbar;
+
+
+% Normalize by counts to average
+%% 
+% Compute temporal derivative
+dphi_dt = gradient(unwrap(phase, [], 2), 1/fs);  % [15000 × T]
+numSamples=size(dphi_dt,2);
+% Now compute velocity vector field: v_phi = ∇φ / (dφ/dt)
+v_phi = zeros(size(grad_phi));  % [15000 × 3 × T]
+
+for t = 1:numSamples
+    v_phi(:,:,t) = grad_phi(:,:,t) ./ dphi_dt(:,t);  % Elementwise
+end
+
+%% 
+target_phase = 0;
+tolerance = 0.1;  % radians
+
+wavefronts = cell(1, numSamples);
+for t = 1:numSamples
+    phase_t = mod(phase(:,t), 2*pi);
+    idx = abs(circ_dist(phase_t, target_phase)) < tolerance;
+    wavefronts{t} = idx;  % logical mask or vertex list
+end
+
+%% 
+% For wavefront at time t:
+wavefront_idx = abs(angle(exp(1i*(phase(:,t) - target_phase)))) < tolerance;
+
+% Connected components
+CC = bwconncomp(wavefront_idx, A);
+
