@@ -1,5 +1,5 @@
 
-[Z, x2, y2, t] = generateRippleSurface(100, 100, 300, 5, 2, 0.1, [0, 0]);
+[Z, x, y, t] = generateRippleSurface(100, 100, 300, 5, 2, 0.1, [0, 0]);
 
 % Select y index and convert to physical y-value
 yIdx = 50;
@@ -10,8 +10,8 @@ x = linspace(-10, 10, 100);  % Columns
 plotSensorLine(Z, yIdx, x);
 
 %% 
-
-exportRippleVideo(Z, x2, y2, t, 'ripple_animation.mp4', 24);
+videoOutFile = 'figures/ripple_animation2.mp4'
+exportRippleVideo(Z, x, y, t, videoOutFile, 24);
 
 %% 
 close all
@@ -121,3 +121,16 @@ zlim([zmin, zmax]);         % or use a manual range like [-1, 1]
 
        close(v);
     close(fig);
+
+    %%
+   %% -- New: generate and plot ripple on a sphere
+    % generate spherical ripple (example parameters)
+    [Zs, lonS, latS, tS, XYZs] = generateSphereRipple(120, 80, 200, 5, 2, 0.15, [0, 0], 'Radius', 10);
+    
+    % plot a single frame (time index 1)
+    plotSphereRippleSurface(Zs, lonS, latS, tS, 'TimeIndex', 1);
+    
+    % optional: export a short movie using exportRippleVideo or a custom writer
+    % for example:
+    % exportRippleVideo(Zs, lonS, latS, tS, 'figures/ripple_sphere.mp4', 24);
+    % ...existing code...

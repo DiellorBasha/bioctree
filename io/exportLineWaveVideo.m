@@ -1,0 +1,134 @@
+function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
+% exportLineWaveVideo  Animate wave dynamics on a 1-D line with side-by-side views.
+%
+% Layout: [ 1 tile (line plot, left) | 3 tiles (space–time image, right) ]
+% - Line plot (left): y-axis = line coordinate (x), x-axis = amplitude
+% - Image (right):    y-axis = line coordinate (x), x-axis = time, plus moving cursor
+%
+% Inputs
+%   X         [Nx x T]  amplitude over space x and time t
+%   x         [Nx x 1]  spatial positions
+%   t         [1  x T]  time vector
+%   filename  e.g., 'line_wave.mp4'
+%   framerate (default 24)
+%
+% Name-Value options (all optional)
+%   'AmplitudeLimits' : [amin amax] for the line plot x-axis; default = symmetric from data
+%   'ColorLimits'     : [cmin cmax] for imagesc; default = auto from data
+%   'Colormap'        : colormap for space-time image (default 'parula')
+%   'Title'           : main title prefix (default 'Wave on a Line')
+%   'Quality'         : video quality (1–100, default 95)
+%   'Save'            : optional saving 
+% Example
+%   [X,x,t] = generateRippleLine(256, 300, 3, 16, 0.02, 0);
+%   exportLineWaveVideo(X, x, t, 'line_wave.mp4', 24, ...
+%       'Title','1D traveling wave','Colormap','turbo');
+
+    if nargin < 5 || isempty(framerate), framerate = 24; end
+
+    p = inputParser;
+    addParameter(p,'AmplitudeLimits',[]);
+    addParameter(p,'ColorLimits',[]);
+    addParameter(p,'Colormap','parula');
+    addParameter(p,'Title','Wave on a Line');
+    addParameter(p,'Quality',95);
+    addParameter(p, 'Save', 0);
+    % Back-compat: if someone passes 'YLimits', map it to AmplitudeLimits.
+    addParameter(p,'YLimits',[]);
+    parse(p,varargin{:});
+    AmpL = p.Results.AmplitudeLimits;
+    if isempty(AmpL) && ~isempty(p.Results.YLimits), AmpL = p.Results.YLimits; end
+    CL   = p.Results.ColorLimits;
+    cmap = p.Results.Colormap;
+    ttl  = p.Results.Title;
+    q    = p.Results.Quality;
+    isSave = p.Results.Save;
+
+    % ---- validate sizes ----
+    [Nx, T] = size(X);
+    assert(isvector(x) && numel(x)==Nx, 'x must be Nx-by-1 matching rows of X.');
+    assert(isvector(t) && numel(t)==T,  't must have length T matching columns of X.');
+    x = x(:);            % ensure column
+    t = t(:).';          % ensure row
+
+    % ---- amplitude axis limits (symmetric by default) ----
+    if isempty(AmpL)
+        A = max(abs(X(:))); if A==0, A = 1; end
+        AmpL = 1.05*[-A, A];
+    end
+
+    % ---- video writer ----
+   if isSave
+    try
+        v = VideoWriter(filename, 'MPEG-4');
+    catch
+        warning('MPEG-4 profile unavailable; falling back to Motion JPEG AVI.');
+        [pth,nam,ext] = fileparts(filename);
+        if ~strcmpi(ext,'.avi'), filename = fullfile(pth,[nam '.avi']); end
+        v = VideoWriter(filename, 'Motion JPEG AVI');
+    end
+    v.FrameRate = framerate;
+    if isprop(v,'Quality'), v.Quality = q; end
+    open(v);
+    end
+    % ---- figure & tiled layout: 1x4, left=1 tile, right=3 tiles ----
+    if isSave
+    fig = figure('Visible','off','Color','w','Position',[100 100 1200 500]);
+    else
+       fig = figure('Visible','on','Color','w','Position',[100 100 1200 500]);
+    end
+    tl  = tiledlayout(fig,1,7,'TileSpacing','compact','Padding','compact');
+
+    % Left (tile 1 of 4): vertical line plot (y = x, x = amplitude)
+    ax1 = nexttile(tl,1,[1 1]);
+    hLine = plot(ax1, X(:,1), x, 'LineWidth', 2); % amplitude on x-axis, line coord on y-axis
+    hold(ax1,'on');
+    hZero = xline(ax1,0,'k:','LineWidth',0.75); %#ok<NASGU>  % zero-amplitude vertical line
+    grid(ax1,'on'); box(ax1,'on');
+    xlabel(ax1,'Amplitude');
+   % ylabel(ax1,'Line coordinate (x)');
+    ax1.YAxis.Visible="off";
+    xlim(ax1, AmpL);
+    ylim(ax1, [x(1), x(end)]);
+   % title(ax1, sprintf('%s — spatial profile', ttl));
+
+    % Right (tiles 2-4): space–time image (x vs t) with time cursor
+    ax2 = nexttile(tl,2,[1 6]);
+    hImg = imagesc(ax2, t, x, X); axis(ax2,'xy'); % y-axis= x (top->bottom increasing)
+    colormap(ax2, cmap); colorbar(ax2);
+    if ~isempty(CL), caxis(ax2, CL); end
+    xlabel(ax2,'Time');
+   % ylabel(ax2,'Line coordinate (x)');
+    ax2.YAxis.Visible="off";
+    xlim(ax2,[t(1), t(end)]);
+    ylim(ax2,[x(1), x(end)]);
+    hold(ax2,'on');
+    hCursor = plot(ax2, [t(1) t(1)], [x(1) x(end)], 'k--', 'LineWidth', 1.25);
+    title(ax2, 'Space–time amplitude (cursor = current time)');
+
+    % ---- animate ----
+    for ti = 1:T
+        % update line: amplitude (x-axis) vs line coord (y-axis)
+        hLine.XData = X(:,ti);
+        % update cursor on image
+        tt = t(ti);
+        hCursor.XData = [tt tt];
+        % small per-frame stamp
+        ax1.Subtitle.String = sprintf('t = %.3f s', tt);
+
+        drawnow limitrate;
+        frame = getframe(fig);
+        if isSave
+        writeVideo(v, frame);
+        end
+    end
+
+    % ---- done ----
+    if isSave 
+        close(v);
+       close(fig);
+    fprintf('✅ Video saved as %s (FPS=%g)\n', filename, v.FrameRate);
+    else
+      fprintf('✅ Plotting animation\n');
+    end
+end
