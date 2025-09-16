@@ -1,7 +1,8 @@
+addpath(genpath(pwd))
 anat=load('Subject_068_anat\tess_cortex_pial_low.mat');
 V=anat.Vertices;
 W=anat.VertConn;
-F=anat.Faces;
+Faces=anat.Faces;
 result=load('results_dSPM-unscaled_MEG_KERNEL_210314_2210.mat');
 datafile=load('data_block002.mat');
 chanfile=load("channel_ctf_acc1.mat");
@@ -17,6 +18,7 @@ F=F(chans,:);
 
 S = IK * F;
 time = datafile.Time;
+signalLength=length(time);
 %%
 % Graph Laplacian
 d = sum(W, 2);         % Degree for each vertex

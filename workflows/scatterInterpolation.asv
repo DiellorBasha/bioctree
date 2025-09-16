@@ -1,0 +1,30 @@
+%% This script interpolates scattered data from vertex-time series into a 3D volume
+
+% Interpolate onto surface vertices
+F_t = F_alpha(:, t);  % data at one timepoint
+F_interp = scatteredInterpolant(V, F_t, 'natural', 'none');
+Faces = channel_tesselate(V, 0);
+
+% Inputs
+T = size(F_alpha, 2);   % Number of time steps
+dz = 1;                 % Vertical spacing per time step (can be time in ms)
+N = size(V, 1);
+
+% Initialize stacked vertices and scalar values
+stackedVertices = zeros(N*T, 3);
+stackedValues = zeros(N*T, 1);
+stackedFaces = [];
+
+for t = 1:T
+    idx_start = (t-1)*N + 1;
+    idx_end = t*N;
+
+    % Translate vertices vertically by t*dz (e.g., along Z)
+    stackedVertices(idx_start:idx_end, :) = V + [zeros(N,2), (t-1)*dz*ones(N,1)];
+
+    % Assign scalar values
+    stackedValues(idx_start:idx_end) = F_alpha(:, t);
+
+    % Reuse faces, just shift indices
+    stackedFaces = [stackedFaces; Faces + (t-1)*N];
+end
