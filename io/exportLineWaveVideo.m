@@ -107,7 +107,11 @@ function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
     if isSave
         fig = figure('Visible','off','Color','w','Position',[100 100 1200 500]);
     else
-        fig = figure('Visible','on','Color','w','Position',[100 100 700 500]);
+        fig = figure(1);
+        fig.Visible="on";
+        fig.Color="w";
+        fig.Position=[100 100 700 500];
+        %fig = figure('Visible','on','Color','w','Position',[100 100 700 500]);
     end
     tl  = tiledlayout(fig,1,7,'TileSpacing','compact','Padding','compact');
 
@@ -150,7 +154,7 @@ function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
         hImg = imagesc(ax2, t, x, X); axis(ax2,'xy');
         colormap(ax2, cmap); colorbar(ax2);
         if ~isempty(CL), caxis(ax2, CL); end
-        title(ax2, 'Space–time amplitude (cursor = current time)');
+        title(ax2, 'Signal Amplitude (cursor = current time)');
     elseif modeST == "lines"
         if isempty(nLines), nLines = min(Nx, 100); end
         idx = unique(round(linspace(1, Nx, nLines)));

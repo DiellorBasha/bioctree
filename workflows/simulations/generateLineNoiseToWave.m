@@ -45,6 +45,13 @@ function [X, x, t, comp] = generateLineNoiseToWave(Nx, T, f, lambda, alpha, x0, 
     addParameter(p,'SpatialSigma',1.5);
     addParameter(p,'NormalizeEnergy',true);
     addParameter(p,'Seed',[]);
+    addParameter(p,'RampType','one-sided');   % 'one-sided' | 'two-sided'
+addParameter(p,'HoldFrac',0);             % 0..1, only used when RampType='two-sided'
+addParameter(p,'MaskType','none');   % 'none' | 'gaussian' | 'tophat' | 'tukey' | 'custom'
+addParameter(p,'MaskWidth',10);      % width in *x units*: sigma (gaussian), radius (tophat/tukey)
+addParameter(p,'MaskBeta',0.5);      % softness for 'tukey' (0..1)
+addParameter(p,'WaveMask',[]);       % custom Nx-by-1 mask (0..1); overrides MaskType if provided
+
     parse(p,varargin{:});
     opt = p.Results;
 
@@ -87,26 +94,32 @@ function [X, x, t, comp] = generateLineNoiseToWave(Nx, T, f, lambda, alpha, x0, 
         end
     end
 
-    % ---- smooth ramp s(t) : 0 -> 1 over RampFrac of T ----
-    rampLen = max(1, round(opt.RampFrac * T));
-    s = ones(1,T);
-    switch lower(opt.RampShape)
-        case 'cosine'
-            % half-cosine: 0 -> 1
-            r = 0:(rampLen-1);
-            s(1:rampLen) = 0.5 * (1 - cos(pi * (r / max(1,rampLen-1))));
-        case 'smoothstep'
-            % 3x^2 - 2x^3 over [0,1]
-            u = linspace(0,1,max(1,rampLen));
-            s(1:rampLen) = u.^2 .* (3 - 2*u);
-        case 'logistic'
-            u = linspace(-6,6,max(1,rampLen));
-            s(1:rampLen) = 1 ./ (1 + exp(-u));
-            s(1:rampLen) = (s(1:rampLen) - s(1)) / (s(rampLen) - s(1) + eps); % normalize 0..1
-        otherwise
-            error('Unknown RampShape "%s".', opt.RampShape);
-    end
-    s(rampLen+1:end) = 1;
+   % ---- smooth ramp s(t): 0->1 (one-sided) or 0->1->0 (two-sided) ----
+rampType  = lower(p.Results.RampType);
+holdFrac  = max(0,min(1,p.Results.HoldFrac));
+rampLenOS = max(1, round(opt.RampFrac * T));  % one-sided total up-length
+
+switch rampType
+    case 'one-sided'
+        s = ones(1,T);
+        s(1:rampLenOS) = ramp_up(opt.RampShape, rampLenOS);
+        s(rampLenOS+1:end) = 1;
+
+    case 'two-sided'
+        % total non-hold portion (up + down)
+        nonHoldLen = max(2, round((1 - holdFrac) * T));
+        riseLen    = floor(nonHoldLen/2);
+        fallLen    = nonHoldLen - riseLen;
+        holdLen    = T - (riseLen + fallLen);
+        % build s: [ 0->1 (rise) | 1 (hold) | 1->0 (fall) ]
+        s = zeros(1,T);
+        s(1:riseLen) = ramp_up(opt.RampShape, riseLen);
+        s(riseLen+1:riseLen+holdLen) = 1;
+        s(riseLen+holdLen+1:end) = fliplr(ramp_up(opt.RampShape, fallLen));
+    otherwise
+        error('RampType must be ''one-sided'' or ''two-sided''.');
+end
+
 
     % ---- energy normalization (optional) ----
     if opt.NormalizeEnergy
@@ -115,13 +128,72 @@ function [X, x, t, comp] = generateLineNoiseToWave(Nx, T, f, lambda, alpha, x0, 
             N = N * (sw / sn);
         end
     end
+% ---- spatial mask M(x) in [0,1] for localization near x0 ----
+M = [];  % default: no mask
+if ~isempty(p.Results.WaveMask)
+    M = p.Results.WaveMask(:);
+    assert(numel(M)==Nx, 'WaveMask must be Nx-by-1.');
+else
+    switch lower(p.Results.MaskType)
+        case 'none'
+            % leave M empty to preserve original global crossfade
+        case 'gaussian'
+            sigma = p.Results.MaskWidth;
+            M = exp(-0.5*((x - x0)/sigma).^2);
+        case 'tophat'
+            R = p.Results.MaskWidth;
+            M = double(abs(x - x0) <= R);
+        case 'tukey'
+            R = p.Results.MaskWidth;    % outer radius where mask falls to 0
+            beta = max(0,min(1,p.Results.MaskBeta));
+            r = abs(x - x0);
+            M = zeros(Nx,1);
+            R0 = (1 - beta)*R;          % flat-top half-width
+            core = (r <= R0);
+            trans = (r > R0) & (r <= R);
+            M(core) = 1;
+            % raised-cosine taper to 0 over [R0, R]
+            M(trans) = 0.5*(1 + cos(pi*(r(trans)-R0)/(beta*R)));
+        otherwise
+            error('MaskType must be ''none'',''gaussian'',''tophat'',''tukey'', or use WaveMask.');
+    end
+end
+if ~isempty(M)
+    % safety clamp (numerics)
+    M = max(0,min(1,M));
+end
 
     % ---- crossfade: Noise -> Wave ----
-    X = (1 - s) .* N + s .* W;     % implicit expansion along rows
+if isempty(M)
+    % original global crossfade (no localization)
+    X = (1 - s) .* N + s .* W;
+else
+    % localized crossfade: only positions with M>0 move toward the wave
+    % Equivalent form: X = (1 - s.*M).*N + (s.*M).*W;
+    X = N + (M * s) .* (W - N);   % implicit expansion: (Nx×1)*(1×T)
+end
 
     % ---- outputs ----
     comp.wave   = W;
     comp.noise  = N;
     comp.ramp   = s;
     comp.kernel = ker;
+end
+function r = ramp_up(shape, n)
+% 0 -> 1 smooth ramp of length n (n>=1)
+    if n<=1, r = 1; return; end
+    switch lower(shape)
+        case 'cosine'     % half-cosine
+            u = linspace(0,1,n);
+            r = 0.5*(1 - cos(pi*u));
+        case 'smoothstep' % 3u^2 - 2u^3
+            u = linspace(0,1,n);
+            r = u.^2 .* (3 - 2*u);
+        case 'logistic'   % normalized logistic
+            u = linspace(-6,6,n);
+            r = 1 ./ (1 + exp(-u));
+            r = (r - r(1)) / (r(end) - r(1) + eps);
+        otherwise
+            error('Unknown RampShape "%s".', shape);
+    end
 end
