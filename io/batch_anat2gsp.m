@@ -1,0 +1,32 @@
+function batch_anat2gsp(anatFolderPath)
+    folderPath = anatFolderPath;
+    
+    % Folders to exclude
+    excluded = ["@default_subject", "Empty_room_noise", "Group_analysis"];
+    
+    % List all folders in the directory
+    dirs = dir(folderPath);
+    validDirs = dirs([dirs.isdir] & ~ismember({dirs.name}, {'.', '..'}) & ~ismember({dirs.name}, excluded));
+
+    % Loop through each subject folder
+    for k = 2:length(validDirs)
+        subjectName = validDirs(k).name;
+        subjectPath = fullfile(folderPath, subjectName);
+
+        try
+            fprintf('Processing: %s\n', subjectName);
+
+            % Call anat2gsp (assumes it's on the path)
+            G = anat2gsp(subjectPath);  % You must define this function
+            G=gsp_estimate_lmax(G);
+            G=gsp_compute_fourier_basis(G);
+            % Save result
+            save(fullfile(subjectPath, 'gspgraph.mat'), 'G', '-v7.3');
+      
+        catch ME
+            fprintf('⚠️ Error processing %s: %s\n', subjectName, ME.message);
+        end
+    end
+
+    fprintf('✅ Done processing all subject folders.\n');
+end
