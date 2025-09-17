@@ -149,15 +149,15 @@ tl = tiledlayout(nRows, 1, 'TileSpacing','compact','Padding','compact');
 axTop = nexttile(tl, [topRows 1]);line
 
     plot(axTop, xTop, temporalLine, 'LineWidth', 1.1);
-    grid(axTop,'on');
-    switch lower(opt.Units)
-        case 'frequency',   xlabel(axTop,'Temporal frequency (Hz)');
-        case 'angular',     xlabel(axTop,'Angular frequency \omega (rad/s)');
-        case 'physical',    xlabel(axTop,'Period T (s)');
-        case 'normalized',  xlabel(axTop,'Temporal freq (cycles/sample)');
-    end
-    ylabel(axTop,'Aggregate');
-    title(axTop, 'Temporal FFT (aggregated over space)');
+    % grid(axTop,'on');
+    % switch lower(opt.Units)
+    %     case 'frequency',   xlabel(axTop,'Temporal frequency (Hz)');
+    %     case 'angular',     xlabel(axTop,'Angular frequency \omega (rad/s)');
+    %     case 'physical',    xlabel(axTop,'Period T (s)');
+    %     case 'normalized',  xlabel(axTop,'Temporal freq (cycles/sample)');
+    % end
+   % ylabel(axTop,'Aggregate');
+  %  title(axTop, 'Temporal FFT (aggregated over space)');
 
     % Bottom: joint spectrum (span the remaining rows)
 axBot = nexttile(tl, [botRows 1]);

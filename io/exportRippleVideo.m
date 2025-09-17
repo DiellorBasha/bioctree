@@ -1,4 +1,4 @@
-function exportRippleVideo(Z, x, y, t, filename, framerate)
+function exportRippleVideo(Z, x, y, t, filename, framerate, isSave)
 % exportRippleVideo - Generate and save a 3D surface animation of ripple data
 %
 % Inputs:
@@ -14,19 +14,23 @@ function exportRippleVideo(Z, x, y, t, filename, framerate)
     if nargin < 6
         framerate = 24;
     end
-
+if isSave
     v = VideoWriter(filename, 'MPEG-4');
     v.FrameRate = framerate;
     open(v);
-
     fig = figure('Visible', 'off');
+else
+ fig = figure('Visible', 'on');
+end
+
     h = surf(x, y, Z(:,:,1), 'EdgeColor', 'none');
     zlim([-1 1]);
     axis equal tight;
     xlabel('x'); ylabel('y'); zlabel('Amplitude');
-    view(0, 90);
-    camlight; lighting gouraud;
-
+    view(340, 89);
+    colormap bone
+    camlight; %lighting gouraud;
+lighting none
     for ti = 1:size(Z,3)
         h.ZData = Z(:,:,ti);
         title('Wave Propagation on Flat Surface');
@@ -34,7 +38,9 @@ function exportRippleVideo(Z, x, y, t, filename, framerate)
         drawnow;
 
         frame = getframe(fig);
+       if isSave
         writeVideo(v, frame);
+       end
     end
 
     close(v);

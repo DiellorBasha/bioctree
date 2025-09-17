@@ -33,11 +33,12 @@ exportLineWaveVideo(X, x, t, 'figures/line_wave.mp4', 24, 'Title','1D traveling 
 % choose an overlap (e.g., 0.15 s)
 overlapSec = 0.01;
 [Y, ty] = crossfadeXT(X, t, X1, t1, overlapSec);
+%% 
 
 X=Y; t=ty;
-exportLineWaveVideo(X, x, t, 'noise_to_wave.mp4', 24, ...
+exportLineWaveVideo(X, x, t, 'figures/linetime_noise_to_wave.mp4', 24, ...
     'Title','Noise → Traveling wave', 'Colormap','bone', ...
-    'AmplitudeLimits',[-1.2 1.2], 'ColorLimits',[-1.2 1.2], 'Save', 0);
+    'AmplitudeLimits',[-1.2 1.2], 'ColorLimits',[-1.2 1.2], 'Save', 1);
 %% 
 
 % Left = colormap rectangle, Right = wiggle lines
