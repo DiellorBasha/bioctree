@@ -1,0 +1,185 @@
+function plot_spacetime_spectrum(Fk, ax, info, varargin)
+%PLOT_SPACETIME_SPECTRUM  Plot |Fk| (time on X) + temporal FFT line on top.
+%
+% plot_spacetime_spectrum(Fk, ax, info, Name=Value, ...)
+%
+% Required
+%   Fk   : N-D complex spectrum from fftn_spacetime (time is dim 2).
+%   ax   : per-dimension axes from fftn_spacetime
+%           - space dims: wavenumber [rad/m]
+%           - time dim : frequency [Hz]
+%   info : struct from fftn_spacetime (size, nfft, timeDim, spacings)
+%
+% Name-Value options
+%   Units         : 'frequency' | 'angular' | 'physical' | 'normalized' (default 'frequency')
+%   SpatialDims   : which spatial dimension to display on Y (default 1)
+%   Slice         : indices for remaining dims (vector or cell). Default centers.
+%   TimePosOnly   : true/false keep only f>=0 (default true)
+%   SpacePosOnly  : true/false keep only k>=0 for plotted spatial dim (default false)
+%   LogMag        : true/false plot 20*log10(|Fk|) (default false)
+%   Colormap      : e.g., 'parula' (default)
+%   Title         : custom title (default auto)
+%   TemporalAgg   : 'mag-mean'|'mag-sum'|'power-mean'|'power-sum' (default 'mag-mean')
+%   TopHeightFrac : relative height of the top temporal subplot (default 0.22)
+%
+% Notes
+% - Time is always on X. For N>2, choose one SpatialDim and slice the others.
+% - 'physical' converts to λ (m) and T (s); zeros are removed to avoid inf.
+% - The top temporal line reflects the same subset used in the 2-D panel
+%   (same SpacePosOnly mask and same spatial slice), aggregated by TemporalAgg.
+
+    % ----------- parse args -----------
+    p = inputParser;
+    addParameter(p, 'Units', 'frequency', @(s)ischar(s) || isstring(s));
+    addParameter(p, 'SpatialDims', 1, @(v)isnumeric(v)&&isscalar(v));
+    addParameter(p, 'Slice', [], @(v)isnumeric(v)||iscell(v)||isempty(v));
+    addParameter(p, 'TimePosOnly', true, @islogical);
+    addParameter(p, 'SpacePosOnly', false, @islogical);
+    addParameter(p, 'LogMag', false, @islogical);
+    addParameter(p, 'Colormap', 'parula', @(s)ischar(s) || isstring(s));
+    addParameter(p, 'Title', '', @(s)ischar(s) || isstring(s));
+    addParameter(p, 'TemporalAgg', 'mag-mean', @(s)ischar(s) || isstring(s));
+    addParameter(p, 'TopHeightFrac', 0.22, @(x)isnumeric(x)&&isscalar(x)&&x>0&&x<0.9);
+    parse(p, varargin{:});
+    opt = p.Results;
+
+    nd   = ndims(Fk);
+    tDim = 2;                  % by design (alignTimeSecond=true used upstream)
+    sDim = opt.SpatialDims;
+
+    % ----------- slicing -----------
+    sz = size(Fk);
+    slicer = cell(1, nd);
+    for d = 1:nd
+        if d==sDim || d==tDim
+            slicer{d} = ':';
+        else
+            if isempty(opt.Slice)
+                slicer{d} = round(sz(d)/2);   % center slice by default
+            elseif iscell(opt.Slice)
+                slicer{d} = opt.Slice{d};
+            else
+                slicer{d} = opt.Slice(1);     % simple numeric fallback
+            end
+        end
+    end
+    Fk2D = squeeze(Fk(slicer{:}));  % [Nspace x Ntime]
+
+    % ----------- base axes from fftn_spacetime -----------
+    k_rad_per_m = ax{sDim};       % space in rad/m
+    f_Hz        = ax{tDim};       % time in Hz
+
+    % masks
+    tMask = true(size(f_Hz));
+    if opt.TimePosOnly, tMask = (f_Hz >= 0); end
+
+    sMask = true(size(k_rad_per_m));
+    if opt.SpacePosOnly, sMask = (k_rad_per_m >= 0); end
+
+    Fk2D = Fk2D(sMask, tMask);
+    k_rad_per_m = k_rad_per_m(sMask);
+    f_Hz        = f_Hz(tMask);
+
+    % ----------- unit conversions for 2-D map -----------
+    yDirNormal = false;  % default: 'axis xy'
+    switch lower(opt.Units)
+        case 'frequency'    % space: cycles/m ; time: Hz
+            y = k_rad_per_m/(2*pi);
+            x = f_Hz;
+            yLabel = 'Spatial frequency (cycles/m)';
+            xLabel = 'Temporal frequency (Hz)';
+
+        case 'angular'      % space: rad/m ; time: rad/s
+            y = k_rad_per_m;
+            x = 2*pi*f_Hz;
+            yLabel = 'Wavenumber k (rad/m)';
+            xLabel = 'Angular frequency \omega (rad/s)';
+
+        case 'physical'     % space: wavelength (m); time: period (s)
+            cyc_per_m = k_rad_per_m/(2*pi);
+            pos_s = cyc_per_m > 0;
+            pos_t = f_Hz > 0;
+            Fk2D = Fk2D(pos_s, pos_t);
+            y = 1 ./ cyc_per_m(pos_s);   % λ (m)
+            x = 1 ./ f_Hz(pos_t);        % T (s)
+            yLabel = 'Wavelength \lambda (m)';
+            xLabel = 'Period T (s)';
+            yDirNormal = true;           % increasing λ upward
+
+        case 'normalized'   % cycles/sample (space & time)
+            dx = info.spacings(sDim);
+            dt = info.spacings(tDim);
+            y = (k_rad_per_m/(2*pi)) * dx;
+            x = f_Hz * dt;
+            yLabel = 'Spatial freq (cycles/sample)';
+            xLabel = 'Temporal freq (cycles/sample)';
+
+        otherwise
+            error('Unknown Units: %s', opt.Units);
+    end
+
+    % ----------- magnitude map -----------
+    M = abs(Fk2D);
+    if opt.LogMag, M = 20*log10(M + eps); end
+
+    % ----------- temporal aggregation for the top line -----------
+    % Use the *same* subset as the 2-D map (same masks and unit regime).
+    % Aggregate across the plotted spatial axis (rows of Fk2D).
+    switch lower(opt.TemporalAgg)
+        case 'mag-mean',   temporalLine = mean(abs(Fk2D), 1);
+        case 'mag-sum',    temporalLine = sum(abs(Fk2D), 1);
+        case 'power-mean', temporalLine = mean(abs(Fk2D).^2, 1);
+        case 'power-sum',  temporalLine = sum(abs(Fk2D).^2, 1);
+        otherwise, error('Unknown TemporalAgg: %s', opt.TemporalAgg);
+    end
+    if opt.LogMag, temporalLine = 20*log10(temporalLine + eps); end
+
+    % X-axis for top plot must match the bottom panel’s time axis:
+    xTop = x;   % (Hz, rad/s, or period, depending on Units)
+
+    % ----------- layout & plotting -----------
+  % ----- version-friendly layout using tile spanning -----
+nRows = 30;                                     % finer control of height ratio
+topRows = max(1, min(nRows-1, round(opt.TopHeightFrac*nRows)));
+botRows = nRows - topRows;
+
+tl = tiledlayout(nRows, 1, 'TileSpacing','compact','Padding','compact');
+
+% Top: temporal FFT % Top: temporal FFT line (span the first 'topRows' rows)
+axTop = nexttile(tl, [topRows 1]);line
+
+    plot(axTop, xTop, temporalLine, 'LineWidth', 1.1);
+    grid(axTop,'on');
+    switch lower(opt.Units)
+        case 'frequency',   xlabel(axTop,'Temporal frequency (Hz)');
+        case 'angular',     xlabel(axTop,'Angular frequency \omega (rad/s)');
+        case 'physical',    xlabel(axTop,'Period T (s)');
+        case 'normalized',  xlabel(axTop,'Temporal freq (cycles/sample)');
+    end
+    ylabel(axTop,'Aggregate');
+    title(axTop, 'Temporal FFT (aggregated over space)');
+
+    % Bottom: joint spectrum (span the remaining rows)
+axBot = nexttile(tl, [botRows 1]);
+    imagesc(axBot, x, y, M);
+    if yDirNormal
+        set(axBot, 'YDir','normal');
+    else
+        axis(axBot,'xy');
+    end
+    colormap(axBot, opt.Colormap); colorbar(axBot);
+    xlabel(axBot, xLabel);
+    ylabel(axBot, yLabel);
+
+    % % Make the bottom panel roughly square in data units when possible
+    % axis(axBot,'tight');
+    % try, axis(axBot,'image'); catch, end
+
+    % Global title
+    if isempty(opt.Title)
+        ttl = sprintf('|F| (%s units) — TemporalAgg: %s', opt.Units, opt.TemporalAgg);
+    else
+        ttl = char(opt.Title);
+    end
+    title(tl, ttl);
+end
