@@ -148,7 +148,7 @@ ax1.FontSize=14
 
     % ===================== Right panel =====================
     ax2 = nexttile(tl,2,[1 6]); hold(ax2,'on');
-ax2.FontSize=14
+    ax2.FontSize=14
     hCursor = [];
     if modeST == "image"
         hImg = imagesc(ax2, t, x, X); axis(ax2,'xy');

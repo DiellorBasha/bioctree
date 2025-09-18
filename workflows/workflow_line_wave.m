@@ -1,19 +1,3 @@
-G = gsp_2dgrid(16);
-param.show_edges = 1;
-gsp_plot_graph(G,param);
-%% 
-
-[TR, V, F, Nx, Ny, vert2grid_lin, grid2vert, xvals, yvals] = surfaceMeshFromGridGraph(G)
-%% 
-
-[X, x, t] = generateRippleLine(256, 300, 3, 16, 0.02, 0);
-
-rng("default")
-randNoise= randn(size(X,1), size(X,2),1);
-X = [randNoise X];
-t = linspace(0, 1, size(X,2));
-exportLineWaveVideo(X, x, t, 'figures/line_wave.mp4', 24, 'Title','1D traveling wave', 'Save', 0);
-
 
 %% 
 % Generate a morphing signal and animate it
@@ -38,7 +22,7 @@ overlapSec = 0.01;
 X=Y; t=ty;
 exportLineWaveVideo(X, x, t, 'figures/linetime_noise_to_wave.mp4', 24, ...
     'Title','Noise → Traveling wave', 'Colormap','bone', ...
-    'AmplitudeLimits',[-1.2 1.2], 'ColorLimits',[-1.2 1.2], 'Save', 1);
+    'AmplitudeLimits',[-1.2 1.2], 'ColorLimits',[-1.2 1.2], 'Save', 0);
 %% 
 
 % Left = colormap rectangle, Right = wiggle lines
