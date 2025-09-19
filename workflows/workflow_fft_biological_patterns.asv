@@ -1,0 +1,141 @@
+pfish=imread("test-data\pufferfishdetail.jpg");
+size(pfish)
+imshow(pfish)
+
+%%
+%% Load & prep
+Irgb = imread("test-data\pufferfishdetail.jpg");  % 300x300x3
+Irgb = imread("test-data\zebradetail.jpg");  % 300x300x3
+
+I = rgb2gray(Irgb);
+I = im2double(I);
+% crop
+I = I(1:500,1:500);
+% Optional: light detrend (remove large-scale shading)
+I = I - imgaussfilt(I, 15);        % high-pass-ish
+I = I / std(I(:));                 % normalize
+
+% Window to reduce FFT edge artifacts
+% Window to reduce FFT edge artifacts (gentler than Hann)
+[Nx,Ny] = size(I);
+taper = 0.2;                         % 0 = rectangular, 1 = Hann; try 0.1–0.3
+wx = tukeywin(Nx, taper);
+wy = tukeywin(Ny, taper);
+W  = wx .* wy.';                     % outer product to 2D
+Iw = I .* W;
+imshow(Iw)
+%% 2-D FFT power spectrum
+F = fftshift(fft2(Iw));
+P = abs(F).^2;                     % power spectrum
+P = P / max(P(:));                 % scale for plotting
+
+% Zero the DC neighborhood (optional) to better see ring
+ctr = floor(size(P)/2)+1;
+r0 = 3;
+[xg,yg] = ndgrid(1:Nx,1:Ny);
+P(((xg-ctr(1)).^2+(yg-ctr(2)).^2) <= r0^2) = 0;
+
+% --- Physical sizes (mm) ---
+Lx = 1; Ly = 1;               % 1 mm x 1 mm patch
+[Nx,Ny] = size(I);            % 300 x 300 (grayscale)
+
+% --- 2-D FFT power spectrum (already computed as P with fftshift) ---
+% Frequency axes in cycles/mm (Nyquist = 1/(2*dx) = Nx/(2*Lx))
+kx = (-floor(Nx/2):ceil(Nx/2)-1) / Lx;   % length Nx, cycles/mm
+ky = (-floor(Ny/2):ceil(Ny/2)-1) / Ly;   % length Ny, cycles/mm
+
+% --- Spatial axes in mm for the image ---
+x_mm = linspace(0, Lx, Nx);   % 0..1 mm
+y_mm = linspace(0, Ly, Ny);   % 0..1 mm
+
+% --- Visualize image & spectrum with meaningful axes ---
+figure('Color','w'); 
+tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+% Spatial image (in mm)
+% Power spectrum (in cycles/mm)
+
+imagesc(kx, ky, P.^0.4);      % gamma for visibility
+set(gca,'YDir','normal'); colormap(gray);
+xlabel('k_x (cycles/mm)'); ylabel('k_y (cycles/mm)');
+title('Power spectrum (cycles/mm)');
+colorbar;
+
+%% Orientation analysis (find peaks on annulus)
+% Pick radius band with strongest energy (coarse)
+% 1) radial average to get dominant radius (spatial frequency)
+%% --- Radial average to get dominant radius (spatial frequency) ---
+[x0,y0] = deal(ctr(1), ctr(2));
+rr = sqrt((xg-x0).^2 + (yg-y0).^2);
+
+rmax  = floor(min(Nx,Ny)/2);
+nbins = rmax;                            % 1 pixel per bin (tweak as needed)
+edges = linspace(0, rmax, nbins+1);
+rCenters = 0.5*(edges(1:end-1)+edges(2:end));
+
+% Bin indices for each pixel (use discretize; clamp NaNs & right-edge)
+binIdx = discretize(rr, edges);
+binIdx(isnan(binIdx)) = 1;
+binIdx(binIdx==numel(edges)) = numel(edges)-1;
+
+% Radial mean power
+radPow = accumarray(binIdx(:), P(:), [nbins 1], @mean, 0);
+
+% Smooth & peak
+radPowSm = smoothdata(radPow, 'gaussian', 7);
+lo = 5;                                   % skip DC neighborhood
+[~,rPeakBin] = max(radPowSm(lo:end));
+rPeakBin = rPeakBin + lo - 1;
+rPeak = rCenters(rPeakBin);
+
+
+%% --- Angular power at the dominant radius (orientation) ---
+band = abs(rr - rPeak) <= 2;              % thin annulus around rPeak
+A = P; A(~band) = 0;
+
+theta = atan2(yg-y0, xg-x0);              % [-pi, pi]
+nth = 180;
+edgesTh = linspace(-pi, pi, nth+1);
+
+angIdx = discretize(theta, edgesTh);
+angIdx(isnan(angIdx)) = 1;
+angIdx(angIdx==numel(edgesTh)) = numel(edgesTh)-1;
+
+angPow = accumarray(angIdx(:), A(:), [nth 1], @sum, 0);
+angPowSm = smoothdata(angPow,'gaussian',5);
+
+[~,k1] = max(angPowSm);
+domTheta = 0.5*(edgesTh(k1)+edgesTh(k1+1));   % radians
+
+% Report
+k_cyc_per_image = rPeak;                   % cycles per image (square)
+k_cyc_per_pixel = k_cyc_per_image / Nx;
+lambda_pixels = 1 / k_cyc_per_pixel;
+
+fprintf('Dominant wavelength ~ %.1f pixels\n', lambda_pixels);
+fprintf('Dominant orientation (spectrum angle) ~ %.1f deg\n', rad2deg(domTheta));
+fprintf('Image-pattern orientation ≈ %.1f deg\n', mod(rad2deg(domTheta)+90,180));
+
+
+%% Plot radial/angle spectra
+figure('Color','w'); 
+subplot(1,2,1); plot(rCenters, radPowSm, 'LineWidth',1.5); grid on;
+xlabel('Radius (freq pixels)'); ylabel('Power'); title('Radial power'); xlim([0 rmax]);
+subplot(1,2,2); thdeg = linspace(-180,180,nth);
+plot(thdeg, angPowSm, 'LineWidth',1.5); grid on;
+xlabel('Angle (deg)'); ylabel('Power'); title('Angular power @ dominant radius'); xlim([-180 180]);
+
+%% Helper: bin indexer for accumarray
+function idx = binIdxFcn(vals, edges)
+   [~,idx] = histc(vals, edges); 
+   idx(idx==numel(edges)) = idx(idx==numel(edges))-1; % right-edge fix
+   idx(idx==0) = 1;                                   % clamp
+end
+%% 
+vidObj = VideoReader("test-data/reaction-diffusion-stim.mp4");
+   vidObj.CurrentTime = 0.5;
+frames = read(vidObj);
+
+for k = 1:
+    vidFrame = readFrame(vidObj);
+    figure(1)
+    imshow(vidFrame)

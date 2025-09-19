@@ -1,15 +1,12 @@
-% File Exchange function
+
 G = build_icosphere(4, 1, 'laplacianType', "cotangent");   % ~5k verts
 %% 
 
 clear waves   % avoid leftovers from previous runs
-
-
 tmpl = struct('fHz',[],'cycles',[],'normal',[],'t0',[],'dur',[], ...
               'tukeyAlpha',[],'A',[],'phi0',0, ...
               'beltSigmaDeg',[],'spotCenter',[],'spotSigmaDeg',[]);
 waves = repmat(tmpl,1,2);
-
 waves(1) = struct('fHz',5,'cycles',16,'normal',[0;0;1], ...
                   't0',0.5,'dur',2,'tukeyAlpha',0.5,'A',7.5, ...
                   'phi0',0,'beltSigmaDeg',18,'spotCenter',[],'spotSigmaDeg',12);
@@ -18,22 +15,9 @@ waves(1) = struct('fHz',5,'cycles',16,'normal',[0;0;1], ...
     'beltSigmaDeg',10, ...            % was 18 → tighter ribbon (≈ 0.35·λ for λ≈22.5°)
     'spotCenter',[0.1;0.1;0.1], ...        % pick a point on the great circle (any unit xyz)
     'spotSigmaDeg',90);              % keep a modest cap (≈ 0.5·λ)
-
 waves(2) = struct('fHz',20,'cycles',64,'normal',[0.3;0.7;0.64], ...
                   't0',2.5,'dur',1,'tukeyAlpha',0.5,'A',6.2, ...
                   'phi0',pi/4,'beltSigmaDeg',12,'spotCenter',[],'spotSigmaDeg',[]);
-% 20 Hz: LOCAL traveler
-% 20 Hz: LOCAL traveler
-
-% waves(1) = struct('fHz',20,'cycles',3,'normal',[0.3;0.7;0.64], ...
-%     't0',0.5,'dur',1,'tukeyAlpha',0.5,'A',6.2,'phi0',pi/4, ...
-%     'beltSigmaDeg',23, 'spotCenter',[0;1;0], 'spotSigmaDeg',6);
-% 
-% % 5 Hz: GLOBAL traveler
-% waves(2) = struct('fHz',5,'cycles',16,'normal',[0;0;1], ...
-%     't0',2.5,'dur',1,'tukeyAlpha',0.6,'A',7.5,'phi0',0, ...
-%     'beltSigmaDeg',45, 'spotCenter',[], 'spotSigmaDeg',56);
-
 T=800; Fs=200;
 [X,t,meta] = generateSphereWave(G.V, T, Fs, waves);
 %% 
@@ -113,3 +97,240 @@ plot_spacetime_spectrum(Fk, ax_cell, info, ...
     'TimePosOnly',true, 'LogMag',true, 'Colormap','bone', ...
     'Title','Sphere joint spectrum (degree-collapsed)');
 
+%% 
+% ============= RADIAL WAVES =================
+% build mesh
+
+% simulation params
+Fs = 200;            % sampling rate (Hz)
+totalSec = 4.0;      % total simulation time (s)
+T = round(Fs * totalSec);
+t = (0:T-1)/Fs;
+framerate = 24;
+
+% create radial wave
+clear waves
+tmpl = struct('type',[],'fHz',[],'cycles',[],'normal',[],'t0',[],'dur',[], ...
+              'tukeyAlpha',[],'A',[],'phi0',0, ...
+              'beltSigmaDeg',[],'spotCenter',[],'spotSigmaDeg',[],'speed',[]);
+waves = repmat(tmpl,1,1);
+
+% radial wave centered near [1 1 1] direction
+c = [0.1; 0.1; 0.1];
+c = c / norm(c);    % MUST be unit vector
+
+waves(1).type = 'radial';
+waves(1).fHz  = 5;            % temporal frequency (Hz)
+waves(1).cycles = 8;         % radial spatial cycles (maps ang in [0,pi] -> cycles)
+waves(1).t0 = 0.5; waves(1).dur = 2;
+waves(1).tukeyAlpha = 0.5;
+waves(1).A = 7.5;
+waves(1).phi0 = 0;
+waves(1).spotCenter = c;     % unit vector center of concentric wave
+waves(1).spotSigmaDeg = 90;  % optional amplitude envelope (deg)
+waves(1).speed = 1.0;        % propagation speed (radians / second)
+
+% optionally add other waves (e.g. background great-circle) in waves(2), ...
+
+% generate signals
+[X, tt, meta] = generateSphereWave(G.V, T, Fs, waves, 'Seed',7);
+%% 
+
+spinAz =3; spinEl = 0;
+
+% choose trace indices (e.g. evenly sample 512 vertices)
+numTraces = size(X,1);
+traceIdx = round(linspace(1, size(G.V,1), numTraces));
+
+% optional display settings for imagesc
+colorLimits = 1.05*[-max(abs(X(:))) max(abs(X(:)))]; % symmetric CL
+cmap = 'bone';
+
+% % preview: sphere left, imagesc right
+% exportIcosphereVideo(G.V, G.F, X, tt, 'icosphere_radial_preview.mp4', framerate, ...
+%     'Save', 0, 'Title', 'Radial Wave', 'View',[30 25], ...
+%     'SpinAzimuthDegPerSec', 10, 'SpinElevationDegPerSec', 0, ...
+%     'Lighting','flat','ShowColorbar',true, 'Colormap','bone', ...
+%     'ShowTraces', true, 'NumTraces', 256, 'TraceIndices', round(linspace(1,size(G.V,1),256)), ...
+%     'SpaceTimeMode','image', 'ColorLimits', 1.05*[-max(abs(X(:))) max(abs(X(:)))]);
+% 
+% 
+% call exporter with imagesc on the right (sphere left, imagesc right)
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
+
+%% 
+% ============= SPIRAL WAVES =================
+
+% simulation params
+
+% spiral wave definition
+w = struct();
+w.type         = 'spiral';
+w.spotCenter   = [1; 0; 0];            % choose direction (will be normalized)
+w.spotCenter   = w.spotCenter / norm(w.spotCenter);
+w.fHz          = 6;                    % temporal frequency (Hz)
+w.cycles       = 4;                    % radial cycles factor
+w.spiralTurns  = 3;                    % angular winding (number of turns)
+w.speed        = 1.2;                  % propagation speed (radians / s)
+w.t0           = 0.2; w.dur = 3; w.tukeyAlpha = 0.4;
+w.A            = 5; w.phi0 = 0;
+w.spotSigmaDeg = 60;                   % optional amplitude envelope
+
+% simulate
+[X, tt, meta] = generateSphereWave(G.V, T, Fs, w, 'Seed', 42);
+%% 
+
+% preview: sphere left + imagesc time-series right
+% call exporter with imagesc on the right (sphere left, imagesc right)
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
+
+
+S = fft_icospheretime(G, X, Fs, 'Lmax', 40, 'NFFT', T, 'Detrend', true);
+
+% Build a 2D spectrum from S (degree × frequency)
+K1 = floor(S.params.NFFT/2)+1;               % one-sided
+Fk = S.Pell_f(:,1:K1);                       % magnitude-like already
+ax_cell = { sqrt((0:S.params.Lmax)'.*(1+(0:S.params.Lmax)')) / G.R * (2*pi), ... % rad/m (k = 2π*cycles/m)
+            S.f(1:K1) };                     % Hz
+%% 
+
+info = struct('spacings', [NaN, 1/Fs]);      % only time spacing needed here
+figure(2)
+clf
+plot_spacetime_spectrum(Fk, ax_cell, info, ...
+    'Units','frequency', 'SpatialDims',1, 'InputKind','magnitude', ...
+    'TimePosOnly',true, 'LogMag',true, 'Colormap','bone', ...
+    'Title','Sphere joint spectrum (degree-collapsed)');
+%% 
+% ========== Standing wave (great-circle standing pattern) =============
+
+w = struct();
+w.type        = 'standing';
+w.normal      = [0;0;1];    % great-circle plane
+w.cycles      = 6;          % spatial standing order
+w.fHz         = 4;          % temporal frequency (Hz)
+w.t0          = 0.2; w.dur = 2.6; w.tukeyAlpha = 0.4;
+w.A           = 5; w.phi0 = 0;
+
+[X, tt, meta] = generateSphereWave(G.V, T, Fs, w, 'Seed', 42);
+
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
+
+%% 
+% ==========  Gaussian beam (narrow wave-packet along a great-circle path)
+
+
+w = struct();
+w.type         = 'beam';
+w.normal       = [0.2; 0.7; 0.68]; w.normal = w.normal / norm(w.normal);
+w.cycles       = 8;                % along-path spatial cycles
+w.fHz          = 6;
+w.t0           = 0.1; w.dur = 2.5; w.tukeyAlpha = 0.3;
+w.A            = 6;
+w.sigmaPerpDeg = 6;                % narrow transverse Gaussian (degrees)
+w.speed        = 1.2;              % radians/s along path
+w.phi0         = 0;
+
+[X, tt, meta] = generateSphereWave(G.V, T, Fs, w, 'Seed', 7);
+
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
+%% 
+% ========== Time-varying wave: precessing great-circle + frequency chirp
+
+base = struct();
+base.type       = 'greatcircle';
+base.normal     = [0;0;1];
+base.cycles     = 10;
+base.fHz        = 5;
+base.t0         = 0; base.dur = 4; base.tukeyAlpha = 0.2;
+base.A          = 4;
+
+w = struct();
+w.type            = 'timevarying';
+w.base            = base;
+w.precessAxis     = [0;1;0];    % axis to precess about
+w.precessRateDeg  = 10;         % deg/s rotation of the great-circle normal
+w.chirpAlpha      = 1.0;        % Hz/s linear chirp (adds to instantaneous f)
+w.A               = 1.0;        % overall scale
+
+[X, tt, meta] = generateSphereWave(G.V, T, Fs, w, 'Seed', 7);
+
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
+
+%% 
+
+
+G = build_icosphere(4, 1, 'laplacianType', "cotangent");
+Fs = 200; totalSec = 4; T = round(Fs*totalSec);
+%% 
+
+
+% FHN parameters & a spot seed to trigger target/spiral-like waves
+pars = struct();
+pars.Du = 2e-3; pars.Dv = 0;          % activator diffuses; recovery local
+pars.eps = 0.08; pars.a = 0.7; pars.b = 0.8; pars.I = 0.0;
+
+pars.seedType     = 'spot';
+pars.spotCenter   = [0;0;1];
+pars.spotSigmaDeg = 10;
+pars.seedU = -0.3; pars.seedV = +0.3; % kick into excitability
+% Faster
+pars.Du = 3e-3;          % was 1e-3
+pars.eps = 0.06;         % faster u–v loop
+pars.I   = pars.I + 0.05;  % more excitable
+
+T = 1000; Fs = 100;                    % 10 s @ 100 Hz
+
+[X,t,meta] = generateSphereFHN(G, T, Fs, pars, 'ReturnField','u','UseMass',true);
+%% 
+
+% Visualize
+exportIcosphereVideo(G.V, G.F, X, t, 'icosphere_waves.mp4', framerate, ...
+    'Save', 0,    'Title', '',  'View', [30 -15], ...
+    'SpinAzimuthDegPerSec', spinAz, 'SpinElevationDegPerSec', spinEl, ...
+    'Lighting', 'flat', 'ShowColorbar', true,  'Colormap', cmap, ...
+    'ColorLimits', colorLimits, ...
+    'EdgeColor', 'none', 'EdgeAlpha', 0.25, ...
+    'ShowTraces', true, 'NumTraces', numTraces,'TraceIndices', traceIdx, ...
+    'SpaceTimeMode', 'image', ...
+    'FigurePosition', [1.6377e+03 627 911.3333 723.3333]);
