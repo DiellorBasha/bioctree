@@ -1,17 +1,6 @@
 function [X,t,meta] = generateSphereWave(V, T, Fs, waves, opts)
 % GENERATESPHEREWAVE  Simulate windowed waves on a spherical mesh
-Unrecognized field name "t0".
 
-Error in generateSphereWave (line 71)
-    idx = find(t>=w.t0 & t<(w.t0+w.dur));
- 
-Unrecognized field name "t0".
-
-Error in generateSphereWave (line 71)
-    idx = find(t>=w.t0 & t<(w.t0+w.dur));
-
-Error in workflow_sphere_wave (line 312)
-[X, tt, meta] = generateSphereWave(G.V, T, Fs, w, 'Seed', 7);% 
 % Extended: supports multiple spatial wave types:
 %   - 'greatcircle' (default) : phase varies around a great-circle plane.
 %   - 'radial'               : concentric/radial waves around a specified spot center.

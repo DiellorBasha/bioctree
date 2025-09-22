@@ -173,7 +173,7 @@ W   = Wxy .* reshape(wt, 1,1,[]);
 Iw  = I .* W;
 implay(I0)
 %% --- 3D FFT -> power spectrum P(kx, ky, f)
-F = fftshift(fftn(Iw), [1 2 3]);
+F = fftshift( fftn(Iw) );   % centers along all dimensions
 P = abs(F).^2;                         % power
 P = P / max(P(:));                     % scale for display
 
@@ -192,30 +192,45 @@ end
 
 %% --- k–ω spectrum: radial average over spatial angles for each temporal freq
 % Build grids for radius in spatial frequency domain
-[kxg, kyg] = ndgrid(ky, kx);   % (Ny x Nx) note: rows->ky, cols->kx
-kr = sqrt(kxg.^2 + kyg.^2);    % spatial frequency radius
-% Binning radii
+
+% --- Build spatial-frequency radius and fixed bin indices
+[kxg, kyg] = ndgrid(ky, kx);         % (Ny x Nx)
+kr = sqrt(kxg.^2 + kyg.^2);
+
 if isempty(mmPerPx)
-    kUnit = 'cycles/pixel';
-    kNyq  = 0.5;
+    kUnit = 'cycles/pixel'; kNyq = 0.5;
 else
-    kUnit = 'cycles/mm';
-    kNyq  = 0.5/mmPerPx;
+    kUnit = 'cycles/mm';     kNyq = 0.5/mmPerPx;
 end
-nbins = round(min(Nx,Ny)/2);
-kEdges = linspace(0, kNyq, nbins+1);
+
+nbins    = round(min(Nx,Ny)/2);
+kEdges   = linspace(0, kNyq, nbins+1);
 kCenters = 0.5*(kEdges(1:end-1)+kEdges(2:end));
 
-% Allocate k–ω matrix (k radius x temporal freq)
+% Bin each pixel's kr once (left-open, right-closed bins)
+idx = discretize(kr, kEdges);
+
+% Clamp anything that landed exactly on the last edge and drop NaNs
+idx(idx == numel(kEdges)) = nbins;
+mask = ~isnan(idx);
+
+% --- Allocate k–ω (k radius x temporal freq)
 KOmega = zeros(nbins, T, 'single');
 
-% For each temporal frequency slice, radially average P(:,:,t)
+% Precompute linear indices for masked pixels (speed)
+idx_lin = idx(mask);
+idx_lin = idx_lin(:);   % ensure column
+
 for ti = 1:T
-    Pslice = P(:,:,ti);
-    % Bin indices for each pixel
-    idx = discretize(kr, kEdges);
-    % Radial mean at this temporal freq
-    KOmega(:,ti) = accumarray(idx(:), Pslice(:), [nbins 1], @mean, 0);
+    % force double precision for accumarray to avoid class-mismatch errors
+    Pslice = double(P(:,:,ti));
+    v = Pslice(mask);    % column vector of values
+
+    % Radial SUM and COUNT, then mean per bin
+    sum_k   = accumarray(idx_lin, double(v(:)), [nbins 1], @sum, 0);
+    count_k = accumarray(idx_lin, ones(numel(v),1,'double'), [nbins 1], @sum, 0);
+
+    KOmega(:,ti) = sum_k ./ max(count_k,1);   % avoid divide-by-zero
 end
 
 % Shift temporal dimension to put DC in center already done by fftshift above
@@ -225,7 +240,8 @@ KOm_pos = KOmega(:, posF);
 f_pos   = f(posF);
 
 %% --- Quick visualizations
-
+figure (1)
+clf
 % 1) One example frame & its spatial spectrum at a chosen freq bin
 [~,tiMax] = max(sum(KOm_pos,1));  % temporal bin with most energy
 PsliceShow = P(:,:, find(posF,1,'first')-1 + tiMax);
