@@ -24,12 +24,12 @@ function G = fromCortex(V, F, varargin)
 %
 % Example:
 %   % Basic usage with geodesic weights
-%   G = meg_gsp.graph.fromCortex(vertices, faces);
+%   G = fromCortex(vertices, faces);
 %   
 %   % Cotangent weights for smoother Laplacian
 %   opts.WeightType = 'cotangent';
 %   opts.NormalizedLap = true;
-%   G = meg_gsp.graph.fromCortex(vertices, faces, opts);
+%   G = fromCortex(vertices, faces, opts);
 %
 % References:
 %   Graph construction follows GSPBOX conventions. Cotangent weights

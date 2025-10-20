@@ -28,10 +28,10 @@ function divG = graphDivergence(G, edgeField, varargin)
 %
 % Example:
 %   % Compute divergence of gradient (should approximate Laplacian)
-%   G = meg_gsp.graph.fromCortex(vertices, faces);
+%   G = fromCortex(vertices, faces);
 %   x = randn(G.N, 1);
-%   gradX = meg_gsp.ops.graphGradient(G, x);
-%   divGradX = meg_gsp.ops.graphDivergence(G, gradX);
+%   gradX = graphGradient(G, x);
+%   divGradX = graphDivergence(G, gradX);
 %   
 %   % Compare with Laplacian: should be approximately -G.L * x
 %   laplacianX = -G.L * x;
@@ -45,7 +45,7 @@ function divG = graphDivergence(G, edgeField, varargin)
 %   The negative sign ensures: ∇G* = -div_G, so that:
 %   div_G(∇G x) = -G.L * x (discrete Laplacian)
 %
-% See also: graphGradient, graphTotalVariation, meg_gsp.ops.jointLaplacian
+% See also: graphGradient, graphTotalVariation
 
 % Input validation
 if nargin < 2

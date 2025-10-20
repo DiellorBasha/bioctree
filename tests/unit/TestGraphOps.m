@@ -1,5 +1,5 @@
 classdef TestGraphOps < matlab.unittest.TestCase
-    % TESTGRAPHOPS Unit tests for graph operations in MEG-GSP toolbox
+    % TESTGRAPHOPS Unit tests for graph operations in Bioctree toolbox
     %
     % This test class validates the mathematical correctness of graph
     % differential operators including gradient, divergence, and total
@@ -40,14 +40,14 @@ classdef TestGraphOps < matlab.unittest.TestCase
             x = randn(G.N, 1);
             
             % Compute gradient of x
-            gradX = meg_gsp.ops.graphGradient(G, x);
+            gradX = graphGradient(G, x);
             
             % Generate edge field y
             Ne = size(gradX, 1);
             y = randn(Ne, 1);
             
             % Compute divergence of y
-            divY = meg_gsp.ops.graphDivergence(G, y);
+            divY = graphDivergence(G, y);
             
             % Test adjoint relationship
             lhs = gradX' * y;  % <∇G x, y>
@@ -74,8 +74,8 @@ classdef TestGraphOps < matlab.unittest.TestCase
             end
             
             % Compute div(grad(x))
-            gradX = meg_gsp.ops.graphGradient(G, x);
-            divGradX = meg_gsp.ops.graphDivergence(G, gradX);
+            gradX = graphGradient(G, x);
+            divGradX = graphDivergence(G, gradX);
             
             % Compare with -L*x
             laplacianX = -G.L * x;
@@ -94,7 +94,7 @@ classdef TestGraphOps < matlab.unittest.TestCase
             
             % Test TV of constant signal should be zero
             x_const = ones(G.N, 1);
-            tv_const = meg_gsp.ops.graphTotalVariation(G, x_const);
+            tv_const = graphTotalVariation(G, x_const);
             
             testCase.verifyEqual(tv_const, zeros(G.N, 1), 'AbsTol', 1e-12, ...
                 'TV of constant signal should be zero');
@@ -102,14 +102,14 @@ classdef TestGraphOps < matlab.unittest.TestCase
             % Test TV is non-negative
             rng(123);
             x_random = randn(G.N, 1);
-            tv_random = meg_gsp.ops.graphTotalVariation(G, x_random);
+            tv_random = graphTotalVariation(G, x_random);
             
             testCase.verifyGreaterThanOrEqual(tv_random, zeros(G.N, 1), ...
                 'Total variation should be non-negative');
             
             % Test TV scaling: TV(α*x) = |α| * TV(x)
             alpha = -2.5;
-            tv_scaled = meg_gsp.ops.graphTotalVariation(G, alpha * x_random);
+            tv_scaled = graphTotalVariation(G, alpha * x_random);
             tv_expected = abs(alpha) * tv_random;
             
             testCase.verifyEqual(tv_scaled, tv_expected, 'RelTol', 1e-12, ...
@@ -127,19 +127,19 @@ classdef TestGraphOps < matlab.unittest.TestCase
             X = randn(G.N, T);
             
             % Test gradient
-            gradX = meg_gsp.ops.graphGradient(G, X);
+            gradX = graphGradient(G, X);
             testCase.verifySize(gradX, [NaN, T], ...
                 'Gradient should preserve number of time points');
             
             % Test that column-wise processing gives same result
             for t = 1:T
-                gradX_t = meg_gsp.ops.graphGradient(G, X(:, t));
+                gradX_t = graphGradient(G, X(:, t));
                 testCase.verifyEqual(gradX(:, t), gradX_t, 'AbsTol', 1e-14, ...
                     'Column-wise gradient should match matrix processing');
             end
             
             % Test divergence
-            divGradX = meg_gsp.ops.graphDivergence(G, gradX);
+            divGradX = graphDivergence(G, gradX);
             testCase.verifySize(divGradX, [G.N, T], ...
                 'Divergence should return to vertex domain');
         end
@@ -149,20 +149,20 @@ classdef TestGraphOps < matlab.unittest.TestCase
             
             % Single vertex graph
             G_single = struct('W', sparse(1, 1), 'N', 1);
-            G_single = meg_gsp.graph.ensureLaplacian(G_single);
+            G_single = ensureLaplacian(G_single);
             
             x_single = 1;
-            grad_single = meg_gsp.ops.graphGradient(G_single, x_single);
+            grad_single = graphGradient(G_single, x_single);
             testCase.verifyEmpty(grad_single, ...
                 'Single vertex should have empty gradient');
             
             % Disconnected graph
             W_disconnected = blkdiag(sparse([0 1; 1 0]), sparse([0 1; 1 0]));
             G_disconnected = struct('W', W_disconnected, 'N', 4);
-            G_disconnected = meg_gsp.graph.ensureLaplacian(G_disconnected);
+            G_disconnected = ensureLaplacian(G_disconnected);
             
             x_disconnected = [1; 2; 3; 4];
-            grad_disconnected = meg_gsp.ops.graphGradient(G_disconnected, x_disconnected);
+            grad_disconnected = graphGradient(G_disconnected, x_disconnected);
             
             % Should work without errors
             testCase.verifySize(grad_disconnected, [2, 1], ...
@@ -175,16 +175,16 @@ classdef TestGraphOps < matlab.unittest.TestCase
             % Graph with very small weights
             G = createTestGraph(20);
             G.W = G.W * 1e-10;  % Very small weights
-            G = meg_gsp.graph.ensureLaplacian(G);
+            G = ensureLaplacian(G);
             
             x = randn(G.N, 1);
             
             % Should not produce NaN or Inf
-            grad = meg_gsp.ops.graphGradient(G, x);
+            grad = graphGradient(G, x);
             testCase.verifyTrue(all(isfinite(grad)), ...
                 'Gradient should be finite even with small weights');
             
-            tv = meg_gsp.ops.graphTotalVariation(G, x);
+            tv = graphTotalVariation(G, x);
             testCase.verifyTrue(all(isfinite(tv)), ...
                 'TV should be finite even with small weights');
         end
@@ -214,6 +214,6 @@ function G = createTestGraph(N)
     G.coords = coords;
     
     % Compute Laplacian
-    G = meg_gsp.graph.ensureLaplacian(G);
+    G = ensureLaplacian(G);
     
 end

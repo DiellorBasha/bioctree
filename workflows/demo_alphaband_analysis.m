@@ -1,8 +1,9 @@
 function demo_alphaband_analysis()
 % DEMO_ALPHABAND_ANALYSIS Alpha-band source analysis demonstration
 %
-% This demo script demonstrates the core functionality of the MEG-GSP toolbox
-% by analyzing alpha-band (8-12 Hz) activity from simulated Brainstorm source data.
+% This demo script demonstrates the core functionality of the Bioctree
+% graph signal processing by analyzing alpha-band (8-12 Hz) activity 
+% from simulated Brainstorm source data.
 %
 % The demo covers:
 % 1. Loading cortical surface and source time series
@@ -13,21 +14,19 @@ function demo_alphaband_analysis()
 % 6. Visualization of results on cortical surface
 %
 % Requirements:
-%   - MEG-GSP toolbox properly installed (run scripts/setup.m)
+%   - Bioctree toolbox properly initialized (run bioctree_start)
 %   - GSPBOX in path
 %   - Sample data (generated if not available)
 
-fprintf('=== MEG-GSP Toolbox Demo: Alpha-Band Analysis ===\n\n');
+fprintf('=== Bioctree Demo: Alpha-Band Analysis ===\n\n');
 
 %% 1. Setup and Data Loading
 fprintf('1. Setting up demo environment...\n');
 
-% Add toolbox paths (in case setup wasn't run)
-try
-    addpath(genpath(fileparts(mfilename('fullpath'))));
-    fprintf('   Added toolbox paths\n');
-catch
-    warning('Could not add toolbox paths. Run setup.m first.');
+% Check if Bioctree is initialized
+if ~exist('fromCortex', 'file')
+    warning('Bioctree not properly initialized. Run bioctree_start first.');
+    bioctree_start();
 end
 
 % Check if GSPBOX is available
@@ -42,12 +41,12 @@ fprintf('\n2. Loading cortical surface and source data...\n');
 
 % Try to load real Brainstorm data, otherwise generate synthetic
 try
-    % Look for sample data files
-    dataFiles = dir('data/*cortex*.mat');
+    % Look for sample data files in test-data
+    dataFiles = dir('test-data/*/anatomy/cortex*.mat');
     if ~isempty(dataFiles)
-        dataPath = fullfile('data', dataFiles(1).name);
+        dataPath = fullfile(dataFiles(1).folder, dataFiles(1).name);
         fprintf('   Loading real data: %s\n', dataPath);
-        S = meg_gsp.io.loadBrainstormSource(dataPath);
+        S = loadBrainstormSource(dataPath);
     else
         error('No real data found, generating synthetic');
     end
@@ -68,7 +67,7 @@ opts_graph.WeightType = 'cotangent';
 opts_graph.NormalizedLap = true;
 opts_graph.Verbose = true;
 
-G = meg_gsp.graph.fromCortex(S.V, S.F, opts_graph);
+G = fromCortex(S.V, S.F, opts_graph);
 
 fprintf('   Graph created: %d vertices, %d edges\n', G.N, G.Ne);
 fprintf('   Spectral radius: %.3f\n', G.lmax);
@@ -93,18 +92,18 @@ fprintf('   Computed instantaneous alpha power\n');
 fprintf('\n5. Computing spatial derivatives and total variation...\n');
 
 % Compute graph gradient of alpha power
-gradAlpha = meg_gsp.ops.graphGradient(G, X_alpha_power);
+gradAlpha = graphGradient(G, X_alpha_power);
 fprintf('   Computed graph gradient (edge-wise differences)\n');
 
 % Total variation (L1 norm of gradient)
-tvAlpha = meg_gsp.ops.graphTotalVariation(G, X_alpha_power, 1);
+tvAlpha = graphTotalVariation(G, X_alpha_power, 1);
 fprintf('   Computed total variation (spatial roughness)\n');
 
 % Time-averaged metrics for visualization
 meanAlphaPower = mean(X_alpha_power, 2);
 meanTV = mean(tvAlpha, 2);
 gradMagnitude = sqrt(sum(gradAlpha.^2, 1));  % L2 norm over edges per time
-meanGradMag = mean(gradMagnitude);
+fprintf('   Mean gradient magnitude: %.2e\n', mean(gradMagnitude));
 
 fprintf('   Mean alpha power: %.2e ± %.2e\n', mean(meanAlphaPower), std(meanAlphaPower));
 fprintf('   Mean total variation: %.2e ± %.2e\n', mean(meanTV), std(meanTV));
@@ -119,7 +118,7 @@ fprintf('   Subsampled to %d time points for JFT\n', length(time_indices));
 
 % Compute Joint Fourier Transform
 try
-    Xhat_joint = meg_gsp.transforms.jft(G, X_sub);
+    Xhat_joint = jft(G, X_sub);
     fprintf('   Computed JFT: %d x %d coefficients\n', size(Xhat_joint));
     
     % Joint spectral energy
@@ -128,7 +127,7 @@ try
             min(spectral_energy(:)), max(spectral_energy(:)));
     
 catch ME
-    warning('JFT computation failed: %s', ME.message);
+    warning(ME.identifier, '%s', ME.message);
     fprintf('   Skipping joint spectral analysis\n');
     Xhat_joint = [];
 end
@@ -137,12 +136,12 @@ end
 fprintf('\n7. Creating visualizations...\n');
 
 % Create figure with multiple subplots
-fig = figure('Name', 'MEG-GSP Alpha-Band Analysis', 'Position', [100, 100, 1200, 800]);
+figure('Name', 'Bioctree Alpha-Band Analysis', 'Position', [100, 100, 1200, 800]);
 
 % Plot 1: Mean alpha power on cortical surface
 subplot(2, 3, 1);
 try
-    meg_gsp.viz.plotCortexMap(S.V, S.F, meanAlphaPower);
+    plotCortexMap(S.V, S.F, meanAlphaPower);
     title('Mean Alpha Power');
     colorbar;
     fprintf('   Plotted cortical alpha power map\n');
@@ -158,7 +157,7 @@ end
 % Plot 2: Total variation (spatial roughness)
 subplot(2, 3, 2);
 try
-    meg_gsp.viz.plotCortexMap(S.V, S.F, meanTV);
+    plotCortexMap(S.V, S.F, meanTV);
     title('Spatial Total Variation');
     colorbar;
 catch
@@ -217,7 +216,7 @@ else
     title('Joint Spectrum (Unavailable)');
 end
 
-sgtitle('MEG-GSP Toolbox: Alpha-Band Analysis Results');
+sgtitle('Bioctree: Alpha-Band Analysis Results');
 
 %% 8. Summary Statistics
 fprintf('\n8. Analysis Summary:\n');
@@ -238,7 +237,7 @@ fprintf('\n=== Demo completed successfully! ===\n');
 fprintf('Next steps:\n');
 fprintf('  - Run demo_joint_filtering.m for filtering comparison\n');
 fprintf('  - Run demo_dgw_propagation.m for wave analysis\n');
-fprintf('  - Explore meg_gsp.viz functions for interactive visualization\n');
+fprintf('  - Explore visualization functions for interactive plots\n');
 
 end
 
