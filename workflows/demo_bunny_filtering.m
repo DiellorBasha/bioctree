@@ -353,7 +353,7 @@ megData = data.F;
 G_full = gsp_bunny();
 G_full = gsp_compute_fourier_basis(G_full);
 
-rng(42);
+rng('default');
 nVertices = 300;
 vertexIndices = randperm(G_full.N, nVertices);
 G = gsp_subgraph(G_full, vertexIndices);
