@@ -118,7 +118,7 @@ function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
     % ===================== Left panel =====================
     ax1 = nexttile(tl,1,[1 1]); hold(ax1,'on');
     hLine = []; hRect = [];
-
+ax1.FontSize=14
     switch leftMode
         case "line"
             hLine = plot(ax1, X(:,1), x, 'LineWidth', 2); % amplitude on x-axis, line coord on y-axis
@@ -148,7 +148,7 @@ function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
 
     % ===================== Right panel =====================
     ax2 = nexttile(tl,2,[1 6]); hold(ax2,'on');
-
+    ax2.FontSize=14
     hCursor = [];
     if modeST == "image"
         hImg = imagesc(ax2, t, x, X); axis(ax2,'xy');
@@ -181,7 +181,7 @@ function exportLineWaveVideo(X, x, t, filename, framerate, varargin)
     ylim(ax2,[x(1), x(end)]);
 
     % time cursor on the right
-    hCursor = plot(ax2, [t(1) t(1)], [x(1) x(end)], 'k--', 'LineWidth', 1.25);
+    hCursor = plot(ax2, [t(1) t(1)], [x(1) x(end)], 'k--', 'LineWidth', 4);
 
     % ---- animate ----
     for ti = 1:T
