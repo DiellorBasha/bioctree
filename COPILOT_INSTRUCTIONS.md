@@ -1,10 +1,10 @@
-# MEG-GSP Toolbox Implementation Instructions
+# Bioctree Implementation Instructions
 
-You are GitHub Copilot helping to implement a production-ready MATLAB toolbox for Graph Signal Processing (GSP) and Time-Vertex Signal Processing (TVSP) applied to MEG source data from Brainstorm. This is a comprehensive scientific computing project requiring mathematical precision and robust implementation.
+You are GitHub Copilot helping to implement Bioctree, a comprehensive MATLAB toolbox for spatiotemporal signal processing and compression of electrophysiological signals on networks (graphs). This project combines graph signal processing, compression algorithms, and time-vertex analysis for efficient storage and analysis of neural data.
 
 ## Project Overview
 
-This toolbox implements joint time-vertex analysis of MEG source signals on cortical surfaces using graph signal processing techniques. It builds on EPFL's GSPBOX and follows the mathematical framework from Grassi et al. for time-vertex signal processing.
+Bioctree provides tools for graph-aware compression, multiscale subdivision, and joint time-vertex analysis of signals measured on networked sensors or neural meshes. It integrates Graph Signal Processing (GSP) with compression techniques and builds on EPFL's GSPBOX for core graph operations.
 
 ## Core Mathematical Framework
 
@@ -63,8 +63,8 @@ TV_J(X) = ||∇J X||_{p,q} (joint TV)
 
 ## Module Implementation Details
 
-### 1. I/O Module (`+meg_gsp/io/`)
-**Purpose**: Interface with Brainstorm output files
+### 1. I/O Module (`gsp/io/`)
+**Purpose**: Interface with Brainstorm output files and data loading
 
 **Key Functions**:
 - `loadBrainstormSource(fileOrFolder, opts)`: Load cortical mesh, source time series
@@ -76,7 +76,7 @@ TV_J(X) = ||∇J X||_{p,q} (joint TV)
 - Validate dimensions: N vertices ↔ N source time series
 - Build graph connectivity from faces using GSPBOX integration
 
-### 2. Graph Construction (`+meg_gsp/graph/`)
+### 2. Graph Construction (`gsp/graph/`)
 **Purpose**: Build cortical surface graphs with proper Laplacians
 
 **Key Functions**:
@@ -94,7 +94,7 @@ TV_J(X) = ||∇J X||_{p,q} (joint TV)
 - Handle degenerate triangles and isolated vertices
 - Store spectral radius `lmax` for filter stability
 
-### 3. Differential Operators (`+meg_gsp/ops/`)
+### 3. Differential Operators (`gsp/ops/`)
 **Purpose**: Implement ∇G, ∇T, div, TV following TVSP framework
 
 **Key Functions**:
@@ -145,7 +145,7 @@ TV_J(X) = ||∇J X||_{p,q} (joint TV)
 - Auto-select Chebyshev order based on desired approximation error
 - Provide stability warnings for wave kernels
 
-### 6. Dynamic Graph Wavelets (`+meg_gsp/dgw/`)
+### 6. Dynamic Graph Wavelets (`gsp/dgw/`)
 **Purpose**: Localized time-vertex analysis with DGW frames
 
 **Key Functions**:
@@ -172,7 +172,7 @@ K_causal = @(s, lambda, t, beta) (t >= 0) .* exp(-beta*t) .* K_wave(s, lambda, t
 - Sparse solvers: Interface with UNLocBoX if available
 - Memory management: Use lazy evaluation for large dictionaries
 
-### 7. Visualization (`+meg_gsp/viz/`)
+### 7. Visualization (`gsp/viz/`)
 **Purpose**: High-quality cortical surface visualization
 
 **Key Functions**:
@@ -188,6 +188,52 @@ K_causal = @(s, lambda, t, beta) (t >= 0) .* exp(-beta*t) .* K_wave(s, lambda, t
 - Interactive controls for time series animation
 - Export capabilities: PNG, MP4, GIF
 - Handle large meshes (N≈15k) with downsampling options
+
+## Bioctree Project Structure
+
+### Repository Layout
+```
+bioctree/
+├── bioctree_start.m      # Main initialization script
+├── compression/          # Core compression algorithms
+├── external/            
+│   ├── gspbox/          # EPFL GSPBOX (cloned from GitHub)
+│   └── icosphere.m      # Icosphere generation utility
+├── gsp/                 # Graph Signal Processing modules
+│   ├── graph/           # Graph construction and Laplacians
+│   ├── io/              # Brainstorm interface and data I/O
+│   ├── ops/             # Differential operators (gradient, divergence, TV)
+│   ├── transforms/      # Spectral transforms (GFT, JFT, STVFT/WT)
+│   ├── filters/         # Joint filtering (separable/non-separable, FFC)
+│   ├── dgw/             # Dynamic graph wavelets
+│   ├── viz/             # Visualization utilities
+│   ├── utils/           # Helper functions
+│   └── examples/        # Runnable examples
+├── io/                  # General data I/O utilities
+├── plotlib/             # Plotting and visualization helpers
+├── test-data/           # MEG/EEG datasets for testing
+├── tests/               # Unit and performance tests
+├── toolbox/             # Core signal processing tools
+│   ├── frequency/       # FFT and spectral analysis
+│   ├── transforms/      # Wavelet and other transforms
+│   ├── filters/         # General filtering
+│   ├── ops/             # Mathematical operators
+│   └── simulations/     # Signal generation
+└── workflows/           # Demo scripts and pipelines
+```
+
+### Integration Strategy
+The bioctree project combines:
+1. **Compression algorithms** for efficient storage of neural signals
+2. **Graph signal processing** for cortical surface analysis
+3. **Time-vertex analysis** for joint spatiotemporal processing
+4. **Visualization tools** for scientific plotting and animation
+
+### Key Integration Points
+- **GSPBOX Integration**: All graph operations build on EPFL's GSPBOX foundation
+- **Shared Transforms**: Leverage existing `toolbox/frequency/` for temporal transforms
+- **Unified I/O**: Extend `io/` for Brainstorm compatibility in `gsp/io/`
+- **Common Plotting**: Build on `plotlib/` for cortical visualization in `gsp/viz/`
 
 ## Testing Strategy
 
@@ -229,27 +275,27 @@ end
 - Memory profiling and timing benchmarks
 - Complexity verification vs theoretical bounds
 
-## Demo Scripts (`scripts/`)
+## Demo Scripts (`workflows/`)
 
 ### 1. Alpha-Band Analysis (`demo_alphaband_analysis.m`)
 ```matlab
 % Load Brainstorm data
-S = meg_gsp.io.loadBrainstormSource('data/subject01_alpha.mat');
+S = loadBrainstormSource('test-data/subject01_alpha.mat');
 
 % Build cortical graph
-G = meg_gsp.graph.fromCortex(S.V, S.F);
+G = fromCortex(S.V, S.F);
 
 % Bandpass filter alpha (8-12 Hz)
 X_alpha = bandpass(S.X_src', [8 12], S.fs)';
 
 % Compute spatial gradients and TV
-gradMag = meg_gsp.ops.graphTotalVariation(G, X_alpha, 1);
+gradMag = graphTotalVariation(G, X_alpha, 1);
 
 % Joint spectral analysis
-Xhat = meg_gsp.transforms.jft(G, X_alpha);
+Xhat = jft(G, X_alpha);
 
 % Visualization
-meg_gsp.viz.plotCortexMap(S.V, S.F, mean(gradMag, 2));
+plotCortexMap(S.V, S.F, mean(gradMag, 2));
 ```
 
 ### 2. Joint Filtering Comparison (`demo_joint_filtering.m`)
@@ -335,8 +381,8 @@ function result = functionName(input1, input2, varargin)
 %
 % Example:
 %   % Practical usage example with real parameters
-%   G = meg_gsp.graph.fromCortex(vertices, faces);
-%   gradX = meg_gsp.ops.graphGradient(G, signal);
+%   G = fromCortex(vertices, faces);
+%   gradX = graphGradient(G, signal);
 %
 % References:
 %   Equation (X) from Grassi et al. "Time-Vertex Signal Processing Framework"

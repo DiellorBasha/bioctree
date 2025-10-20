@@ -29,20 +29,20 @@ function gradG = graphGradient(G, x, varargin)
 %
 % Example:
 %   % Compute gradient of smooth signal on cortical graph
-%   G = meg_gsp.graph.fromCortex(vertices, faces);
+%   G = fromCortex(vertices, faces);
 %   signal = randn(G.N, 100);  % Random signal
-%   gradG = meg_gsp.ops.graphGradient(G, signal);
+%   gradG = graphGradient(G, signal);
 %   
 %   % Visualize gradient magnitude
 %   gradMag = sqrt(sum(gradG.^2, 1));  % L2 norm over edges
-%   meg_gsp.viz.plotCortexMap(vertices, faces, gradMag);
+%   plotCortexMap(vertices, faces, gradMag);
 %
 % References:
 %   Definition follows discrete calculus on graphs from:
 %   Shuman et al. "The emerging field of signal processing on graphs" (2013)
 %   Grassi et al. "A Time-Vertex Signal Processing Framework" (2017)
 %
-% See also: graphDivergence, graphTotalVariation, meg_gsp.ops.timeDiff
+% See also: graphDivergence, graphTotalVariation
 
 % Input validation
 if nargin < 2
