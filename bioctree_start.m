@@ -28,7 +28,6 @@ fprintf('Bioctree root: %s\n', bioctree_root);
 fprintf('Adding Bioctree modules to path...\n');
 addpath(bioctree_root);
 addpath(genpath(fullfile(bioctree_root, 'compression')));
-addpath(genpath(fullfile(bioctree_root, 'gsp')));
 addpath(genpath(fullfile(bioctree_root, 'io')));
 addpath(genpath(fullfile(bioctree_root, 'plotlib')));
 addpath(genpath(fullfile(bioctree_root, 'toolbox')));
@@ -48,8 +47,40 @@ if exist(gspbox_path, 'dir')
         fprintf('  ✗ GSPBOX initialization failed\n');
     end
 else
-    warning('GSPBOX not found at %s', gspbox_path);
-    fprintf('  ! Clone GSPBOX: git clone https://github.com/epfl-lts2/gspbox.git external/gspbox\n');
+    fprintf('GSPBOX not found. Attempting to clone from GitHub...\n');
+    external_dir = fullfile(bioctree_root, 'external');
+    if ~exist(external_dir, 'dir')
+        mkdir(external_dir);
+    end
+    
+    % Change to external directory and clone GSPBOX
+    current_dir = pwd;
+    try
+        cd(external_dir);
+        fprintf('  Cloning GSPBOX from https://github.com/epfl-lts2/gspbox.git...\n');
+        [status, cmdout] = system('git clone https://github.com/epfl-lts2/gspbox.git gspbox');
+        
+        if status == 0
+            fprintf('  ✓ GSPBOX cloned successfully\n');
+            
+            % Add to path and initialize
+            addpath(genpath(gspbox_path));
+            try
+                gsp_start();
+                fprintf('  ✓ GSPBOX initialized successfully\n');
+            catch ME
+                warning('BIOCTREE:GSPBOXInit', 'Failed to initialize GSPBOX: %s', ME.message);
+                fprintf('  ✗ GSPBOX initialization failed\n');
+            end
+        else
+            warning('BIOCTREE:GSPBOXClone', 'Failed to clone GSPBOX:\n%s', cmdout);
+            fprintf('  ✗ GSPBOX clone failed. Please manually clone:\n');
+            fprintf('    git clone https://github.com/epfl-lts2/gspbox.git external/gspbox\n');
+        end
+    catch ME
+        warning('BIOCTREE:GSPBOXSetup', 'Error during GSPBOX setup: %s', ME.message);
+    end
+    cd(current_dir);
 end
 
 % Add external utilities
@@ -90,11 +121,11 @@ end
 % Display available functionality
 fprintf('\n=== Available Functionality ===\n');
 fprintf('Core modules:\n');
-fprintf('  • Graph Signal Processing (gsp/)\n');
+fprintf('  • Graph Signal Processing (toolbox/graphs/, toolbox/operators/)\n');
 fprintf('  • Compression algorithms (compression/)\n');
-fprintf('  • Time-vertex analysis (gsp/transforms/, gsp/filters/)\n');
-fprintf('  • Brainstorm integration (gsp/io/)\n');
-fprintf('  • Visualization tools (plotlib/, gsp/viz/)\n');
+fprintf('  • Spatiotemporal analysis (toolbox/frequency/, toolbox/simulations/)\n');
+fprintf('  • Brainstorm integration (io/)\n');
+fprintf('  • Visualization tools (plotlib/)\n');
 
 fprintf('\nQuick start:\n');
 fprintf('  • Demo workflows: run scripts in workflows/\n');

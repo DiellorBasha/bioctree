@@ -258,6 +258,8 @@ axis square
 title(sprintf('Heat diffusion tau = %d', taus(4)));
 colormap("hot")
 
+map = Sf(:,1);
+OutputFile = savemap2bst(MriFileSrc, map, varargin)
 %% Wavelets
 Nf = 6;
 
@@ -317,19 +319,19 @@ dd=rescale(dd, -1, 1)
 
 figure (3);
 subplot(221)
-gsp_plot_signal(G,dd(:,2), param_plot);
+gsp_plot_signal(G,dd(:,1), param_plot);
 axis square
 title('Curvature estimation scale 1');
 subplot(222)
-gsp_plot_signal(G,dd(:,3), param_plot);
+gsp_plot_signal(G,dd(:,2), param_plot);
 axis square
 title('Curvature estimation scale 2');
 subplot(223)
-gsp_plot_signal(G,dd(:,4), param_plot);
+gsp_plot_signal(G,dd(:,3), param_plot);
 axis square
 title('Curvature estimation scale 3');
 subplot(224)
-gsp_plot_signal(G,dd(:,5), param_plot);
+gsp_plot_signal(G,dd(:,4), param_plot);
 axis square
 title('Curvature estimation scale 4');
 colormap("hot")

@@ -27,13 +27,43 @@ fprintf('   Noise (MAD-based): %.2e | Approx. SNR: %.1f dB\n', noise_level, snr_
 fprintf('\n2. Estimating graph PSD p(λ)...\n');
 
 param_psd = struct;
-param_psd.Nfilt = 96;                % number of translated graph windows (λ-resolution)
-param_psd.order = 60;                % Chebyshev order (if fast polynomial filtering is used)
-if ~isfield(G, 'U')
-gsp_compute_fourier_basis(G);        % ensure eigenpairs available for plotting
-end
+param_psd.Nfilt = 32;                % number of translated graph windows (λ-resolution)
+param_psd.order = 30;                % Chebyshev order (if fast polynomial filtering is used)
+% if ~isfield(G, 'U')
+% gsp_compute_fourier_basis(G);        % ensure eigenpairs available for plotting
+% end
+G = gsp_estimate_lmax(G);
+
 % --- slice first; then call (avoids colon inside function args) ---
-Xsub = X(:, 1:1200);
+Xsub = X(:, 1:600);
+% Batch over time to avoid holding all intermediates
+K = 4; T = size(Xsub,2); B = floor(T/K);
+xi = linspace(0, G.lmax, 256)';   % eval grid (no eigenvectors needed)
+psd_acc = zeros(numel(xi),1,'single');
+
+for k = 1:K
+    idx = (1:B) + (k-1)*B;
+    psd_k = gsp_estimate_psd(G, Xsub(:, idx), param_psd);  % returns handle or vector
+    if isa(psd_k,'function_handle')
+        psd_acc = psd_acc + single(psd_k(xi));
+    else
+        % if vector length != 256, interpolate to xi
+        if numel(psd_k) == numel(xi)
+            v = single(psd_k(:));
+        else
+            v = single(interp1(linspace(0,G.lmax,numel(psd_k)), psd_k(:), xi, 'linear','extrap'));
+        end
+        psd_acc = psd_acc + v;
+    end
+    clear v psd_k
+end
+
+psd_vals = psd_acc / K;
+psd_vals = psd_vals / max(psd_vals + eps);
+
+figure; plot(xi, psd_vals, 'LineWidth',1.5); grid on
+xlabel('lambda (grid)'); ylabel('Normalized PSD'); title('Graph PSD ');
+
 
 lam = G.e(:);   % eigenvalues (ascending)
 
