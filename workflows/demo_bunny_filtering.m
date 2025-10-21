@@ -221,28 +221,28 @@ figure('Name', 'Bioctree Filtering Demo', 'Position', [100, 100, 1600, 1200]);
 
 % Plot 1: Original signal on graph
 subplot(3, 4, 1);
-gsp_plot_graph(G, mean(X, 2));
+gsp_plot_signal(G, mean(X, 2));
 title('Original Signal');
 colorbar;
 view(45, 30);
 
 % Plot 2: Separable filtered
 subplot(3, 4, 2);
-gsp_plot_graph(G, mean(X_sep, 2));
+gsp_plot_signal(G, mean(X_sep, 2));
 title('Separable Filtered');
 colorbar;
 view(45, 30);
 
 % Plot 3: Joint filtered
 subplot(3, 4, 3);
-gsp_plot_graph(G, mean(X_joint, 2));
+gsp_plot_signal(G, mean(X_joint, 2));
 title('Joint Filtered');
 colorbar;
 view(45, 30);
 
 % Plot 4: FFC filtered
 subplot(3, 4, 4);
-gsp_plot_graph(G, mean(X_ffc, 2));
+gsp_plot_signal(G, mean(X_ffc, 2));
 title('FFC Filtered');
 colorbar;
 view(45, 30);
@@ -350,19 +350,36 @@ dataPath = 'test-data/omega-tutorial/sub-0002/sensor/data_block001_band_02.mat';
 data = load(dataPath);
 megData = data.F;
 
-G_full = gsp_bunny();
-G_full = gsp_compute_fourier_basis(G_full);
+% G_full = gsp_bunny();
+% G_full = gsp_compute_fourier_basis(G_full);
+% 
+% rng('default');
+% nVertices = 300;
+% vertexIndices = randperm(G_full.N, nVertices);
+% G = gsp_subgraph(G_full, vertexIndices);
+% % G = gsp_estimate_lmax(G);
+% G = gsp_compute_fourier_basis(G);
+ % --- FULL bunny graph (no vertex downsampling) ---
+    G = gsp_bunny();
+    G = gsp_estimate_lmax(G);
+    G = gsp_compute_fourier_basis(G);
 
-rng('default');
-nVertices = 300;
-vertexIndices = randperm(G_full.N, nVertices);
-G = gsp_subgraph(G_full, vertexIndices);
-G = gsp_estimate_lmax(G);
-G = gsp_compute_fourier_basis(G);
 
 downsample_factor = round(300 / 64);  % Target 64 Hz sampling rate
 time_indices = 1:downsample_factor:size(megData, 2);
-X = megData(1:G.N, time_indices);
+% megData: M x T
+% G: bunny graph with N = G.N = 2503 vertices
+N = G.N; 
+M = size(megData,1);
+
+% Option A: wrap-around copy (one-liner)
+X_full = megData(1 + mod(0:N-1, M), :);
+
+% Option B: repeat then trim (same result, a bit more explicit)
+X_full = repmat(megData, ceil(N/M), 1);
+X = X_full(1:N, :);
+
+%X = megData(1:G.N, time_indices);
 
 fs = 300 / downsample_factor;
 t = (0:length(time_indices)-1) / fs;
