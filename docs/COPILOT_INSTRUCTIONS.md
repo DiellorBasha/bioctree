@@ -2,6 +2,16 @@
 
 You are GitHub Copilot helping to implement Bioctree, a comprehensive MATLAB toolbox for spatiotemporal signal processing and compression of electrophysiological signals on networks (graphs). This project combines graph signal processing, compression algorithms, and time-vertex analysis for efficient storage and analysis of neural data.
 
+## CRITICAL: BCT File Extension Requirements
+
+**BCT files MUST always use the .h5 extension, never .bct extension.**
+
+- BCT files are HDF5 files with standardized Bioctree structure
+- They are called "BCT files" because of their internal organization, not file extension
+- All BCT functions (outbct, inbct, db_create_test_bct, etc.) must use .h5 extensions
+- Examples: `data.h5`, `test_bioctree_standard.h5`, `results.h5`
+- Never use: `data.bct`, `test.bct`, or any .bct extensions
+
 ## Project Overview
 
 Bioctree provides tools for graph-aware compression, multiscale subdivision, and joint time-vertex analysis of signals measured on networked sensors or neural meshes. It integrates Graph Signal Processing (GSP) with compression techniques and builds on EPFL's GSPBOX for core graph operations.

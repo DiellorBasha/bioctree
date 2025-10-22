@@ -2,7 +2,7 @@
 
 ## Overview
 
-The bioctree project uses a standardized test BCT file (`test_bioctree_standard.bct`) for consistent testing, demos, and development. This file is automatically created and managed by the database module.
+The bioctree project uses a standardized test BCT file (`test_bioctree_standard.h5`) for consistent testing, demos, and development. This file is automatically created and managed by the database module.
 
 ## Usage in Code
 
@@ -26,7 +26,7 @@ signal_only = db_load_test_bct('DataType', 'signal');
 
 ```matlab
 % Create with custom parameters (for specific tests)
-success = db_create_test_bct('my_test.bct', ...
+success = db_create_test_bct('my_test.h5', ...
     'NumLayers', 5, ...
     'IcosphereLevel', 2, ...
     'TimeSteps', 50);
@@ -87,8 +87,8 @@ The standard test dataset is available via db_load_test_bct() and contains:
 
 ## File Locations
 
-- **Development**: `test_bioctree_standard.bct` (current directory)
-- **Production**: `{config.DataPath}/test_bioctree_standard.bct`
+- **Development**: `test_bioctree_standard.h5` (current directory)
+- **Production**: `{config.DataPath}/test_bioctree_standard.h5`
 - **Config**: Uses `bioctree_config()` for path resolution
 
 ## Maintenance
@@ -97,7 +97,7 @@ The test file is automatically created when first accessed via `db_load_test_bct
 
 To recreate (if corrupted):
 ```matlab
-delete('test_bioctree_standard.bct');  % or full path
+delete('test_bioctree_standard.h5');  % or full path
 data = db_load_test_bct();  % Will recreate automatically
 ```
 

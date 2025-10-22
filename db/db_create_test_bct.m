@@ -11,7 +11,7 @@ function success = db_create_test_bct(outputPath, varargin)
 %   success = db_create_test_bct(outputPath, 'param', value, ...)
 %
 % Inputs:
-%   outputPath - Path for output BCT file (default: config.DataPath/test_bioctree_standard.bct)
+%   outputPath - Path for output BCT file (default: config.DataPath/test_bioctree_standard.h5)
 %
 % Parameters:
 %   'IcosphereLevel'    - Subdivision level for icosphere (default: 3, ~642 vertices)
@@ -40,7 +40,7 @@ function success = db_create_test_bct(outputPath, varargin)
 %   success = db_create_test_bct();
 %
 %   % Custom configuration
-%   success = db_create_test_bct('my_test.bct', 'NumLayers', 5, 'IcosphereLevel', 2);
+%   success = db_create_test_bct('my_test.h5', 'NumLayers', 5, 'IcosphereLevel', 2);
 %
 % See also: DB_LOAD_BCT_CONFIG, DB_CREATE_BCT_STRUCTURE, GENERATEPATCHSIGNAL
 
@@ -76,9 +76,9 @@ success = false;
 if isempty(outputPath)
     try
         config = bioctree_config();
-        outputPath = fullfile(config.DataPath, 'test_bioctree_standard.bct');
+        outputPath = fullfile(config.DataPath, 'test_bioctree_standard.h5');
     catch
-        outputPath = 'test_bioctree_standard.bct';
+        outputPath = 'test_bioctree_standard.h5';
         if verbose
             fprintf('⚠ Could not load bioctree_config, using current directory\n');
         end

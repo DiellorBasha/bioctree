@@ -43,10 +43,10 @@ result = db_convert_data('DryRun', true);
 config = db_load_bct_config();
 
 % Create BCT file structure from configuration  
-success = db_create_bct_structure('data.bct', config);
+success = db_create_bct_structure('data.h5', config);
 
 % Generate standard test BCT file
-success = db_create_test_bct();  % Creates test_bioctree_standard.bct
+success = db_create_test_bct();  % Creates test_bioctree_standard.h5
 
 % Load standard test data (creates if missing)
 data = db_load_test_bct();  % Returns structure with graph, signal, etc.
@@ -64,7 +64,7 @@ All functions in this module follow the `db_` prefix convention and focus on:
 
 The `db_create_test_bct()` function generates the canonical test BCT file used throughout bioctree:
 
-- **File**: `test_bioctree_standard.bct` (in data directory)
+- **File**: `test_bioctree_standard.h5` (in data directory)
 - **Graph**: Icosphere (level 3, ~642 vertices) 
 - **Signals**: 10 patch layers with sizes from 5% to 85%
 - **Temporal**: 100 time steps per layer (1000 total)

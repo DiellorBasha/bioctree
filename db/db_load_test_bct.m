@@ -9,7 +9,7 @@ function data = db_load_test_bct(varargin)
 %   data = db_load_test_bct('param', value, ...)
 %
 % Parameters:
-%   'FilePath'      - Path to test BCT file (default: auto-detected)
+%   'FilePath'      - Path to test BCT file (.h5 extension, default: auto-detected)
 %   'DataType'      - 'all', 'graph', 'signal', 'metadata' (default: 'all')
 %   'CreateIfMissing' - Create test file if it doesn't exist (default: true)
 %   'Verbose'       - Display loading information (default: false)
@@ -47,10 +47,10 @@ if isempty(file_path)
     % Try to use bioctree_config first
     try
         config = bioctree_config();
-        file_path = fullfile(config.DataPath, 'test_bioctree_standard.bct');
+        file_path = fullfile(config.DataPath, 'test_bioctree_standard.h5');
     catch
         % Fall back to current directory
-        file_path = 'test_bioctree_standard.bct';
+        file_path = 'test_bioctree_standard.h5';
         if verbose
             fprintf('⚠ Could not load bioctree_config, using current directory\n');
         end

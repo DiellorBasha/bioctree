@@ -10,7 +10,7 @@ function success = outbct(filePath, analysisData, varargin)
 %   success = outbct(filePath, analysisData, 'param', value, ...)
 %
 % Inputs:
-%   filePath     - Output BCT file path (e.g., 'bioctree_results.bct')
+%   filePath     - Output BCT file path (e.g., 'bioctree_results.h5')
 %   analysisData - Structure containing Bioctree analysis results with fields:
 %     .graph       - Graph structure with adjacency, coordinates, eigendecomposition
 %     .X           - Time-vertex signal matrix [N x T]
