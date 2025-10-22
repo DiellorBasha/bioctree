@@ -80,6 +80,12 @@
             "compression": 6,
             "sparse": true,
             "required": false
+          },
+          "faces": {
+            "datatype": "uint32",
+            "dimensions": ["Nf", 3],
+            "description": "Triangular face connectivity (vertex indices)",
+            "required": false
           }
         }
       },

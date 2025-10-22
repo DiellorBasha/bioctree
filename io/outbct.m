@@ -450,11 +450,29 @@ function writeGraphData(filePath, G, opts, dataType)
         writeArrayToHDF5(filePath, '/graph/eigenvectors', G.U, dataType, opts.Compression);
     end
     
-    % Edge list
-    if isfield(G, 'W') && ~isempty(G.W)
+    % Edge list - prioritize direct edge list (G.E) over adjacency matrix (G.W)
+    if isfield(G, 'E') && ~isempty(G.E)
+        % Use direct edge list from graph structure (preferred for icospheres)
+        writeArrayToHDF5(filePath, '/graph/edge_list', G.E, 'int32', opts.Compression);
+        if opts.Verbose
+            fprintf('  ✓ Edge connectivity saved: %d edges from G.E\n', size(G.E, 1));
+        end
+    elseif isfield(G, 'W') && ~isempty(G.W)
+        % Extract edge list from adjacency matrix
         [i, j] = find(triu(G.W));
         edges = [i, j];
         writeArrayToHDF5(filePath, '/graph/edge_list', edges, 'int32', opts.Compression);
+        if opts.Verbose
+            fprintf('  ✓ Edge connectivity saved: %d edges from G.W\n', size(edges, 1));
+        end
+    end
+    
+    % Face connectivity (triangular mesh)
+    if isfield(G, 'F') && ~isempty(G.F)
+        writeArrayToHDF5(filePath, '/graph/faces', G.F, 'int32', opts.Compression);
+        if opts.Verbose
+            fprintf('  ✓ Face connectivity saved: %d triangular faces from G.F\n', size(G.F, 1));
+        end
     end
     
     if opts.Verbose

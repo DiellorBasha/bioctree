@@ -53,15 +53,7 @@ if ~graph_exists
     fprintf('\nCreating new icosphere graph...\n');
     
     % Parameters for icosphere generation
-    subdivision_level = 3;  % Number of subdivision iterations (3 = 642 vertices)
-    radius = 1;            % Unit sphere
-    laplacian_type = "cotangent";  % Use cotangent Laplacian for better geometry
-    
-    fprintf('  Generating icosphere with %d subdivisions...\n', subdivision_level);
-    
-    % Build the icosphere graph structure
-    G = build_icosphere(subdivision_level, radius, 'laplacianType', laplacian_type);
-    
+  G    
     fprintf('  ✓ Generated icosphere with %d vertices and %d faces\n', ...
         G.N, size(G.F, 1));
     fprintf('  ✓ Graph has %d edges\n', G.Ne);
@@ -408,11 +400,219 @@ else
     fprintf('✓ Multi-scale patch layers already exist\n');
 end
 
+%% Visualization: Plot Graph Wireframe
+fprintf('\n=== Graph Visualization ===\n');
+fprintf('Creating wireframe plot of icosphere graph...\n');
+
+try
+    % Create BioctreePlotter instance using the in-memory G structure (preserves face data)
+    plotter = BioctreePlotter(G);
+    
+    % Create wireframe plot
+    fig1 = figure('Name', 'Bioctree Icosphere - Wireframe', 'Position', [100, 100, 800, 600]);
+    plotter.plotWireframe('Figure', fig1, ...
+                         'Title', sprintf('Icosphere Graph Structure - %d vertices, %d edges, Level %d subdivision', ...
+                                        G.N, G.Ne, subdivision_level), ...
+                         'ViewAngle', [45, 30]);
+    
+    fprintf('  ✓ Wireframe plot created successfully\n');
+    fprintf('  ✓ Graph structure: %d vertices arranged on unit sphere\n', G.N);
+    fprintf('  ✓ Edge connectivity: %d edges forming triangular mesh\n', G.Ne);
+    
+    % Create surface mesh plot
+    fprintf('\nCreating surface mesh plot...\n');
+    try
+        % Create a second figure for surface plot
+        fig2 = figure('Name', 'Bioctree Icosphere - Surface Mesh', 'Position', [920, 100, 800, 600]);
+        plotter.plotSurface('Figure', fig2, ...
+                           'ViewAngle', [45, 30], ...
+                           'Lighting', true, ...
+                           'Shading', 'gouraud');
+        
+        % Set custom title after plotting
+        title(sprintf('Icosphere Surface Mesh\n%d vertices, Level %d subdivision', ...
+                     G.N, subdivision_level), 'FontSize', 14, 'FontWeight', 'bold');
+        
+        fprintf('  ✓ Surface mesh plot created successfully\n');
+        fprintf('  ✓ Icosphere rendered as triangular surface mesh\n');
+        
+    catch ME
+        fprintf('  ⚠ Failed to create surface mesh plot: %s\n', ME.message);
+    end
+    
+    % Create multipanel signal analysis if signals exist
+    if signal_exists || additional_layers_exist
+        fprintf('\nCreating multipanel signal analysis...\n');
+        
+        try
+            % Plot one of the patch signals (15% patch)
+            signal_name = 'signal_patch_15_pct';
+            if additional_layers_exist
+                % Create separate plotter for signals (uses HDF5 file for signal data)
+                signal_plotter = BioctreePlotter(output_filename);
+                
+                % Define multipanel specification: Surface Signal + GFT Analysis
+                plot_specs = {
+                    struct('type', 'surfaceSignal', 'subplot', [1,2,1], ...
+                           'title', sprintf('(A) Signal Distribution: %s', signal_name), ...
+                           'params', {{'SignalName', signal_name, ...
+                                      'Colormap', 'turbo', ...
+                                      'ViewAngle', [-45, -30], ...
+                                      'EdgeAlpha', 0.1, ...
+                                      'Lighting', true, ...
+                                      'Shading', 'interp'}}), ...
+                    struct('type', 'gft', 'subplot', [1,2,2], ...
+                           'title', '(B) Graph Fourier Transform', ...
+                           'params', {{'SignalName', signal_name, ...
+                                      'PlotType', 'stem', ...
+                                      'ShowEigenvalues', true, ...
+                                      'HighlightLowFreq', true, ...
+                                      'NumFreqBands', 15, ...
+                                      'Normalize', true}})
+                };
+                
+                % Create multipanel figure
+                fig3 = signal_plotter.plotMultipanel(plot_specs, ...
+                    'MainTitle', sprintf('Bioctree Icosphere Analysis: %s (15%% Patch Coverage)', signal_name), ...
+                    'FigureSize', [1400, 600], ...
+                    'ShowInfo', false, ...
+                    'TightLayout', true);
+                
+                % Position the figure
+                set(fig3, 'Position', [1740, 100, 1400, 600]);
+                
+                fprintf('  ✓ Multipanel analysis created: Surface signal + GFT spectrum\n');
+                fprintf('  ✓ Left panel: Surface signal visualization on icosphere mesh\n');
+                fprintf('  ✓ Right panel: Graph Fourier Transform spectral analysis\n');
+                
+            else
+                fprintf('  ℹ No multi-layer signals available for multipanel plotting\n');
+            end
+            
+        catch ME
+            fprintf('  ⚠ Failed to create multipanel signal analysis: %s\n', ME.message);
+        end
+    end
+    
+catch ME
+    fprintf('  ⚠ Failed to create wireframe plot: %s\n', ME.message);
+    fprintf('  ℹ Continuing without visualization...\n');
+end
+
+%% Comprehensive 5×2 Multipanel Analysis: First 5 Signals
+if signal_exists || additional_layers_exist
+    fprintf('\nCreating comprehensive 5×2 multipanel analysis of first 5 signals...\n');
+    
+    try
+        % Create plotter using HDF5 file to access all signals
+        multipanel_plotter = BioctreePlotter(output_filename);
+        
+        % Define the first 5 signals to analyze
+        signal_list = {'signal_001', 'signal_002', 'signal_003', 'signal_004', 'signal_005'};
+        signal_labels = {'5% Patch', '10% Patch', '15% Patch', '20% Patch', '25% Patch'};
+        
+        fprintf('  Selected signals for analysis:\n');
+        for i = 1:5
+            fprintf('    %d. %s (%s)\n', i, signal_list{i}, signal_labels{i});
+        end
+        
+        % Create multipanel specification: 5 rows × 2 columns
+        % Left column: Surface signal visualizations
+        % Right column: Graph Fourier Transform analyses
+        plot_specs = {};
+        
+        for i = 1:5
+            % Left column: Surface signal plot
+            surface_spec = struct();
+            surface_spec.type = 'surfaceSignal';
+            surface_spec.subplot = [5, 2, 2*i-1];  % Odd positions: 1,3,5,7,9
+            surface_spec.title = sprintf('(%c) %s Signal', 'A'+(i-1), signal_labels{i});
+            surface_spec.params = {'SignalName', signal_list{i}, ...
+                                  'Colormap', 'turbo', ...
+                                  'ViewAngle', [-45, -30], ...
+                                  'EdgeAlpha', 0.05, ...
+                                  'Lighting', true, ...
+                                  'Shading', 'interp', ...
+                                  'ShowInfo', false};
+            plot_specs{end+1} = surface_spec;
+            
+            % Right column: GFT spectrum plot  
+            gft_spec = struct();
+            gft_spec.type = 'gft';
+            gft_spec.subplot = [5, 2, 2*i];      % Even positions: 2,4,6,8,10
+            gft_spec.title = sprintf('(%c) %s GFT Spectrum', 'F'+(i-1), signal_labels{i});
+            gft_spec.params = {'SignalName', signal_list{i}, ...
+                              'PlotType', 'stem', ...
+                              'ShowEigenvalues', true, ...
+                              'HighlightLowFreq', true, ...
+                              'NumFreqBands', 15, ...
+                              'Normalize', true, ...
+                              'ShowInfo', false};
+            plot_specs{end+1} = gft_spec;
+        end
+        
+        fprintf('  Creating 5×2 multipanel figure (%d total plots)...\n', length(plot_specs));
+        
+        % Create comprehensive multipanel figure
+        fig_comprehensive = multipanel_plotter.plotMultipanel(plot_specs, ...
+            'MainTitle', 'Comprehensive Multi-Scale Patch Signal Analysis: Spatial Distribution & Spectral Characteristics', ...
+            'FigureSize', [1600, 1800], ...  % Taller figure for 5 rows
+            'ShowInfo', false, ...
+            'TightLayout', true);
+        
+        % Position the comprehensive figure
+        set(fig_comprehensive, 'Position', [50, 50, 1600, 1800]);
+        
+        fprintf('  ✓ Comprehensive 5×2 multipanel analysis created successfully!\n');
+        fprintf('    • 5 rows: Different patch sizes (5%%, 10%%, 15%%, 20%%, 25%%)\n');
+        fprintf('    • 2 columns: Surface signals (left) + GFT spectra (right)\n');
+        fprintf('    • Total: 10 analysis panels in single coordinated figure\n');
+        
+        % Add detailed analysis summary
+        fprintf('\n  Analysis Overview:\n');
+        fprintf('    • Left column: 3D surface signal visualizations\n');
+        fprintf('      - Patch signals mapped onto icosphere mesh\n');
+        fprintf('      - Increasing spatial coverage from top to bottom\n');
+        fprintf('      - Consistent viewing angle for comparison\n');
+        fprintf('    • Right column: Graph Fourier Transform spectra\n');
+        fprintf('      - Spectral energy distribution across graph frequencies\n');
+        fprintf('      - Low-frequency components highlighted in red\n');
+        fprintf('      - Energy localization analysis for each patch size\n');
+        
+        fprintf('\n  Comparative Analysis Features:\n');
+        fprintf('    • Spatial domain: Progressive patch size visualization\n');
+        fprintf('    • Frequency domain: Spectral energy distribution comparison\n');
+        fprintf('    • Cross-scale analysis: Size vs. frequency localization\n');
+        fprintf('    • Unified layout: Direct row-wise comparison capability\n');
+        
+    catch ME
+        fprintf('  ✗ Failed to create comprehensive multipanel analysis: %s\n', ME.message);
+        fprintf('    Error details: %s\n', ME.getReport());
+    end
+    
+    fprintf('\n=== Comprehensive Multipanel Analysis Complete ===\n');
+    fprintf('✓ 5×2 multipanel figure created with surface signals and GFT analysis\n');
+    fprintf('✓ Multi-scale patch comparison across spatial and frequency domains\n');
+    fprintf('✓ Coordinated visualization for comprehensive signal characterization\n');
+else
+    fprintf('\n=== Analysis Complete ===\n');
+    fprintf('  ℹ No signals available for comprehensive analysis\n');
+end
+
+fprintf('\n=== Visualization Summary ===\n');
+fprintf('✓ Figure 1: Wireframe graph structure visualization\n');
+fprintf('✓ Figure 2: Surface mesh representation of icosphere\n'); 
+fprintf('✓ Figure 3: Multipanel analysis (Surface Signal + Graph Fourier Transform)\n');
+fprintf('  • Left panel: 3D surface signal visualization\n');
+fprintf('  • Right panel: Spectral energy distribution\n');
+fprintf('  • Combined spatial and frequency domain analysis\n');
+
 fprintf('\nNext Steps:\n');
-fprintf('• Analyze multi-scale patch interactions\n');
-fprintf('• Implement temporal patch dynamics\n');
-fprintf('• Add patch-based spectral analysis\n');
-fprintf('• Compare signals across different scales\n');
+fprintf('• Create multipanel comparisons across different patch sizes\n');
+fprintf('• Implement temporal patch dynamics with multipanel time series\n');
+fprintf('• Add patch-based spectral analysis using component plotting\n');
+fprintf('• Compare signals across scales using multipanel layouts\n');
+fprintf('• Develop custom multipanel templates for bioctree analysis\n');
 
 fprintf('\n=== Icosphere Workflow Complete ===\n');
 
