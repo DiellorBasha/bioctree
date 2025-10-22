@@ -11,6 +11,8 @@ This module contains all database and metadata handling functions for the Bioctr
 ### BCT Structure Management  
 - **`db_create_bct_structure.m`** - Create BCT file structure from JSON configuration
 - **`db_load_bct_config.m`** - Load BCT structure configuration from JSON files
+- **`db_create_test_bct.m`** - Generate standard test BCT file for bioctree development
+- **`db_load_test_bct.m`** - Load standard test BCT file with automatic creation if missing
 
 ## Usage Examples
 
@@ -42,6 +44,12 @@ config = db_load_bct_config();
 
 % Create BCT file structure from configuration  
 success = db_create_bct_structure('data.bct', config);
+
+% Generate standard test BCT file
+success = db_create_test_bct();  % Creates test_bioctree_standard.bct
+
+% Load standard test data (creates if missing)
+data = db_load_test_bct();  % Returns structure with graph, signal, etc.
 ```
 
 ## Design Principles
@@ -51,6 +59,18 @@ All functions in this module follow the `db_` prefix convention and focus on:
 - **BCT Operations**: Creating, configuring, and validating BCT structures  
 - **Data Conversion**: Migrating between data formats
 - **System Monitoring**: Providing status information and cleanup utilities
+
+## Standard Test Dataset
+
+The `db_create_test_bct()` function generates the canonical test BCT file used throughout bioctree:
+
+- **File**: `test_bioctree_standard.bct` (in data directory)
+- **Graph**: Icosphere (level 3, ~642 vertices) 
+- **Signals**: 10 patch layers with sizes from 5% to 85%
+- **Temporal**: 100 time steps per layer (1000 total)
+- **Purpose**: Standard dataset for testing, demos, and development
+
+This file should be referenced in all bioctree functions that need test data.
 
 ## Dependencies
 
