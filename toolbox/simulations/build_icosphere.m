@@ -28,6 +28,7 @@ switch opts.laplacianType
     case "cotangent"
         L = cotangent_laplacian(V,F);   % LB-like
         W = [];                         % not used
+        A = [];                         % not used for cotangent
 
     case "combinatorial"
         if opts.edgeWeightSigmaDeg > 0
@@ -41,11 +42,51 @@ switch opts.laplacianType
             w = ones(size(E,1),1);
         end
         W = sparse(E(:,1),E(:,2),w,N,N); W = W + W.';
+        A = W > 0;  % Logical adjacency matrix
         d = sum(W,2);
         L = spdiags(d,0,N,N) - W;
 end
 
-G = struct('V',V,'F',F,'E',E,'L',L,'W',W,'R',R,'vertexArea',Avert);
+% Create GSPBox-compatible structure
+G = struct();
+
+% GSPBox standard fields
+G.N = N;                        % Number of vertices (GSPBox standard)
+G.coords = V;                   % Vertex coordinates (GSPBox standard)
+G.W = W;                        % Weight matrix (GSPBox standard)
+G.L = L;                        % Laplacian matrix (GSPBox standard)
+
+% Additional GSPBox fields
+if ~isempty(W)
+    G.A = A;                    % Adjacency matrix
+    G.d = sum(W, 2);           % Degree vector
+    G.Ne = nnz(W) / 2;         % Number of edges (undirected)
+else
+    % For cotangent Laplacian, create adjacency from edges
+    G.A = sparse(E(:,1), E(:,2), true, N, N);
+    G.A = G.A + G.A.';         % Make symmetric
+    G.d = sum(G.A, 2);         % Degree vector (unweighted)
+    G.Ne = size(E, 1);         % Number of edges
+end
+
+G.directed = 0;                 % Undirected graph
+G.hypergraph = 0;              % Not a hypergraph
+G.lap_type = char(opts.laplacianType);  % Laplacian type
+G.type = 'icosphere';          % Graph type identifier
+
+% Mesh-specific fields (for compatibility with existing code)
+G.V = V;                       % Vertex coordinates (alternative naming)
+G.F = F;                       % Face connectivity
+G.E = E;                       % Edge connectivity  
+G.R = R;                       % Sphere radius
+G.vertexArea = Avert;          % Vertex areas
+
+% GSPBox plotting structure (basic)
+G.plotting = struct();
+G.plotting.vertex_size = 30;
+G.plotting.vertex_color = [0.8, 0.9, 1.0];
+G.plotting.edge_color = [0.5, 0.5, 0.5];
+G.plotting.edge_width = 0.5;
 end
 
 % ---------- helpers ----------
