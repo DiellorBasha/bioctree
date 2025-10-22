@@ -40,9 +40,8 @@ function varargout = bioctree_config(varargin)
 %
 % See also: outbct, inbct, bioctree_data_info
 
-% Get the directory where this function is located
-functionDir = fileparts(mfilename('fullpath'));
-bioctreeRoot = fileparts(functionDir); % Go up one level from toolbox to bioctree root
+% Get the directory where this function is located (bioctree root)
+bioctreeRoot = fileparts(mfilename('fullpath'));
 defaultDataPath = fullfile(bioctreeRoot, 'data');
 
 % Configuration file path
