@@ -12,7 +12,7 @@ function success = outbct(filePath, analysisData, varargin)
 % Inputs:
 %   filePath     - Output HDF5 file path (e.g., 'bioctree_results.h5')
 %   analysisData - Structure containing Bioctree analysis results with fields:
-%     .G           - Graph structure with adjacency, coordinates, eigendecomposition
+%     .graph       - Graph structure with adjacency, coordinates, eigendecomposition
 %     .X           - Time-vertex signal matrix [N x T]
 %     .Xhat_gft    - Graph Fourier Transform coefficients [N x T] (optional)
 %     .Xhat_jft    - Joint Fourier Transform coefficients [N_modes x NFFT] (optional)
@@ -140,7 +140,7 @@ opts = p.Results;
 filePath = char(filePath);
 
 % Validate required fields
-requiredFields = {'G'};
+requiredFields = {'graph'};
 for field = requiredFields
     if ~isfield(analysisData, field{1})
         error('BioctreeHDF5:MissingField', 'analysisData must contain field: %s', field{1});
@@ -161,7 +161,7 @@ try
     end
     
     % Extract dimensions
-    G = analysisData.G;
+    G = analysisData.graph;
     N = G.N;  % Number of vertices
     
     % Determine temporal dimensions
@@ -205,8 +205,8 @@ try
     writeTemporalData(filePath, G, T, fs, opts, dataType);
     
     % Write signal data
-    if opts.IncludeRaw && isfield(analysisData, 'X')
-        writeRawData(filePath, analysisData.X, opts, dataType);
+    if opts.IncludeRaw
+        writeRawData(filePath, analysisData, opts, dataType);
     end
     
     % Write spectral data
@@ -253,27 +253,53 @@ end
 % ============================================================================
 
 function createHDF5Groups(filePath, verbose)
-% Create the standard Bioctree HDF5 group structure
+% Create the standard Bioctree HDF5 group structure using JSON configuration
     
     if verbose
         fprintf('Creating HDF5 group structure...\n');
     end
     
-    % Main groups
-    groups = {'/metadata', '/graph', '/temporal', '/data', '/indices', '/analysis'};
+    try
+        % Load structure configuration from JSON file
+        structure_config = loadHDF5StructureConfig();
+        
+        % Create structure using configuration
+        success = createHDF5StructureFromConfig(filePath, structure_config, verbose);
+        
+        if ~success
+            error('Failed to create HDF5 structure from configuration');
+        end
+        
+        if verbose
+            fprintf('   ✓ HDF5 structure created from configuration (version %s)\n', ...
+                structure_config.version);
+        end
+        
+        return; % Exit early since new method handles everything
+        
+    catch ME
+        if verbose
+            fprintf('   ⚠ Configuration-based creation failed: %s\n', ME.message);
+            fprintf('   Falling back to hardcoded structure...\n');
+        end
+        
+        % Fallback to original hardcoded approach
+        % Main groups
+        groups = {'/metadata', '/graph', '/temporal', '/data', '/indices', '/analysis'};
+        
+        % Data subgroups
+        data_groups = {'/data/raw', '/data/spectral', '/data/derived'};
+        
+        % Indices subgroups  
+        indices_groups = {'/indices/time_indices', '/indices/spatial_indices', '/indices/frequency_indices'};
+        
+        % Analysis subgroups
+        analysis_groups = {'/analysis/statistics', '/analysis/decompositions', '/analysis/detection'};
+        
+        all_groups = [groups, data_groups, indices_groups, analysis_groups];
+    end % End of try-catch for configuration-based vs fallback creation
     
-    % Data subgroups
-    data_groups = {'/data/raw', '/data/spectral', '/data/derived'};
-    
-    % Indices subgroups  
-    indices_groups = {'/indices/time_indices', '/indices/spatial_indices', '/indices/frequency_indices'};
-    
-    % Analysis subgroups
-    analysis_groups = {'/analysis/statistics', '/analysis/decompositions', '/analysis/detection'};
-    
-    all_groups = [groups, data_groups, indices_groups, analysis_groups];
-    
-    % Create file and groups
+    % Create file and groups (fallback method)
     if exist(filePath, 'file')
         delete(filePath);
     end
@@ -361,7 +387,7 @@ function writeMetadata(filePath, analysisData, opts, N, T, fs, dataType)
     writeStructToHDF5(filePath, '/metadata/analysis_info', analysis_info);
     
     % Graph properties
-    G = analysisData.G;
+    G = analysisData.graph;
     graph_props = struct();
     graph_props.N = N;
     graph_props.num_edges = nnz(G.W) / 2;
@@ -460,18 +486,79 @@ function writeTemporalData(filePath, ~, T, fs, opts, dataType)
     end
 end
 
-function writeRawData(filePath, X, opts, dataType)
-% Write raw signal data to HDF5 file
+function writeRawData(filePath, analysisData, opts, dataType)
+% Write raw signal data to HDF5 file (supports multiple signal layers)
     
     if opts.Verbose
         fprintf('Writing raw signal data...\n');
     end
     
-    % Main signal
-    writeArrayToHDF5(filePath, '/data/raw/signal', X, dataType, opts.Compression, opts.ChunkSize);
+    % Handle multiple signal formats
+    signal_count = 0;
     
-    if opts.Verbose
-        fprintf('  ✓ Raw signal data written (%s)\n', mat2str(size(X)));
+    % Main signal (X field - primary signal)
+    if isfield(analysisData, 'X') && ~isempty(analysisData.X)
+        writeArrayToHDF5(filePath, '/data/raw/signal', analysisData.X, dataType, opts.Compression, opts.ChunkSize);
+        signal_count = signal_count + 1;
+        if opts.Verbose
+            fprintf('  ✓ Primary signal written: %s\n', mat2str(size(analysisData.X)));
+        end
+    end
+    
+    % Additional signal layers (X_layers field)
+    if isfield(analysisData, 'X_layers') && isstruct(analysisData.X_layers)
+        layer_names = fieldnames(analysisData.X_layers);
+        for i = 1:length(layer_names)
+            layer_name = layer_names{i};
+            layer_data = analysisData.X_layers.(layer_name);
+            
+            if ~isempty(layer_data) && isnumeric(layer_data)
+                dataset_path = sprintf('/data/raw/signal_%s', layer_name);
+                writeArrayToHDF5(filePath, dataset_path, layer_data, dataType, opts.Compression, opts.ChunkSize);
+                signal_count = signal_count + 1;
+                
+                if opts.Verbose
+                    fprintf('  ✓ Signal layer "%s" written: %s\n', layer_name, mat2str(size(layer_data)));
+                end
+            end
+        end
+    end
+    
+    % Numbered signal layers (X1, X2, X3, etc.)
+    field_names = fieldnames(analysisData);
+    signal_fields = field_names(startsWith(field_names, 'X') & ~strcmp(field_names, 'X') & ~strcmp(field_names, 'X_layers'));
+    
+    for i = 1:length(signal_fields)
+        field_name = signal_fields{i};
+        signal_data = analysisData.(field_name);
+        
+        if ~isempty(signal_data) && isnumeric(signal_data)
+            % Extract layer identifier (e.g., X1 -> 001, X_patch -> patch)
+            layer_id = field_name(2:end);
+            if isempty(layer_id)
+                continue;
+            end
+            
+            % Format as numbered layer if purely numeric
+            if ~isempty(str2double(layer_id))
+                dataset_path = sprintf('/data/raw/signal_%03d', str2double(layer_id));
+            else
+                dataset_path = sprintf('/data/raw/signal_%s', layer_id);
+            end
+            
+            writeArrayToHDF5(filePath, dataset_path, signal_data, dataType, opts.Compression, opts.ChunkSize);
+            signal_count = signal_count + 1;
+            
+            if opts.Verbose
+                fprintf('  ✓ Signal layer "%s" written: %s\n', layer_id, mat2str(size(signal_data)));
+            end
+        end
+    end
+    
+    if opts.Verbose && signal_count > 0
+        fprintf('  ✓ Total signal layers written: %d\n', signal_count);
+    elseif opts.Verbose
+        fprintf('  ℹ No signal data found to write\n');
     end
 end
 

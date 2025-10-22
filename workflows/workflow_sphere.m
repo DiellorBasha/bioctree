@@ -70,7 +70,7 @@ if ~graph_exists
     
     % Prepare minimal data structure for outbct (graph only)
     data_struct = struct();
-    data_struct.G = G;  % Main graph structure
+    data_struct.graph = G;  % Main graph structure (using "graph" field consistently)
     
     % Add minimal metadata
     data_struct.metadata.description = 'Bioctree icosphere graph structure';
@@ -165,7 +165,7 @@ if ~signal_exists
     
     % Create minimal data structure with graph and signal
     data_struct = struct();
-    data_struct.G = G;  % Graph structure
+    data_struct.graph = G;  % Graph structure (using "graph" field consistently)
     data_struct.X = signal(:);  % Signal as column vector [N x 1]
     
     % Add signal metadata
@@ -204,6 +204,174 @@ else
     fprintf('\n✓ Patch signal already exists - no action needed\n');
 end
 
+%% Step 4: Check and create additional signal layers
+fprintf('\nChecking for additional signal layers...\n');
+
+% Check if multiple signal layers exist
+additional_layers_exist = false;
+if file_exists
+    try
+        % Check for signal layers (numbered format)
+        info = h5info(output_filename, '/data/raw');
+        layer_datasets = {};
+        for i = 1:length(info.Datasets)
+            dataset_name = info.Datasets(i).Name;
+            if startsWith(dataset_name, 'signal_') && ~strcmp(dataset_name, 'signal')
+                layer_datasets{end+1} = dataset_name;
+            end
+        end
+        
+        if ~isempty(layer_datasets)
+            additional_layers_exist = true;
+            fprintf('  ✓ Found %d additional signal layers: %s\n', ...
+                length(layer_datasets), strjoin(layer_datasets, ', '));
+        else
+            fprintf('  ℹ No additional signal layers found\n');
+        end
+    catch
+        fprintf('  ℹ Could not check for additional layers\n');
+    end
+end
+
+if ~additional_layers_exist
+    fprintf('\nGenerating patch signal layers with increasing sizes...\n');
+    
+    % Create 5 patch signals with increasingly larger patch sizes
+    patch_sizes = [0.05, 0.10, 0.15, 0.20, 0.25];  % 5%, 10%, 15%, 20%, 25% of vertices
+    patch_signals = cell(5, 1);
+    patch_params_all = cell(5, 1);
+    
+    % Use the same center for all patches for consistency
+    fprintf('  Finding optimal patch center...\n');
+    [~, center_params] = generatePatchSignal(G, ...
+        'patchSize', 0.15, 'patchCenter', 'auto', ...
+        'patchValue', 1.0, 'backgroundValue', 0.0, ...
+        'growthMode', 'none');
+    common_center = center_params.patchCenter;
+    fprintf('  ✓ Using vertex %d as common center\n', common_center);
+    
+    for i = 1:5
+        fprintf('  Generating patch %d (size %.1f%%)...', i, patch_sizes(i)*100);
+        
+        [patch_signals{i}, patch_params_all{i}] = generatePatchSignal(G, ...
+            'patchSize', patch_sizes(i), ...
+            'patchCenter', common_center, ...  % Use same center
+            'patchValue', 1.0, ...
+            'backgroundValue', 0.0, ...
+            'growthMode', 'none');
+        
+        active_vertices = sum(patch_signals{i} > 0.5);
+        coverage = 100 * active_vertices / G.N;
+        
+        fprintf(' %d vertices (%.1f%% actual)\n', active_vertices, coverage);
+    end
+    
+    fprintf('  ✓ Created %d patch signals with increasing sizes\n', length(patch_signals));
+    
+    % Prepare multi-layer data structure
+    fprintf('\nAdding patch signal layers to HDF5...\n');
+    
+    % Load existing data or create new structure
+    if signal_exists
+        % Load existing signal to preserve it as layer 0 (baseline)
+        existing_signal = h5read(output_filename, '/data/raw/signal');
+        data_struct = struct();
+        data_struct.graph = G;
+        data_struct.X = existing_signal;  % Keep original signal as primary
+    else
+        % Use the first (smallest) patch as primary signal
+        data_struct = struct();
+        data_struct.graph = G;
+        data_struct.X = patch_signals{1}(:);  % 5% patch as primary
+        
+        fprintf('  ✓ Using patch 1 (5%%) as primary signal: %s\n', mat2str(size(data_struct.X)));
+    end
+    
+    % Add patch signals as named layers
+    data_struct.X_layers = struct();
+    
+    for i = 1:5
+        % Create descriptive layer names
+        layer_name = sprintf('patch_%02d_pct', round(patch_sizes(i)*100));
+        data_struct.X_layers.(layer_name) = patch_signals{i}(:);
+        
+        fprintf('  ✓ Added layer "%s": %d active vertices\n', ...
+            layer_name, sum(patch_signals{i} > 0.5));
+    end
+    
+    % Also add as numbered layers for easy access
+    for i = 1:5
+        field_name = sprintf('X%d', i);
+        data_struct.(field_name) = patch_signals{i}(:);
+    end
+    
+    % Update metadata to describe the patch layers
+    data_struct.metadata.description = 'Bioctree icosphere with multi-scale patch signals';
+    data_struct.metadata.creation_date = datestr(now);
+    data_struct.metadata.signal_type = 'multi_scale_patches';
+    data_struct.metadata.coordinate_system = 'cartesian_3d';
+    
+    % Add patch-specific metadata
+    data_struct.metadata.patch_center_vertex = common_center;
+    data_struct.metadata.patch_center_coords = G.coords(common_center, :);
+    data_struct.metadata.num_patch_layers = length(patch_signals);
+    
+    % Add layer descriptions
+    data_struct.metadata.signal_layers = struct();
+    if signal_exists
+        data_struct.metadata.signal_layers.primary = 'Original patch signal (preserved)';
+    else
+        data_struct.metadata.signal_layers.primary = sprintf('Patch signal %.0f%% coverage', patch_sizes(1)*100);
+    end
+    
+    for i = 1:5
+        layer_name = sprintf('patch_%02d_pct', round(patch_sizes(i)*100));
+        actual_coverage = 100 * sum(patch_signals{i} > 0.5) / G.N;
+        
+        data_struct.metadata.signal_layers.(layer_name) = sprintf(...
+            'Patch signal %.0f%% target, %.1f%% actual coverage, %d vertices', ...
+            patch_sizes(i)*100, actual_coverage, sum(patch_signals{i} > 0.5));
+    end
+    
+    % Save all layers to HDF5
+    try
+        success = outbct(output_filename, data_struct, ...
+            'IncludeRaw', true, ...         % Include all signal data
+            'IncludeSpectral', false, ...   % No spectral data yet
+            'Compression', 6, ...
+            'Verbose', true);
+        
+        if success
+            fprintf('  ✓ Multi-scale patch signals added to HDF5!\n');
+            fileInfo = dir(output_filename);
+            fprintf('  ✓ Updated file size: %.2f KB\n', fileInfo.bytes / 1024);
+            
+            % Report patch layer details
+            fprintf('  ✓ Patch signal layers stored:\n');
+            fprintf('    - Primary signal: /data/raw/signal\n');
+            
+            for i = 1:5
+                layer_name = sprintf('patch_%02d_pct', round(patch_sizes(i)*100));
+                active_count = sum(patch_signals{i} > 0.5);
+                actual_pct = 100 * active_count / G.N;
+                fprintf('    - %s: %d vertices (%.1f%%)\n', layer_name, active_count, actual_pct);
+            end
+            
+            fprintf('    - Numbered access: /data/raw/signal_001 through signal_005\n');
+            fprintf('    - Common center: vertex %d at [%.3f, %.3f, %.3f]\n', ...
+                common_center, G.coords(common_center, 1), G.coords(common_center, 2), G.coords(common_center, 3));
+        else
+            fprintf('  ✗ Multi-scale patch signal save failed\n');
+        end
+        
+    catch ME
+        fprintf('  ✗ Error adding signal layers: %s\n', ME.message);
+    end
+    
+else
+    fprintf('\n✓ Additional signal layers already exist - no action needed\n');
+end
+
 %% Summary
 fprintf('\n=== Workflow Summary ===\n');
 if ~graph_exists
@@ -214,16 +382,37 @@ else
 end
 
 if ~signal_exists
-    fprintf('✓ Created patch signal and added to HDF5\n');
-    fprintf('✓ Signal covers %.1f%% of surface\n', 100 * sum(signal > 0.5) / G.N);
+    fprintf('✓ Created primary patch signal and added to HDF5\n');
+    if exist('signal', 'var')
+        fprintf('✓ Primary signal covers %.1f%% of surface\n', 100 * sum(signal > 0.5) / G.N);
+    end
 else
-    fprintf('✓ Existing patch signal found - ready for analysis\n');
+    fprintf('✓ Existing primary signal found\n');
+end
+
+if ~additional_layers_exist
+    fprintf('✓ Created multi-scale patch signal layers:\n');
+    for i = 1:5
+        if exist('patch_signals', 'var') && ~isempty(patch_signals)
+            active_count = sum(patch_signals{i} > 0.5);
+            actual_pct = 100 * active_count / G.N;
+            fprintf('  • Patch %d: %.0f%% target → %d vertices (%.1f%% actual)\n', ...
+                i, patch_sizes(i)*100, active_count, actual_pct);
+        else
+            fprintf('  • Patch %d: %.0f%% target coverage\n', i, patch_sizes(i)*100);
+        end
+    end
+    fprintf('✓ All patches centered at vertex %d\n', common_center);
+    fprintf('✓ Total layers: 10+ signals in single HDF5 file\n');
+else
+    fprintf('✓ Multi-scale patch layers already exist\n');
 end
 
 fprintf('\nNext Steps:\n');
-fprintf('• Add signal generation functionality\n');
-fprintf('• Implement temporal dynamics\n');
-fprintf('• Add spectral analysis capabilities\n');
+fprintf('• Analyze multi-scale patch interactions\n');
+fprintf('• Implement temporal patch dynamics\n');
+fprintf('• Add patch-based spectral analysis\n');
+fprintf('• Compare signals across different scales\n');
 
 fprintf('\n=== Icosphere Workflow Complete ===\n');
 
