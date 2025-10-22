@@ -19,7 +19,8 @@ fprintf('=== BioctreePlotter Report Generation Demo ===\n\n');
 
 % Initialize bioctree system
 bioctree_start;
-addpath('reports');
+% Add reports to path for report generation functions
+addpath('../toolbox/reports');
 
 %% Check for Report Generator availability
 try
