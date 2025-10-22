@@ -1,7 +1,7 @@
 {
-  "bioctree_hdf5_structure": {
+  "bioctree_bct_structure": {
     "version": "1.1",
-    "description": "Bioctree HDF5 file structure specification with Fourier basis support",
+    "description": "Bioctree BCT file structure specification with Fourier basis support",
     "last_modified": "2025-10-22",
     
     "groups": {

@@ -10,7 +10,7 @@ fprintf('=== BioctreePlotter Multipanel Demo ===\n\n');
 
 %% Load sample data
 % You can replace this with your actual HDF5 file path
-sample_file = 'sample_data.h5';
+sample_file = 'sample_data.bct';
 
 % For this demo, we'll use a data structure approach
 % (replace with actual file loading when available)

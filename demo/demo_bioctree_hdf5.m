@@ -24,7 +24,7 @@ duration = T/fs;  % Signal duration (seconds)
 config = bioctree_config();
 
 % Output file (using Bioctree HDF5 format)
-outputFile = fullfile(config.TempPath, 'demo_bioctree_results.h5');
+outputFile = fullfile(config.TempPath, 'demo_bioctree_results.bct');
 
 %% Step 1: Generate Test Data
 fprintf('1. Generating test graph signal...\n');

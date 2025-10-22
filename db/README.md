@@ -1,6 +1,6 @@
 # Database Module (/db)
 
-This module contains all database and metadata handling functions for the Bioctree system. These functions manage HDF5 dataset interactions, data conversion operations, and system information retrieval.
+This module contains all database and metadata handling functions for the Bioctree system. These functions manage BCT dataset interactions, data conversion operations, and system information retrieval.
 
 ## Functions
 
@@ -8,9 +8,9 @@ This module contains all database and metadata handling functions for the Bioctr
 - **`db_data_info.m`** - Get comprehensive information about Bioctree data files and storage
 - **`db_convert_data.m`** - Batch convert legacy .bct files to HDF5 format
 
-### HDF5 Structure Management  
-- **`db_create_hdf5_structure.m`** - Create HDF5 file structure from JSON configuration
-- **`db_load_hdf5_config.m`** - Load HDF5 structure configuration from JSON files
+### BCT Structure Management  
+- **`db_create_bct_structure.m`** - Create BCT file structure from JSON configuration
+- **`db_load_bct_config.m`** - Load BCT structure configuration from JSON files
 
 ## Usage Examples
 
@@ -35,20 +35,20 @@ result = db_convert_data();
 result = db_convert_data('DryRun', true);
 ```
 
-### HDF5 Structure Operations
+### BCT Structure Operations
 ```matlab
-% Load default HDF5 structure configuration
-config = db_load_hdf5_config();
+% Load default BCT structure configuration
+config = db_load_bct_config();
 
-% Create HDF5 file structure from configuration  
-success = db_create_hdf5_structure('data.h5', config);
+% Create BCT file structure from configuration  
+success = db_create_bct_structure('data.bct', config);
 ```
 
 ## Design Principles
 
 All functions in this module follow the `db_` prefix convention and focus on:
 - **Metadata Management**: Tracking data system state and statistics
-- **HDF5 Operations**: Creating, configuring, and validating HDF5 structures  
+- **BCT Operations**: Creating, configuring, and validating BCT structures  
 - **Data Conversion**: Migrating between data formats
 - **System Monitoring**: Providing status information and cleanup utilities
 

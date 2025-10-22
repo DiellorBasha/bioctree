@@ -1,9 +1,9 @@
 %% OUTBCT Function Usage Guide
 % This script demonstrates how to use the outbct function to export 
-% Bioctree analysis results to structured HDF5 format.
+% Bioctree analysis results to structured BCT format.
 
 %% Basic Usage
-% The outbct function exports graph signal analysis data to HDF5 format
+% The outbct function exports graph signal analysis data to BCT format
 % with a standardized structure for efficient querying and analysis.
 
 % Basic syntax:
@@ -12,8 +12,8 @@
 
 %% Required Inputs
 
-% 1. filePath: Output HDF5 file path (string or char)
-output_file = 'data/my_bioctree_analysis.h5';  % .h5 extension recommended
+% 1. filePath: Output BCT file path (string or char)
+output_file = 'example1_graph_only.bct';  % .bct extension recommended
 
 % 2. analysisData: Structure containing analysis results with required field 'G'
 % The analysisData structure must contain at least:
@@ -33,7 +33,7 @@ data.G = G;
 success = outbct(output_file, data);
 
 if success
-    fprintf('✓ Graph exported successfully to example1_graph_only.h5\n');
+    fprintf('✓ Graph exported successfully to example1_graph_only.bct\n');
 else
     fprintf('✗ Export failed\n');
 end
@@ -57,7 +57,7 @@ data.metadata.analysis_date = datestr(now);
 data.metadata.description = 'Example icosphere patch signal';
 
 % Export with options
-success = outbct('example2_with_signal.h5', data, ...
+success = outbct('example2_with_signal.bct', data, ...
     'Compression', 6, ...      % Compression level 0-9
     'Precision', 'single', ... % 'single' or 'double'
     'Verbose', true);          % Display progress
@@ -113,7 +113,7 @@ spatial_patches.middle = round(N/3)+1:round(2*N/3);
 spatial_patches.posterior = round(2*N/3)+1:N;
 
 % Export with all options
-success = outbct('example3_complete.h5', data, ...
+success = outbct('example3_complete.bct', data, ...
     'Compression', 7, ...
     'ChunkSize', [50, 25], ...
     'FreqBands', freq_bands, ...
@@ -176,8 +176,8 @@ fprintf('\n');
 %% Reading Data Back
 
 fprintf('To read data back, use inbct():\n');
-fprintf('  loaded_data = inbct(''example1_graph_only.h5'');\n');
-fprintf('  signal = inbct(''example2_with_signal.h5'', ''DataType'', ''signal'');\n');
+fprintf('  loaded_data = inbct(''example1_graph_only.bct'');\n');
+fprintf('  signal = inbct(''example2_with_signal.bct'', ''DataType'', ''signal'');\n');
 fprintf('\n');
 
 %% Error Handling Example
@@ -189,7 +189,7 @@ try
     bad_data = struct();  % Missing .G field
     bad_data.X = randn(100, 50);
     
-    success = outbct('bad_example.h5', bad_data, 'Verbose', false);
+    success = outbct('bad_example.bct', bad_data, 'Verbose', false);
     
 catch ME
     fprintf('Expected error caught: %s\n', ME.message);
@@ -207,7 +207,7 @@ fprintf('\n');
 
 %% Clean up example files
 fprintf('Cleaning up example files...\n');
-files_to_clean = {'example1_graph_only.h5', 'example2_with_signal.h5', 'example3_complete.h5', 'bad_example.h5'};
+files_to_clean = {'example1_graph_only.bct', 'example2_with_signal.bct', 'example3_complete.bct', 'bad_example.bct'};
 for i = 1:length(files_to_clean)
     if exist(files_to_clean{i}, 'file')
         delete(files_to_clean{i});

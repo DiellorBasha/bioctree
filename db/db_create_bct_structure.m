@@ -1,20 +1,20 @@
-function success = db_create_hdf5_structure(filePath, structure_config, verbose)
-% DB_CREATE_HDF5_STRUCTURE Create HDF5 file structure from JSON config
+function success = db_create_bct_structure(filePath, structure_config, verbose)
+% DB_CREATE_BCT_STRUCTURE Create BCT file structure from JSON config
 %
 % Usage:
-%   success = createHDF5StructureFromConfig(filePath, structure_config)
-%   success = createHDF5StructureFromConfig(filePath, structure_config, verbose)
+%   success = db_create_bct_structure(filePath, structure_config)
+%   success = db_create_bct_structure(filePath, structure_config, verbose)
 %
 % Inputs:
-%   filePath         - Output HDF5 file path
-%   structure_config - Configuration structure from loadHDF5StructureConfig
+%   filePath         - Output BCT file path (HDF5 format)
+%   structure_config - Configuration structure from db_load_bct_config
 %   verbose          - Display progress messages (default: false)
 %
 % Outputs:
 %   success - True if structure created successfully
 %
 % Description:
-%   Creates the complete HDF5 group structure based on the JSON configuration,
+%   Creates the complete BCT file structure based on the JSON configuration,
 %   including support for Fourier basis datasets in the /graph group.
 
 if nargin < 3
@@ -25,7 +25,7 @@ success = false;
 
 try
     if verbose
-        fprintf('Creating HDF5 structure from configuration...\n');
+        fprintf('Creating BCT structure from configuration...\n');
         fprintf('  File: %s\n', filePath);
         fprintf('  Config version: %s\n', structure_config.version);
     end
@@ -95,14 +95,14 @@ try
     
     if verbose
         fprintf('  ✓ Created %d groups successfully\n', groups_created);
-        fprintf('  ✓ HDF5 structure ready for Bioctree data\n');
+        fprintf('  ✓ BCT structure ready for Bioctree data\n');
     end
     
     success = true;
     
 catch ME
-    warning('createHDF5StructureFromConfig:CreationError', ...
-        'Failed to create HDF5 structure: %s', ME.message);
+    warning('db_create_bct_structure:CreationError', ...
+        'Failed to create BCT structure: %s', ME.message);
     success = false;
 end
 
@@ -153,7 +153,7 @@ function success = createHDF5Group(filePath, groupPath, verbose)
 end
 
 function exists = groupExists(info, groupPath)
-% Check if a group exists in the HDF5 file structure
+% Check if a group exists in the BCT file structure
     exists = false;
     if ~isfield(info, 'Groups') || isempty(info.Groups)
         return;
