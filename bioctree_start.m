@@ -118,9 +118,31 @@ for i = 1:size(recommended_toolboxes, 1)
     end
 end
 
+% Initialize Bioctree data management system
+fprintf('\n=== Initializing Bioctree Data System ===\n');
+try
+    bioctree_init('Verbose', false);
+    fprintf('✓ Data system initialized\n');
+    
+    % Display data configuration
+    config = bioctree_config('all');
+    fprintf('Data location: %s\n', config.DataPath);
+catch ME
+    fprintf('⚠ Data system initialization failed: %s\n', ME.message);
+    fprintf('  You can initialize manually with: bioctree_init()\n');
+end
+
 % Display available functionality
 fprintf('\n=== Available Functionality ===\n');
-fprintf('Core modules:\n');
+fprintf('Bioctree Data Engine:\n');
+fprintf('  • outbct() - Export analysis results to structured HDF5 (.h5 files)\n');
+fprintf('  • inbct() - Load and query data with multidimensional filtering\n');
+fprintf('  • bioctree_config() - Configure data paths and system settings\n');
+fprintf('  • bioctree_data_info() - System status and cleanup operations\n');
+fprintf('  • bct2h5() - Convert legacy .bct files to proper .h5 HDF5 format\n');
+fprintf('  • bioctree_convert_data() - Batch convert all .bct files in data system\n');
+
+fprintf('\nCore Analysis Modules:\n');
 fprintf('  • Graph Signal Processing (toolbox/graphs/, toolbox/operators/)\n');
 fprintf('  • Compression algorithms (compression/)\n');
 fprintf('  • Spatiotemporal analysis (toolbox/frequency/, toolbox/simulations/)\n');
@@ -128,11 +150,11 @@ fprintf('  • Brainstorm integration (io/)\n');
 fprintf('  • Visualization tools (plotlib/)\n');
 
 fprintf('\nQuick start:\n');
-fprintf('  • Demo workflows: run scripts in workflows/\n');
-fprintf('  • Test data: explore test-data/ directory\n');
-fprintf('  • Run tests: runtests(''tests'')\n');
+fprintf('  • Try demo: demo_bioctree_hdf5\n');
+fprintf('  • Explore workflows: scripts in workflows/\n');
+fprintf('  • Configure system: bioctree_config()\n');
 fprintf('  • Documentation: see COPILOT_INSTRUCTIONS.md\n');
 
-fprintf('\n=== Bioctree ready for use! ===\n\n');
+fprintf('\n=== Bioctree ready for spatiotemporal graph analysis! ===\n\n');
 
 end
