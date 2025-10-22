@@ -148,7 +148,7 @@ fprintf('\n5. Integration with Bioctree data system...\n');
 
 % Show how the conversion integrates with the data management system
 fprintf('  Current data system status:\n');
-dataInfo = bioctree_data_info('summary');
+dataInfo = db_data_info('summary');
 
 fprintf('    Total files: %d\n', dataInfo.summary.total_files);
 fprintf('    HDF5 (.h5) files: %d\n', dataInfo.summary.bioctree_h5_files + dataInfo.summary.other_h5_files);

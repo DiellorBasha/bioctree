@@ -1,5 +1,5 @@
-function structure_config = loadHDF5StructureConfig(config_file)
-% LOADHDF5STRUCTURECONFIG Load HDF5 structure configuration from JSON
+function structure_config = db_load_hdf5_config(config_file)
+% DB_LOAD_HDF5_CONFIG Load HDF5 structure configuration from JSON
 %
 % Usage:
 %   structure_config = loadHDF5StructureConfig()

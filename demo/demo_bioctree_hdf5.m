@@ -444,7 +444,7 @@ fprintf('\n   Current data configuration:\n');
 bioctree_config();
 
 % Get data system info
-dataInfo = bioctree_data_info('summary');
+dataInfo = db_data_info('summary');
 fprintf('\n   Data system status:\n');
 fprintf('   • Total files: %d\n', dataInfo.summary.total_files);
 fprintf('   • Storage used: %.1f MB\n', dataInfo.summary.total_size_mb);
@@ -482,13 +482,13 @@ if strcmpi(response, 'y')
     fprintf('Demo file deleted.\n');
     
     % Show updated data info
-    dataInfo = bioctree_data_info('summary');
+    dataInfo = db_data_info('summary');
     fprintf('Updated storage: %d files, %.1f MB total\n', ...
             dataInfo.summary.total_files, dataInfo.summary.total_size_mb);
 else
     fprintf('Demo file preserved in: %s\n', config.TempPath);
     fprintf('Use inbct(''%s'') to reload data\n', outputFile);
-    fprintf('Use bioctree_data_info() for data system status\n');
+    fprintf('Use db_data_info() for data system status\n');
 end
 
 fprintf('\n=== Demo Complete ===\n');

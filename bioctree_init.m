@@ -28,7 +28,7 @@ function success = bioctree_init(varargin)
 % Output:
 %   success - True if initialization completed successfully
 %
-% See also: bioctree_config, bioctree_data_info, outbct, inbct
+% See also: bioctree_config, db_data_info, outbct, inbct
 
 % Parse input arguments
 p = inputParser;
@@ -218,7 +218,7 @@ try
             fprintf('Step 5: Cleaning up existing data...\n');
         end
         
-        cleanupInfo = bioctree_data_info('cleanup');
+        cleanupInfo = db_data_info('cleanup');
         if verbose && isfield(cleanupInfo, 'cleanup')
             cleanup = cleanupInfo.cleanup;
             fprintf('  ✓ Removed %d files, freed %.1f MB\n', ...
@@ -237,7 +237,7 @@ try
             if verbose
                 fprintf('  Found %d legacy .bct file(s)\n', length(bctFiles));
                 fprintf('  These should be converted to proper .h5 format\n');
-                fprintf('  Use bioctree_convert_data() to convert them\n');
+                fprintf('  Use db_convert_data() to convert them\n');
             end
         else
             if verbose
@@ -265,7 +265,7 @@ try
     
     % Test data info system
     try
-        testInfo = bioctree_data_info('summary');
+        testInfo = db_data_info('summary');
         if verbose
             fprintf('  ✓ Data information system working\n');
         end
@@ -306,7 +306,7 @@ try
         fprintf('• Configuration: Use bioctree_config() to modify settings\n');
         fprintf('• Data export: Use outbct(filename, data) to save analysis results\n');
         fprintf('• Data import: Use inbct(filename) to load and query data\n');
-        fprintf('• System info: Use bioctree_data_info() for status and cleanup\n\n');
+        fprintf('• System info: Use db_data_info() for status and cleanup\n\n');
         
         fprintf('Next steps:\n');
         fprintf('1. Run demo_bioctree_hdf5.m to see the system in action\n');

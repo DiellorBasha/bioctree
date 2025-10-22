@@ -261,10 +261,10 @@ function createHDF5Groups(filePath, verbose)
     
     try
         % Load structure configuration from JSON file
-        structure_config = loadHDF5StructureConfig();
+        structure_config = db_load_hdf5_config();
         
         % Create structure using configuration
-        success = createHDF5StructureFromConfig(filePath, structure_config, verbose);
+        success = db_create_hdf5_structure(filePath, structure_config, verbose);
         
         if ~success
             error('Failed to create HDF5 structure from configuration');

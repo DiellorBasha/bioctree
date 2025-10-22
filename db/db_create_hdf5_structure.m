@@ -1,5 +1,5 @@
-function success = createHDF5StructureFromConfig(filePath, structure_config, verbose)
-% CREATEHDF5STRUCTUREFROMCONFIG Create HDF5 file structure from JSON config
+function success = db_create_hdf5_structure(filePath, structure_config, verbose)
+% DB_CREATE_HDF5_STRUCTURE Create HDF5 file structure from JSON config
 %
 % Usage:
 %   success = createHDF5StructureFromConfig(filePath, structure_config)

@@ -138,9 +138,9 @@ fprintf('Bioctree Data Engine:\n');
 fprintf('  • outbct() - Export analysis results to structured HDF5 (.h5 files)\n');
 fprintf('  • inbct() - Load and query data with multidimensional filtering\n');
 fprintf('  • bioctree_config() - Configure data paths and system settings\n');
-fprintf('  • bioctree_data_info() - System status and cleanup operations\n');
+fprintf('  • db_data_info() - System status and cleanup operations\n');
 fprintf('  • bct2h5() - Convert legacy .bct files to proper .h5 HDF5 format\n');
-fprintf('  • bioctree_convert_data() - Batch convert all .bct files in data system\n');
+fprintf('  • db_convert_data() - Batch convert all .bct files in data system\n');
 
 fprintf('\nCore Analysis Modules:\n');
 fprintf('  • Graph Signal Processing (toolbox/graphs/, toolbox/operators/)\n');

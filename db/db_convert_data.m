@@ -1,5 +1,5 @@
-function result = bioctree_convert_data(varargin)
-% BIOCTREE_CONVERT_DATA Batch convert all .bct files in Bioctree data system
+function result = db_convert_data(varargin)
+% DB_CONVERT_DATA Batch convert all .bct files in Bioctree data system
 %
 % This function automatically finds and converts all legacy .bct files
 % in the Bioctree data directory structure to proper .h5 HDF5 format.

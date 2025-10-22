@@ -1,14 +1,14 @@
-function info = bioctree_data_info(varargin)
-% BIOCTREE_DATA_INFO Get information about Bioctree data files and storage
+function info = db_data_info(varargin)
+% DB_DATA_INFO Get information about Bioctree data files and storage
 %
 % This function provides comprehensive information about the Bioctree data
 % storage system, including file inventory, disk usage, and system status.
 %
 % Usage:
-%   info = bioctree_data_info()              % Complete information
-%   info = bioctree_data_info('summary')     % Summary only
-%   info = bioctree_data_info('files')       % File inventory only
-%   info = bioctree_data_info('path', dir)   % Specific directory info
+%   info = db_data_info()              % Complete information
+%   info = db_data_info('summary')     % Summary only
+%   info = db_data_info('files')       % File inventory only
+%   info = db_data_info('path', dir)   % Specific directory info
 %
 % Parameters:
 %   'summary'     - Return only summary statistics
