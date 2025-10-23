@@ -1,6 +1,10 @@
 function success = bct2h5(inputPath, varargin)
 % BCT2H5 Convert legacy .bct files to proper .h5 HDF5 format
 %
+% ⚠️  DEPRECATED: This function is deprecated. The BCT class system automatically
+% handles file format conversions and no longer requires separate .h5 files.
+% Use bct.open() to read both .bct and .h5 files directly.
+%
 % This function converts Bioctree .bct files (which are actually HDF5 files
 % with incorrect extension) to proper .h5 files for better system compatibility.
 %
@@ -75,6 +79,10 @@ success.file_list = {};
 success.errors = {};
 
 startTime = tic;
+
+% Issue deprecation warning
+warning('BCT2H5:Deprecated', ['bct2h5() is deprecated. The BCT class system automatically handles ' ...
+    'file format conversions. Use bct.open() to read both .bct and .h5 files directly.']);
 
 try
     if opts.Verbose

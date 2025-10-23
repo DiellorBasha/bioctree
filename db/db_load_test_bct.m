@@ -88,24 +88,46 @@ if ~exist(file_path, 'file')
     end
 end
 
-%% Load Data
+%% Load Data using BCT class
 if verbose
     fprintf('Loading standard test BCT file: %s\n', file_path);
 end
 
+% Issue deprecation warning
+warning('DB_LOAD_TEST_BCT:Deprecated', ['db_load_test_bct() is deprecated. ' ...
+    'Use BCT class methods: bct.open() and bct object read methods for data loading.']);
+
 try
+    % Open BCT file
+    bct_obj = bct.open(file_path);
+    
+    % Load data based on type using BCT class methods
     switch data_type
         case 'all'
-            data = inbct(file_path, 'Verbose', verbose);
+            data = struct();
+            data.graph = bct_obj.readGraph();
+            try
+                data.X = bct_obj.readSignal('signal');
+            catch
+                % Signal might not exist
+            end
+            try
+                data.metadata = bct_obj.readMetadata();
+            catch
+                % Metadata might not exist
+            end
             
         case 'graph'
-            data = inbct(file_path, 'DataType', 'graph', 'Verbose', verbose);
+            data = struct();
+            data.graph = bct_obj.readGraph();
             
         case 'signal'
-            data = inbct(file_path, 'DataType', 'signal', 'Verbose', verbose);
+            data = struct();
+            data.X = bct_obj.readSignal('signal');
             
         case 'metadata'
-            data = inbct(file_path, 'DataType', 'metadata', 'Verbose', verbose);
+            data = struct();
+            data.metadata = bct_obj.readMetadata();
     end
     
     if verbose

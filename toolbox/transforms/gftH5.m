@@ -114,9 +114,30 @@ if ischar(params.hdf5_file_or_path) || isstring(params.hdf5_file_or_path)
         fprintf('   Loading from file: %s\n', input_file);
     end
     
-    % Load using inbct function
+    % Load using BCT class
     try
-        data = inbct(input_file);
+        bct_obj = bct.open(input_file);
+        
+        % Convert BCT object to legacy data structure format for compatibility
+        data = struct();
+        
+        % Load graph data
+        data.graph = bct_obj.readGraph();
+        
+        % Load signal data if available
+        try
+            data.X = bct_obj.readSignal('signal');
+        catch
+            % Signal data might not exist, that's okay
+        end
+        
+        % Load metadata if available
+        try
+            data.metadata = bct_obj.readMetadata();
+        catch
+            % Metadata might not exist, that's okay
+        end
+        
     catch ME
         error('gftH5:LoadError', 'Failed to load HDF5 file: %s', ME.message);
     end
@@ -498,8 +519,13 @@ if ~isempty(params.OutputFile)
         analysisData.metadata.created = datestr(now);
         analysisData.metadata.source_file = input_file;
         
-        % Export using outbct
-        outbct(params.OutputFile, analysisData);
+        % Export using BCT class
+        bct_obj = bct.create(params.OutputFile);
+        bct_obj.addGraph(analysisData.G);
+        bct_obj.addSignal(analysisData.X, 'signal');
+        bct_obj.addSignal(analysisData.X_gft, 'gft_coeffs');
+        bct_obj.addSignal(analysisData.spectral_energy, 'spectral_energy');
+        bct_obj.addMetadata(analysisData.metadata);
         
         computation_time.saving = toc(tic_save);
         
