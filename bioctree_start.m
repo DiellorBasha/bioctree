@@ -132,6 +132,13 @@ catch ME
     fprintf('  You can initialize manually with: bioctree_init()\n');
 end
 
+addpath(fullfile(bioctree_root,'toolbox'));  % brings +bct package
+addpath(fullfile(bioctree_root,'workflows'), fullfile(bioctree_root,'io'), ...
+        fullfile(bioctree_root,'plotlib'), fullfile(bioctree_root,'demo'), ...
+        fullfile(bioctree_root,'tests'));
+fprintf('[bioctree] Paths added. Data root: %s\n', fullfile(bioctree_root,'data'));
+
+
 % Display available functionality
 fprintf('\n=== Available Functionality ===\n');
 fprintf('Bioctree Data Engine:\n');

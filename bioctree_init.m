@@ -313,7 +313,7 @@ try
         fprintf('2. Use bioctree_config() to customize paths and settings\n');
         fprintf('3. Start saving your analysis results with outbct()\n');
     end
-    
+
 catch ME
     if verbose
         fprintf('\n❌ Bioctree initialization failed!\n');

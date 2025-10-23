@@ -108,6 +108,15 @@ fprintf('Vertices: %d, Signal size: [%d x %d]\n', ...
     size(data.graph.coords, 1), size(data.signal.signal));
 ```
 
+## File Extension Requirements
+
+**CRITICAL: All BCT files must use .h5 extension, never .bct**
+
+- BCT files are HDF5 files with Bioctree-specific internal structure
+- The "BCT" name refers to the data organization, not the file extension
+- Always use: `data.h5`, `test.h5`, `results.h5`
+- Never use: `data.bct`, `test.bct`, `results.bct`
+
 ## Best Practices
 
 1. **Always use `db_load_test_bct()`** instead of hardcoded file paths
@@ -116,6 +125,7 @@ fprintf('Vertices: %d, Signal size: [%d x %d]\n', ...
 4. **Use `'Verbose', true`** in demos to show users what's loading
 5. **Reference standard dimensions** (642 vertices, 1000 time samples) in assertions
 6. **Leverage reproducibility** - same seed always gives same signals
+7. **Use .h5 extension** for all BCT files to maintain HDF5 compatibility
 
 ## Examples
 

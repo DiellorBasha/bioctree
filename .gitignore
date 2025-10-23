@@ -2,3 +2,9 @@ gspbox/
 test-data/
 figures/
 circstat/
+scripts/### bct ###
+/data/cache/
+/data/temp/
+/data/bioctree_files/derivatives/
+/data/bioctree_files/processed/
+/data/**/*.h5~

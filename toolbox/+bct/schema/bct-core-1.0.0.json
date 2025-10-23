@@ -1,0 +1,23 @@
+{
+  "datatype": "bct",
+  "schema_name": "bct-core",
+  "schema_version": "1.0.0",
+  "root_attributes_required": ["datatype","schema_name","schema_version","indexing","uuid","created_utc"],
+  "axes": {
+    "time_s":       {"path": "/axes/time_s",       "dtype": "float64", "rank": 1, "optional": false},
+    "node_id":      {"path": "/axes/node_id",      "dtype": "int32",   "rank": 1, "optional": false},
+    "freq_hz":      {"path": "/axes/freq_hz",      "dtype": "float32", "rank": 1, "optional": true},
+    "graph_lambda": {"path": "/axes/graph_lambda", "dtype": "float32", "rank": 1, "optional": true}
+  },
+  "datasets": {
+    "/signals/raw":              {"shape": ["T","N"],         "dtype_any_of": ["float32"], "dim_scales": ["time_s","node_id"], "optional": false},
+    "/decomp/time_freq/coeffs":  {"shape": ["F","T","N"],     "dtype_any_of": ["float32","complex64"], "dim_scales": ["freq_hz","time_s","node_id"], "optional": true},
+    "/decomp/graph_freq/coeffs": {"shape": ["K","T","N"],     "dtype_any_of": ["float32","complex64"], "dim_scales": ["graph_lambda","time_s","node_id"], "optional": true}
+  },
+  "dimension_constraints": [
+    {"equals": ["len(/axes/node_id)", "shape(/signals/raw)[1]"], "optional_left": false, "optional_right": false},
+    {"equals": ["len(/axes/time_s)",  "shape(/signals/raw)[0]"], "optional_left": false, "optional_right": false},
+    {"equals": ["shape(/decomp/time_freq/coeffs)[1:3]", "shape(/signals/raw)"], "optional_left": true},
+    {"equals": ["shape(/decomp/graph_freq/coeffs)[1:3]", "shape(/signals/raw)"], "optional_left": true}
+  ]
+}
