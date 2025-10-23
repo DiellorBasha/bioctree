@@ -1,6 +1,9 @@
 function success = db_create_bct_structure(filePath, structure_config, verbose)
 % DB_CREATE_BCT_STRUCTURE Create BCT file structure from JSON config
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead: obj = bct.create('filename')
+%
 % Usage:
 %   success = db_create_bct_structure(filePath, structure_config)
 %   success = db_create_bct_structure(filePath, structure_config, verbose)
@@ -16,6 +19,11 @@ function success = db_create_bct_structure(filePath, structure_config, verbose)
 % Description:
 %   Creates the complete BCT file structure based on the JSON configuration,
 %   including support for Fourier basis datasets in the /graph group.
+
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_create_bct_structure is deprecated. Use bct.create() instead: obj = bct.create(''%s'')', ...
+    filePath);
 
 if nargin < 3
     verbose = false;

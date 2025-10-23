@@ -1,6 +1,9 @@
 function success = db_create_test_bct(outputPath, varargin)
 % DB_CREATE_TEST_BCT Create standardized test BCT file for bioctree development
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead with bct.create() and write methods.
+%
 % This function creates the canonical test BCT file that serves as the standard
 % test dataset for all bioctree functions and demos. The file contains an
 % icosphere graph with multi-layer patch signals of varying sizes.
@@ -69,6 +72,10 @@ fs = p.Results.SamplingRate;
 seed = p.Results.Seed;
 verbose = p.Results.Verbose;
 overwrite = p.Results.Overwrite;
+
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_create_test_bct is deprecated. Use BCT class: obj = bct.create(); obj.write_raw(); obj.write_graph()');
 
 success = false;
 

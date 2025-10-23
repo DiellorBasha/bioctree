@@ -1,6 +1,9 @@
 function data = db_load_test_bct(varargin)
 % DB_LOAD_TEST_BCT Load the standard test BCT file for bioctree development
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead: obj = bct.open('test_bioctree_standard.h5')
+%
 % This function loads the canonical test BCT file created by db_create_test_bct().
 % If the file doesn't exist, it will be created automatically.
 %
@@ -41,6 +44,10 @@ file_path = p.Results.FilePath;
 data_type = lower(p.Results.DataType);
 create_if_missing = p.Results.CreateIfMissing;
 verbose = p.Results.Verbose;
+
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_load_test_bct is deprecated. Use BCT class: obj = bct.open(''test_bioctree_standard.h5'')');
 
 %% Determine File Path
 if isempty(file_path)

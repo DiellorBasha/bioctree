@@ -1,6 +1,9 @@
 function structure_config = db_load_bct_config(config_file)
 % DB_LOAD_BCT_CONFIG Load BCT structure configuration from JSON
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead which handles schema automatically.
+%
 % Usage:
 %   structure_config = db_load_bct_config()
 %   structure_config = db_load_bct_config(config_file)
@@ -16,6 +19,10 @@ function structure_config = db_load_bct_config(config_file)
 %   This function loads the BCT structure specification from a JSON
 %   configuration file, providing a centralized way to manage the
 %   Bioctree BCT file format including Fourier basis support.
+
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_load_bct_config is deprecated. BCT class handles schema automatically.');
 
 if nargin < 1 || isempty(config_file)
     % Use default config file path
