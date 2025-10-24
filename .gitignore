@@ -8,3 +8,8 @@ scripts/### bct ###
 /data/bioctree_files/derivatives/
 /data/bioctree_files/processed/
 /data/**/*.h5~
+/data
+/external/.venv
+/external\bioelectromagnetism
+/external/gifti-main
+/external/out

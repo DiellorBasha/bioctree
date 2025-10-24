@@ -142,7 +142,7 @@ function obj = open(fn)
         W = sparse(i,j,w,nNodes,nNodes); W = max(W,W.');
         G = struct('W',W,'N',nNodes);
         C = this.read_coords(); if ~isempty(C), G.coords = double(C); end
-        try, G = gsp_estimate_lmax(G); catch, end
+        try G = gsp_estimate_lmax(G); catch, end
     end
     function write_raw(this, X, fs)
       X = single(X); [T,N] = size(X);
@@ -298,7 +298,12 @@ h5writeatt(this.fn,'/','fs_hz', single(fs));
 if ~bct.internal.Util.pathExists(this.fn,"/signals/raw")
    h5create(this.fn,'/signals/raw',[T N],'Datatype','single', ...
       'ChunkSize',[min(T,2048) min(N,256)], 'Deflate',5, 'Shuffle',true);
-   h5write(this.fn,'/signals/raw', squeeze(Xltn(1,:,:)));
+   % Ensure proper T×N dimensions even when T=1
+   first_layer = squeeze(Xltn(1,:,:));
+   if T == 1 && isvector(first_layer)
+       first_layer = reshape(first_layer, 1, N);  % Ensure 1×N for T=1 case
+   end
+   h5write(this.fn,'/signals/raw', first_layer);
    bct.internal.DimScale.attach(this.fn,"/signals/raw", ...
       {"/axes/time_s","/axes/node_id"}, {'time_s','node_id'});
 end

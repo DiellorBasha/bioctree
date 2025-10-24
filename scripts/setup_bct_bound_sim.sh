@@ -1,10 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="/mnt/c/CodingProjects/bioctree"
+
+echo "Creating directories..."
+mkdir -p "$ROOT/toolbox/+bct/+sim"
+mkdir -p "$ROOT/examples"
+
+##############################################
+# toolbox/+bct/+sim/sim.m  (B-bound simulator)
+##############################################
+cat > "$ROOT/toolbox/+bct/+sim/sim.m" <<'MATLAB'
 classdef sim < handle
 % bct.sim.sim — B-bound simulator for graph signals (Gaussian static + default growth series)
 %
 % Integration notes (matches your bct API):
 %   - Graph I/O via:   B.write_graph(G_struct)
 %   - Axes/signals via: B.write_raw_layers(XLTN, fs), B.append_raw_layer(XTN, layer_id0based)
-%   - Axis queries via: B.read_axis('node_id'), B.has('/path'), B.read_coords(), B.read_graph_gsp()
+%   - Axis queries via: B.read_axis('node_id')
 %
 % Defaults requested:
 %   • If no graph in file: build default G = gsp_bunny(), then G = gsp_estimate_lmax(G),
@@ -34,20 +47,11 @@ classdef sim < handle
         function obj = sim(B)
             % B is a bct.bct instance
             obj.B = B;
-            
+            node_id = obj.B.read_axis('node_id'); % int32 0..N-1
+            obj.N = numel(node_id);
             % Ensure a graph exists in the file (creates bunny if needed)
             obj.ensure_graph_in_file();
-            
-            % Get node count first - either from axes or infer from graph structure
-            if obj.B.has("/axes/node_id")
-                node_id = obj.B.read_axis('node_id'); % int32 0..N-1
-                obj.N = numel(node_id);
-            else
-                % Infer N from graph edges
-                obj.N = obj.infer_node_count_from_graph();
-            end
-            
-            % Cache GSP graph from file (now that obj.N is set)
+            % Cache GSP graph from file
             obj.Gsp = obj.load_gsp_from_file();
         end
 
@@ -177,7 +181,7 @@ classdef sim < handle
                 if numel(x) ~= obj.N
                     error('bct:sim:VectorSizeMismatch','Vector length must be N=%d.', obj.N);
                 end
-                XTN = reshape(x(:), 1, obj.N);  % Ensure T=1, N=obj.N (row vector)
+                XTN = reshape(x, 1, obj.N);  % T=1
             else
                 [r,c] = size(x);
                 if c == obj.N
@@ -194,8 +198,7 @@ classdef sim < handle
             has_stack = obj.pathExists("/signals/raw_stack");
             if ~has_stack
                 % Initialize stack with L=1 using write_raw_layers (creates axes & /signals/raw)
-                [T, N] = size(XTN);
-                XLTN = reshape(XTN, [1, T, N]); % L×T×N format for write_raw_layers
+                XLTN = reshape(XTN, [1, size(XTN,1), size(XTN,2)]); % L=1
                 obj.B.write_raw_layers(XLTN, fs_opt); % sets /axes/time_s and fs_hz
                 layer_id1 = 1; % first (1-based)
                 return;
@@ -203,13 +206,8 @@ classdef sim < handle
 
             % Append to existing stack: need layer_id0based
             if isempty(layer_id0based)
-                % Read layer_id axis using BCT method
-                if obj.B.has("/axes/layer_id")
-                    lid = obj.B.read_axis('layer_id'); % int32 0..L-1
-                    layer_id0based = double(numel(lid)); % append at end
-                else
-                    layer_id0based = 0; % first layer
-                end
+                lid = obj.B.read_axis('layer_id'); % int32 0..L-1
+                layer_id0based = double(numel(lid)); % append at end
             end
             obj.B.append_raw_layer(XTN, layer_id0based);
             layer_id1 = layer_id0based + 1;
@@ -219,63 +217,55 @@ classdef sim < handle
     % ---------- internals ----------
     methods (Access=private)
         function ensure_graph_in_file(obj)
-            % If no graph in file, create default graph and write it via B.write_graph
+            % If no graph in file, create default bunny and write it via B.write_graph
             if obj.pathExists("/graph/edges/coo_i")
                 return;
             end
-            
-            % Try GSPBox bunny first, fallback to simple default
-            if exist('gsp_bunny','file') == 2
-                G = gsp_bunny();
-                try G = gsp_estimate_lmax(G); catch, end
-                
-                % Prepare G struct for B.write_graph (MATLAB 1-based E list)
-                [ii,jj,ww] = find(G.W); sel = ii<jj; ii=ii(sel); jj=jj(sel); ww=ww(sel);
-                Gs = struct( ...
-                    'coords', single(G.coords), ...
-                    'E', [double(ii) double(jj) single(ww)], ...
-                    'lap_type', 'combinatorial', ...
-                    'lmax', single(isfield(G,'lmax') * G.lmax) ...
-                );
-            else
-                % Fallback: create simple 10-node circle graph
-                warning('bct:sim:GSPBoxMissing','GSPBox not found. Creating simple circle graph.');
-                nNodes = 10; 
-                % Simple circle: node i connected to nodes i-1 and i+1 (with wraparound)
-                ii = [1:nNodes, 1:nNodes]; 
-                jj = [2:nNodes, 1, [2:nNodes, 1]];  % Each node connects to next and prev
-                ww = ones(1, 2*nNodes);
-                % Remove duplicate edges (keep only i<j)
-                edges = [ii(:), jj(:), ww(:)];
-                edges = edges(edges(:,1) < edges(:,2), :);
-                
-                % Create 3D coordinates for circle
-                theta = 2*pi*(0:nNodes-1)/nNodes;
-                coords = single([cos(theta)', sin(theta)', zeros(nNodes,1)]);
-                
-                Gs = struct( ...
-                    'coords', coords, ...
-                    'E', edges, ...
-                    'lap_type', 'combinatorial', ...
-                    'lmax', single(4) ... % approximate for circle graph
-                );
+            % Build default bunny (requires GSPBox)
+            if exist('gsp_bunny','file') ~= 2
+                error('bct:sim:GSPBoxMissing','gsp_bunny not found. Add GSPBox to path.');
             end
+            G = gsp_bunny();
+            try, G = gsp_estimate_lmax(G); catch, end
+
+            % Prepare G struct for B.write_graph (MATLAB 1-based E list)
+            [ii,jj,ww] = find(G.W); sel = ii<jj; ii=ii(sel); jj=jj(sel); ww=ww(sel);
+            Gs = struct( ...
+                'coords', single(G.coords), ...
+                'E', [double(ii) double(jj) single(ww)], ...
+                'lap_type', 'combinatorial', ...
+                'lmax', single(isfield(G,'lmax') * G.lmax) ...
+            );
             obj.B.write_graph(Gs);
         end
 
         function G = load_gsp_from_file(obj)
-            % Use BCT's read_graph_gsp method
-            G = obj.B.read_graph_gsp();
-            if isempty(G)
-                % Fallback if no graph exists (shouldn't happen after ensure_graph_in_file)
+            % Build a GSPBox-like struct G with fields W, coords (if present), N
+            coords = obj.try_read_coords();
+            % Read COO edges (0-based) if available
+            if obj.pathExists("/graph/edges/coo_i")
+                i0 = h5read(obj.B.fn, '/graph/edges/coo_i'); % int32
+                j0 = h5read(obj.B.fn, '/graph/edges/coo_j');
+                w  = h5read(obj.B.fn, '/graph/edges/coo_w'); % single
+                i = double(i0)+1; j = double(j0)+1; w = double(w);
+                N = obj.N;
+                W = sparse(i,j,w,N,N); W = max(W,W.');
+                G = struct('W', W, 'N', N);
+                if ~isempty(coords), G.coords = double(coords); end
+                try, G = gsp_estimate_lmax(G); catch, end
+            else
+                % Should not happen (ensure_graph_in_file ran), but guard:
                 G = struct('W', sparse(obj.N,obj.N), 'N', obj.N);
-                coords = obj.try_read_coords();
                 if ~isempty(coords), G.coords = double(coords); end
             end
         end
 
         function coords = try_read_coords(obj)
-            coords = obj.B.read_coords(); % Use BCT method
+            if ~obj.pathExists("/graph/nodes/coords")
+                coords = [];
+                return;
+            end
+            coords = h5read(obj.B.fn,'/graph/nodes/coords'); % single N×3 (per your writer)
         end
 
         function d = nodeDistances(obj, centerIdx, mode)
@@ -306,20 +296,53 @@ classdef sim < handle
             end
         end
 
-        function nNodes = infer_node_count_from_graph(obj)
-            % Infer node count from graph edges in file using BCT methods
-            if obj.B.has("/graph/edges/coo_i")
-                i0 = h5read(obj.B.fn, '/graph/edges/coo_i'); % int32 0-based
-                j0 = h5read(obj.B.fn, '/graph/edges/coo_j');
-                nNodes = double(max([max(i0), max(j0)])) + 1; % +1 for 0-based indexing
-            else
-                % No graph exists yet - this shouldn't happen after ensure_graph_in_file
-                nNodes = 10; % default fallback
-            end
-        end
-        
         function tf = pathExists(obj, path)
-            tf = obj.B.has(path); % Use BCT method
+            tf = false;
+            try
+                h5info(obj.B.fn, path);
+                tf = true;
+            catch
+                tf = false;
+            end
         end
     end
 end
+MATLAB
+
+##############################################
+# Example: default growth signal (T=100, fs=10)
+##############################################
+cat > "$ROOT/examples/bct_sim_default_growth_demo.m" <<'MATLAB'
+bioctree_init();
+
+% Create or open a BCT file
+fn = 'demo_default_growth.bct.h5';
+if exist(fn,'file'), delete(fn); end
+B = bct.bct.create(fn);
+
+% Build simulator (auto-creates bunny graph in file if missing)
+S = bct.sim.sim(B);
+
+% Generate default growth signal (T=100, fs=10) and write it
+X_TN = S.gaussian_growth_default();     % T×N
+layer_id = S.write_layer(X_TN);         % initializes axes if needed
+fprintf('Appended growth series as layer %d (1-based)\n', layer_id);
+
+% Make it the default layer and copy to /signals/raw for fast access
+B.set_default_layer(layer_id);
+
+% Quick sanity: read a time slice back
+tSpan = [1 1]; nodeIdx = [1 B.N];      % first time step
+x1 = B.read_raw(tSpan, nodeIdx);       % 1×N
+fprintf('Read back a slice: size = [%d %d]\n', size(x1,1), size(x1,2));
+MATLAB
+
+echo "Done."
+echo "Created / updated:"
+echo " - toolbox/+bct/+sim/sim.m"
+echo " - examples/bct_sim_default_growth_demo.m"
+
+echo
+echo "Run in MATLAB:"
+echo "  addpath(genpath('toolbox'));"
+echo "  run('examples/bct_sim_default_growth_demo.m')"
