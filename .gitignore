@@ -8,3 +8,8 @@ scripts/### bct ###
 /data/bioctree_files/derivatives/
 /data/bioctree_files/processed/
 /data/**/*.h5~
+/external/.venv/
+
+# Test files
+test_*.m
+test_*.py
