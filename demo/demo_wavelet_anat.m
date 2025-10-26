@@ -223,7 +223,7 @@ A = load("test-data\omega-tutorial\sub-0002\anatomy\cortex.mat");
 G = A.graph.graph
 G = gsp_estimate_lmax(G);
 
-%% Heat kernel
+% Heat kernel
 taus = [1, 10, 100, 1000];
 Hk = gsp_design_heat(G, taus);
 
