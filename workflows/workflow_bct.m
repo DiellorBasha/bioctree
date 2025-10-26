@@ -34,7 +34,6 @@ for n = 2:N
     C(:,:,n) = single(wt);
 end
 
-
 tf_attrs = struct('transform',"cwt", 'pr_exact',true, 'padding',"reflect", ...
                   'params_json', jsonencode(struct('wavelet','amor')));
 B.write_tf_coeffs(reshape(C,[1 F T N]), single(f), tf_attrs);

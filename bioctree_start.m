@@ -132,22 +132,33 @@ catch ME
     fprintf('  You can initialize manually with: bioctree_init()\n');
 end
 
-addpath(fullfile(bioctree_root,'toolbox'));  % brings +bct package
+% Ensure BCT class package is on path
+addpath(fullfile(bioctree_root,'toolbox'));  % brings +bct package into scope
 addpath(fullfile(bioctree_root,'workflows'), fullfile(bioctree_root,'io'), ...
         fullfile(bioctree_root,'plotlib'), fullfile(bioctree_root,'demo'), ...
-        fullfile(bioctree_root,'tests'));
+        fullfile(bioctree_root,'tests'), fullfile(bioctree_root,'db'));
+
+% Verify BCT class availability
+if exist('bct.bct', 'class')
+    fprintf('[bioctree] ✓ BCT class system available\n');
+else
+    fprintf('[bioctree] ⚠ BCT class system not found\n');
+end
+
 fprintf('[bioctree] Paths added. Data root: %s\n', fullfile(bioctree_root,'data'));
 
 
 % Display available functionality
 fprintf('\n=== Available Functionality ===\n');
-fprintf('Bioctree Data Engine:\n');
-fprintf('  • outbct() - Export analysis results to structured HDF5 (.h5 files)\n');
-fprintf('  • inbct() - Load and query data with multidimensional filtering\n');
+fprintf('BCT Object-Oriented Data Engine:\n');
+fprintf('  • bct.create() - Create new BCT files with schema validation\n');
+fprintf('  • bct.open() - Open existing BCT files with automatic validation\n');
+fprintf('  • Multi-layer signals, time-frequency analysis, hyperslab queries\n');
 fprintf('  • bioctree_config() - Configure data paths and system settings\n');
 fprintf('  • db_data_info() - System status and cleanup operations\n');
-fprintf('  • bct2h5() - Convert legacy .bct files to proper .h5 HDF5 format\n');
-fprintf('  • db_convert_data() - Batch convert all .bct files in data system\n');
+fprintf('\nLegacy I/O Functions (being phased out):\n');
+fprintf('  • outbct() - Export analysis results (use bct.create() + write methods)\n');
+fprintf('  • inbct() - Load data (use bct.open() + read methods)\n');
 
 fprintf('\nCore Analysis Modules:\n');
 fprintf('  • Graph Signal Processing (toolbox/graphs/, toolbox/operators/)\n');
@@ -156,7 +167,10 @@ fprintf('  • Spatiotemporal analysis (toolbox/frequency/, toolbox/simulations/
 fprintf('  • Brainstorm integration (io/)\n');
 fprintf('  • Visualization tools (plotlib/)\n');
 
-fprintf('\nQuick start:\n');
+fprintf('\nQuick start with BCT Class:\n');
+fprintf('  • Create: obj = bct.create(''my_dataset'')\n');
+fprintf('  • Write: obj.write_raw(signal_data, sampling_rate)\n');
+fprintf('  • Read: obj = bct.open(''dataset.h5''); data = obj.read_raw()''\n');
 fprintf('  • Try demo: demo_bioctree_hdf5\n');
 fprintf('  • Explore workflows: scripts in workflows/\n');
 fprintf('  • Configure system: bioctree_config()\n');

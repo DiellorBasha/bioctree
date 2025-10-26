@@ -12,6 +12,300 @@ You are GitHub Copilot helping to implement Bioctree, a comprehensive MATLAB too
 - Examples: `data.h5`, `test_bioctree_standard.h5`, `results.h5`
 - Never use: `data.bct`, `test.bct`, or any .bct extensions
 
+## NEW: BCT Object-Oriented Class System
+
+**MAJOR ARCHITECTURAL CHANGE: The bioctree codebase is transitioning from functional I/O (outbct/inbct) to an object-oriented BCT class system for all HDF5 file operations.**
+
+### BCT Class Architecture (`toolbox/+bct/`)
+
+The new BCT class provides a comprehensive object-oriented interface for BCT file handling with full CRUD operations, schema validation, and multi-layer support.
+
+#### Core Class (`toolbox/+bct/@bct/bct.m`)
+```matlab
+% Factory methods for file lifecycle
+obj = bct.create('dataset_name');     % Create new BCT file
+obj = bct.open('existing_file.h5');   % Open existing BCT file
+
+% CRUD Operations
+obj.write_raw(signal_matrix, fs);     % Write raw signals
+obj.write_graph(graph_struct);        % Write graph structure
+data = obj.read_raw([1,100], [1,50]); % Read time/node slices
+obj.validate();                       % Schema validation
+```
+
+#### Internal Utilities (`toolbox/+bct/+internal/`)
+- **`Schema.m`**: JSON schema management and validation
+- **`Validator.m`**: Comprehensive data integrity checking
+- **`Paths.m`**: Intelligent path resolution (bioctree root detection)
+- **`Util.m`**: HDF5 utilities and UUID generation
+- **`Attr.m`**: Type-safe attribute writing
+- **`DimScale.m`**: HDF5 dimension scale management
+
+#### Schema Definition (`toolbox/+bct/schema/bct-core-1.0.0.json`)
+Enforces standardized BCT file structure with required groups, attributes, and dimensional constraints.
+
+### BCT Class Usage Patterns
+
+#### 1. CREATE Operations
+```matlab
+% Create new BCT file with automatic schema skeleton
+obj = bct.create('my_analysis_results');  % Creates in data/bioctree_files/raw/
+
+% Write core data
+obj.write_raw(signal_data, sampling_rate);
+obj.write_graph(graph_structure);
+
+% Multi-layer support
+obj.write_raw_layers(signal_3D, fs, layer_ids);  % (L×T×N) format
+```
+
+#### 2. READ Operations
+```matlab
+% Open existing file with automatic validation
+obj = bct.open('analysis_results.h5');
+
+% Efficient partial loading (hyperslabs)
+time_slice = obj.read_raw([100, 200], ':');           % Time range, all nodes
+node_slice = obj.read_raw(':', [1, 50]);              % All time, node range
+layer_data = obj.read_raw_layers([1,3], [1,100], ':'); % Specific layers
+
+% Frequency band reconstruction
+alpha_band = obj.read_tf_band([8, 12], [1, 1000], ':', 1);
+```
+
+#### 3. UPDATE Operations
+```matlab
+% Append new layers dynamically
+obj.append_raw_layer(new_layer_data, layer_id);
+
+% Time-frequency coefficient storage
+obj.write_tf_coeffs(coeffs_4D, freq_hz, transform_attrs);
+
+% Layer management
+obj.set_default_layer(layer_index);
+default_id = obj.get_default_layer();
+```
+
+#### 4. VALIDATION Operations
+```matlab
+% Comprehensive validation reporting
+report = obj.validate();
+if ~report.ok
+    fprintf('Validation errors:\n%s\n', strjoin(report.messages, '\n'));
+end
+```
+
+### Multi-Layer Signal Architecture
+
+The new BCT class natively supports multi-layer signals for complex experimental designs:
+
+#### Layer Organization
+```matlab
+% 3D Signal Stack: (L × T × N)
+% L = Layers (conditions/trials/frequencies)  
+% T = Time points
+% N = Graph nodes/vertices
+
+% Example: Multi-condition experiment
+layer_1 = condition_A_data;  % (T×N)
+layer_2 = condition_B_data;  % (T×N)
+layer_3 = condition_C_data;  % (T×N)
+signal_3D = cat(1, reshape(layer_1,[1,T,N]), ...
+                   reshape(layer_2,[1,T,N]), ...
+                   reshape(layer_3,[1,T,N])); % (3×T×N)
+
+obj.write_raw_layers(signal_3D, fs, [0, 1, 2]);
+```
+
+#### Layer Access Patterns
+```matlab
+% Access specific experimental conditions
+condition_A = obj.read_raw_layers(1, ':', ':');      % Layer 1 only
+conditions_AB = obj.read_raw_layers([1,2], ':', ':'); % Layers 1&2
+all_conditions = obj.read_raw_layers(':', [1,100], [1,50]); % Time/node slice
+```
+
+### Time-Frequency Analysis Support
+
+#### Complex Coefficient Storage
+```matlab
+% 4D Coefficient Array: (L × F × T × N)
+% Split real/imaginary storage for efficiency
+obj.write_tf_coeffs(coeffs_complex_4D, freq_hz, tf_attributes);
+
+% Transform attributes
+tf_attrs = struct(...
+    'transform', 'continuous_wavelet', ...
+    'pr_exact', true, ...                    % Perfect reconstruction
+    'padding', 'symmetric', ...
+    'params_json', jsonencode(cwt_params));
+```
+
+#### Band-Limited Reconstruction
+```matlab
+% Direct frequency band signal reconstruction
+alpha_signal = obj.read_tf_band([8, 12], time_range, node_range, layer_ids);
+beta_signal = obj.read_tf_band([13, 30], time_range, node_range, layer_ids);
+```
+
+### Path Management and Data Organization
+
+#### Intelligent Path Resolution
+```matlab
+% The BCT class automatically resolves paths relative to bioctree root
+obj = bct.create('experiment_1');  
+% → Creates: <bioctree_root>/data/bioctree_files/raw/experiment_1.h5
+
+obj = bct.create('processed/filtered_data');
+% → Creates: <bioctree_root>/data/bioctree_files/raw/processed/filtered_data.h5
+
+% Absolute paths are rebased under bioctree data directory for portability
+```
+
+#### Data Directory Structure Integration
+```matlab
+% BCT class respects bioctree configuration
+config = bioctree_config();
+% All BCT files created under config.DataPath by default
+% Supports custom paths via bioctree_config('DataPath', '/custom/location')
+```
+
+### Refactoring Guidelines for Legacy Code
+
+#### Phase 1: Replace outbct/inbct Calls
+```matlab
+% OLD PATTERN (functional)
+success = outbct('results.h5', analysis_data, 'Compression', 6);
+data = inbct('results.h5', 'TimeRange', [1, 100]);
+
+% NEW PATTERN (object-oriented)
+obj = bct.create('results');
+obj.write_raw(analysis_data.X, analysis_data.fs);
+obj.write_graph(analysis_data.graph);
+data_slice = obj.read_raw([1, 100], ':');
+```
+
+#### Phase 2: Leverage Advanced Features
+```matlab
+% Multi-layer experiments
+obj.write_raw_layers(multi_condition_data, fs, condition_ids);
+
+% Efficient partial loading
+time_window = obj.read_raw([start_idx, end_idx], vertex_indices);
+
+% Frequency domain analysis
+obj.write_tf_coeffs(cwt_coeffs, frequencies, transform_params);
+band_limited = obj.read_tf_band([freq_min, freq_max], time_range, vertices);
+```
+
+#### Phase 3: Add Validation Integration
+```matlab
+% Add validation checkpoints in analysis pipelines
+function results = analysis_pipeline(input_file)
+    obj = bct.open(input_file);
+    
+    % Validate input data integrity
+    report = obj.validate();
+    assert(report.ok, 'Input validation failed: %s', strjoin(report.messages, '; '));
+    
+    % Perform analysis...
+    
+    % Create results file with validation
+    results_obj = bct.create('pipeline_results');
+    results_obj.write_raw(processed_data, fs);
+    
+    % Final validation
+    final_report = results_obj.validate();
+    if ~final_report.ok
+        warning('Output validation issues: %s', strjoin(final_report.messages, '; '));
+    end
+end
+```
+
+### Error Handling and Debugging
+
+#### Schema Validation Errors
+```matlab
+% Common validation issues and solutions:
+try
+    obj = bct.open('problematic_file.h5');
+catch ME
+    if contains(ME.identifier, 'bct:SchemaInvalid')
+        fprintf('Schema validation failed:\n%s\n', ME.message);
+        % Handle schema migration or file repair
+    end
+end
+```
+
+#### Dimensional Consistency Checks
+```matlab
+% Automatic axis validation prevents common errors:
+% - Signal dimensions vs graph node count
+% - Time axis length vs signal temporal dimension  
+% - Layer count consistency across datasets
+```
+
+### Migration Strategy
+
+#### Database Functions (`db/`)
+1. **`db_create_test_bct.m`**: Replace outbct call with BCT class
+2. **`db_load_test_bct.m`**: Replace inbct call with BCT class  
+3. **New functions**: `db_create_bct_class.m`, `db_load_bct_class.m`
+
+#### Demo Scripts (`demo/`)
+Update all demo scripts to use BCT class for file I/O operations.
+
+#### Analysis Workflows (`workflows/`)
+Integrate BCT class validation and multi-layer support into analysis pipelines.
+
+### Performance Considerations
+
+#### Hyperslab Reading
+```matlab
+% Efficient partial data access without loading full datasets
+subset = obj.read_raw([time_start, time_end], [node_start, node_end]);
+% Only loads requested data slice, not entire file
+```
+
+#### Layer-Specific Analysis
+```matlab
+% Process individual layers without loading all data
+for layer_id = 1:num_layers
+    layer_data = obj.read_raw_layers(layer_id, ':', ':');
+    results(layer_id) = analyze_layer(layer_data);
+end
+```
+
+#### Memory Management
+```matlab
+% BCT class manages HDF5 file handles efficiently
+% Automatic cleanup prevents file handle leaks
+% Chunked storage optimizes read/write performance
+```
+
+### Integration with Existing Bioctree Functions
+
+The BCT class system is designed to integrate seamlessly with existing bioctree workflows:
+
+#### Graph Processing Functions
+```matlab
+% BCT class provides graph data in standard bioctree format
+obj = bct.open('dataset.h5');
+G = obj.graph;  % Standard bioctree graph structure
+% Use with existing functions: graphGradient(G, signal), etc.
+```
+
+#### Signal Processing Workflows  
+```matlab
+% BCT class signals compatible with all bioctree processing
+raw_signals = obj.read_raw(':', ':');
+processed = apply_bioctree_filter(raw_signals, filter_params);
+obj_out = bct.create('filtered_results');
+obj_out.write_raw(processed, fs);
+```
+
+This BCT class system represents a major architectural upgrade that will enable more robust, efficient, and maintainable bioctree workflows while maintaining backward compatibility with existing functions.
+
 ## Project Overview
 
 Bioctree provides tools for graph-aware compression, multiscale subdivision, and joint time-vertex analysis of signals measured on networked sensors or neural meshes. It integrates Graph Signal Processing (GSP) with compression techniques and builds on EPFL's GSPBOX for core graph operations.

@@ -1,6 +1,9 @@
 function success = db_create_test_bct(outputPath, varargin)
 % DB_CREATE_TEST_BCT Create standardized test BCT file for bioctree development
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead with bct.create() and write methods.
+%
 % This function creates the canonical test BCT file that serves as the standard
 % test dataset for all bioctree functions and demos. The file contains an
 % icosphere graph with multi-layer patch signals of varying sizes.
@@ -69,6 +72,10 @@ fs = p.Results.SamplingRate;
 seed = p.Results.Seed;
 verbose = p.Results.Verbose;
 overwrite = p.Results.Overwrite;
+
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_create_test_bct is deprecated. Use BCT class: obj = bct.create(); obj.write_raw(); obj.write_graph()');
 
 success = false;
 
@@ -242,17 +249,38 @@ try
         end
     end
     
-    %% Step 6: Export to BCT File
+    % Issue deprecation warning
+    warning('DB_CREATE_TEST_BCT:Deprecated', ['db_create_test_bct() is deprecated. ' ...
+        'Use BCT class methods: bct.create() and bct object methods for data creation.']);
+    
+    %% Step 6: Export to BCT File using BCT class
     if verbose
         fprintf('\nStep 5: Exporting to BCT file...\n');
     end
     
-    success = outbct(outputPath, data_struct, ...
-        'IncludeRaw', true, ...         % Include raw signal data
-        'IncludeSpectral', true, ...    % Include GFT coefficients
-        'Compression', 6, ...           % Good compression
-        'Precision', 'single', ...      % Save space while maintaining quality
-        'Verbose', verbose);
+    try
+        % Create BCT file and add data using BCT class
+        bct_obj = bct.create(outputPath);
+        bct_obj.addGraph(data_struct.graph);
+        bct_obj.addSignal(data_struct.X, 'signal');
+        bct_obj.addSignal(data_struct.Xhat_gft, 'gft_coeffs');
+        bct_obj.addMetadata(data_struct.metadata);
+        
+        % Add signal layers if they exist
+        if isfield(data_struct, 'X_layers')
+            layer_names = fieldnames(data_struct.X_layers);
+            for i = 1:length(layer_names)
+                bct_obj.addSignal(data_struct.X_layers.(layer_names{i}), layer_names{i});
+            end
+        end
+        
+        success = exist(outputPath, 'file') ~= 0;
+    catch ME
+        if verbose
+            fprintf('✗ Error creating BCT file: %s\n', ME.message);
+        end
+        success = false;
+    end
     
     if success
         fileInfo = dir(outputPath);

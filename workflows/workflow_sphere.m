@@ -77,14 +77,21 @@ if ~graph_exists
         fprintf('  ✓ Created output directory: %s\n', output_dir);
     end
     
-    % Save graph to HDF5
+    % Save graph to HDF5 using BCT class
     fprintf('\nSaving graph to HDF5...\n');
     try
-        success = outbct(output_filename, data_struct, ...
-            'IncludeRaw', false, ...        % No signal data yet
-            'IncludeSpectral', false, ...   % No spectral data yet
-            'Compression', 6, ...
-            'Verbose', true);
+        % Delete existing file to preserve overwrite behavior
+        if exist(output_filename, 'file')
+            delete(output_filename);
+        end
+        
+        % Create BCT file and add graph data
+        bct_obj = bct.create(output_filename);
+        bct_obj.addGraph(data_struct.graph);
+        bct_obj.addMetadata(data_struct.metadata);
+        
+        % Verify creation success
+        success = exist(output_filename, 'file') ~= 0;
         
         if success
             fprintf('  ✓ Graph successfully saved to HDF5!\n');
@@ -96,6 +103,7 @@ if ~graph_exists
         
     catch ME
         fprintf('  ✗ Error saving graph: %s\n', ME.message);
+        success = false;
     end
     
 else
@@ -172,13 +180,15 @@ if ~signal_exists
     data_struct.metadata.patch_value = patch_value;
     data_struct.metadata.background_value = background_value;
     
-    % Save updated data to HDF5
+    % Save updated data to HDF5 using BCT class
     try
-        success = outbct(output_filename, data_struct, ...
-            'IncludeRaw', true, ...         % Include signal data now
-            'IncludeSpectral', false, ...   % No spectral data yet
-            'Compression', 6, ...
-            'Verbose', true);
+        % Open existing BCT file and add signal data
+        bct_obj = bct.open(output_filename);
+        bct_obj.addSignal(data_struct.X, 'signal');
+        bct_obj.updateMetadata(data_struct.metadata);
+        
+        % Verify update success  
+        success = true; % BCT class methods throw errors if they fail
         
         if success
             fprintf('  ✓ Patch signal successfully added to HDF5!\n');
@@ -190,6 +200,7 @@ if ~signal_exists
         
     catch ME
         fprintf('  ✗ Error adding signal: %s\n', ME.message);
+        success = false;
     end
     
 else
@@ -325,13 +336,25 @@ if ~additional_layers_exist
             patch_sizes(i)*100, actual_coverage, sum(patch_signals{i} > 0.5));
     end
     
-    % Save all layers to HDF5
+    % Save all layers to HDF5 using BCT class
     try
-        success = outbct(output_filename, data_struct, ...
-            'IncludeRaw', true, ...         % Include all signal data
-            'IncludeSpectral', false, ...   % No spectral data yet
-            'Compression', 6, ...
-            'Verbose', true);
+        % Open existing BCT file and add multiple signal layers
+        bct_obj = bct.open(output_filename);
+        
+        % Add primary signal
+        bct_obj.addSignal(data_struct.X, 'signal');
+        
+        % Add each patch signal layer
+        for i = 1:5
+            layer_name = sprintf('patch_%02d_pct', round(patch_sizes(i)*100));
+            bct_obj.addSignal(patch_signals{i}, layer_name);
+        end
+        
+        % Update metadata with layer information
+        bct_obj.updateMetadata(data_struct.metadata);
+        
+        % Verify update success
+        success = true; % BCT class methods throw errors if they fail
         
         if success
             fprintf('  ✓ Multi-scale patch signals added to HDF5!\n');
@@ -358,6 +381,7 @@ if ~additional_layers_exist
         
     catch ME
         fprintf('  ✗ Error adding signal layers: %s\n', ME.message);
+        success = false;
     end
     
 else

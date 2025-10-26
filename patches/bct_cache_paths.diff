@@ -1,0 +1,330 @@
+*** a/toolbox/+bct/@bct/bct.m
+--- b/toolbox/+bct/@bct/bct.m
+***************
+*** 1,6 ****
+  classdef bct < handle
+      % ... existing header/comments ...
+-     properties
++     properties
+          fn
+          schema
+          T
+          N
+          fs
+      end
+--- 1,38 ----
+  classdef bct < handle
+      % ... existing header/comments ...
++ 
++     %% =========================
++     %  Canonical paths (schema v1.0.0)
++     %  =========================
++     properties (Access = private, Constant)
++         P = struct( ...
++           'axes_time', "/axes/time_s", ...
++           'axes_node', "/axes/node_id", ...
++           'axes_layer',"/axes/layer_id", ...
++           'axes_freq', "/axes/freq_hz", ...
++           'raw',       "/signals/raw", ...
++           'stack',     "/signals/raw_stack", ...
++           'tfR',       "/decomp/time_freq/coeffs_real", ...
++           'tfI',       "/decomp/time_freq/coeffs_imag" ...
++         )
++     end
++ 
++     %% =========================
++     %  Cached sizes & presence flags (+ optional HDF5 handles)
++     %  =========================
++     properties (SetAccess = private)
++         T
++         N
++         fs
++ 
++         L = NaN        % layers in /signals/raw_stack
++         F = NaN        % freqs in /axes/freq_hz (if TF present)
++ 
++         has_raw   logical = false
++         has_stack logical = false
++         has_tf    logical = false
++     end
++ 
++     properties (Access = private)
++         h5 = struct('fid',[], 'd_raw',[], 'd_stack',[], 'd_tfR',[], 'd_tfI',[], ...
++                     's_raw',[], 's_stack',[], 's_tfR',[], 's_tfI',[])
++     end
++ 
+      properties
+          fn
+          schema
+          T
+          N
+          fs
+      end
+***************
+*** 30,54 ****
+      methods (Static)
+          function obj = open(fn)
+              obj = bct.bct();
+              obj.fn = string(fn);
+!             % existing: load manifest / validate
+!             obj.schema = bct.internal.Schema.readManifest(fn);
+!             bct.internal.Validator.validateSkeleton(fn, obj.schema);
+! 
+!             % existing: if raw exists, cache T/N/fs here (may use h5info)
+!             if bct.internal.Util.pathExists(fn, '/signals/raw')
+!                 info = h5info(fn, '/signals/raw');
+!                 obj.T = info.Dataspace.Size(1);
+!                 obj.N = info.Dataspace.Size(2);
+!                 try
+!                     obj.fs = double(h5readatt(fn,'/','fs_hz'));
+!                 catch
+!                     obj.fs = NaN;
+!                 end
+!             else
+!                 obj.T = NaN; obj.N = NaN; obj.fs = NaN;
+!             end
+          end
+      end
+--- 62,130 ----
+      methods (Static)
+          function obj = open(fn)
+              obj = bct.bct();
+              obj.fn = string(fn);
+! 
+!             % Manifest + skeleton check (trust after this passes)
+!             obj.schema = bct.internal.Schema.readManifest(fn);
+!             bct.internal.Validator.validateSkeleton(fn, obj.schema);
+! 
+!             % Presence flags (ONE TIME)
+!             obj.has_raw   = bct.internal.Util.pathExists(fn, obj.P.raw);
+!             obj.has_stack = bct.internal.Util.pathExists(fn, obj.P.stack);
+!             obj.has_tf    = bct.internal.Util.pathExists(fn, obj.P.tfR) && ...
+!                             bct.internal.Util.pathExists(fn, obj.P.tfI);
+! 
+!             % Shapes (ONE TIME)
+!             if obj.has_raw
+!                 s = h5info(fn, obj.P.raw);
+!                 obj.T = s.Dataspace.Size(1);
+!                 obj.N = s.Dataspace.Size(2);
+!                 try
+!                     obj.fs = double(h5readatt(fn,'/','fs_hz'));
+!                 catch
+!                     obj.fs = NaN;
+!                 end
+!             else
+!                 obj.T = NaN; obj.N = NaN;
+!                 % If axes exist, seed T/N from them (optional)
+!                 if bct.internal.Util.pathExists(fn, obj.P.axes_time)
+!                     obj.T = numel(h5read(fn, obj.P.axes_time));
+!                 end
+!                 if bct.internal.Util.pathExists(fn, obj.P.axes_node)
+!                     obj.N = numel(h5read(fn, obj.P.axes_node));
+!                 end
+!                 try
+!                     obj.fs = double(h5readatt(fn,'/','fs_hz'));
+!                 catch
+!                     obj.fs = NaN;
+!                 end
+!             end
+! 
+!             if obj.has_stack
+!                 sRS = h5info(fn, obj.P.stack);
+!                 obj.L = sRS.Dataspace.Size(1);
+!             end
+! 
+!             if obj.has_tf
+!                 obj.F = numel(h5read(fn, obj.P.axes_freq));
+!             end
+! 
+!             % OPTIONAL: persistent HDF5 handles for hot loops
+!             % Uncomment if you plan to use H5D/H5S reads in windows.
+!             %{
+!             obj.h5.fid = H5F.open(fn, 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
+!             if obj.has_raw
+!                 obj.h5.d_raw = H5D.open(obj.h5.fid, obj.P.raw);
+!                 obj.h5.s_raw = H5D.get_space(obj.h5.d_raw);
+!             end
+!             if obj.has_stack
+!                 obj.h5.d_stack = H5D.open(obj.h5.fid, obj.P.stack);
+!                 obj.h5.s_stack = H5D.get_space(obj.h5.d_stack);
+!             end
+!             if obj.has_tf
+!                 obj.h5.d_tfR = H5D.open(obj.h5.fid, obj.P.tfR); obj.h5.s_tfR = H5D.get_space(obj.h5.d_tfR);
+!                 obj.h5.d_tfI = H5D.open(obj.h5.fid, obj.P.tfI); obj.h5.s_tfI = H5D.get_space(obj.h5.d_tfI);
+!             end
+!             %}
+          end
+      end
+***************
+*** 56,61 ****
+--- 132,178 ----
+      methods
++         function delete(this)
++             % Best-effort close of optional low-level handles
++             try
++                 if ~isempty(this.h5.d_raw),   H5D.close(this.h5.d_raw);   end
++                 if ~isempty(this.h5.s_raw),   H5S.close(this.h5.s_raw);   end
++                 if ~isempty(this.h5.d_stack), H5D.close(this.h5.d_stack); end
++                 if ~isempty(this.h5.s_stack), H5S.close(this.h5.s_stack); end
++                 if ~isempty(this.h5.d_tfR),   H5D.close(this.h5.d_tfR);   end
++                 if ~isempty(this.h5.s_tfR),   H5S.close(this.h5.s_tfR);   end
++                 if ~isempty(this.h5.d_tfI),   H5D.close(this.h5.d_tfI);   end
++                 if ~isempty(this.h5.s_tfI),   H5S.close(this.h5.s_tfI);   end
++                 if ~isempty(this.h5.fid),     H5F.close(this.h5.fid);     end
++             catch
++             end
++         end
++ 
++         %% -------- small public getters (keep callers B-bound)
++         function v = read_axis(this, name)
++             p = "/axes/" + string(name);
++             if ~bct.internal.Util.pathExists(this.fn, p)
++                 error('bct:AxisMissing','Axis not found: %s', p);
++             end
++             v = h5read(this.fn, char(p));
++         end
++ 
++         function tf = has(this, path)
++             tf = bct.internal.Util.pathExists(this.fn, char(path));
++         end
++ 
++         function C = read_coords(this)
++             if this.has('/graph/nodes/coords')
++                 C = h5read(this.fn, '/graph/nodes/coords');
++             else
++                 C = [];
++             end
++         end
++ 
++         function G = read_graph_gsp(this)
++             if ~this.has('/graph/edges/coo_i'), G = []; return; end
++             i0 = h5read(this.fn,'/graph/edges/coo_i'); 
++             j0 = h5read(this.fn,'/graph/edges/coo_j');
++             w  = h5read(this.fn,'/graph/edges/coo_w');
++             i = double(i0)+1; j = double(j0)+1; w = double(w);
++             N = numel(this.read_axis('node_id'));
++             W = sparse(i,j,w,N,N); W = max(W,W.');
++             G = struct('W',W,'N',N);
++             C = this.read_coords(); if ~isempty(C), G.coords = double(C); end
++             try, G = gsp_estimate_lmax(G); catch, end
++         end
++ 
+          %% -------- write_raw (cache-aware)
+          function write_raw(this, X, fs)
+              X = single(X);
+              [T,N] = size(X);
+-             % ... existing logic ...
++ 
++             if isnan(this.N) || isnan(this.T) || ~this.has_raw
++                 % First-time init: create axes + raw (per schema)
++                 if ~bct.internal.Util.pathExists(this.fn, this.P.axes_node)
++                     h5create(this.fn, this.P.axes_node, [N 1], 'Datatype','int32');
++                     h5write(this.fn,  this.P.axes_node, int32((0:N-1)'));
++                 else
++                     nAxis = numel(h5read(this.fn, this.P.axes_node));
++                     assert(nAxis==N, "bct:NodeCountMismatch","Signal N=%d vs node_id=%d",N,nAxis);
++                 end
++                 if ~bct.internal.Util.pathExists(this.fn, this.P.axes_time)
++                     h5create(this.fn, this.P.axes_time, [T 1], 'Datatype','double');
++                     h5write(this.fn,  this.P.axes_time, (0:T-1)'/fs);
++                 else
++                     tAxis = numel(h5read(this.fn, this.P.axes_time));
++                     assert(tAxis==T, "bct:TimeLengthMismatch","Signal T=%d vs time_s=%d",T,tAxis);
++                 end
++                 h5create(this.fn, this.P.raw, [T N], 'Datatype','single', ...
++                     'ChunkSize', [min(T,2048) min(N,256)], 'Deflate',5, 'Shuffle',true);
++                 bct.internal.DimScale.attach(this.fn, this.P.raw, ...
++                     {this.P.axes_time, this.P.axes_node}, {'time_s','node_id'});
++                 h5writeatt(this.fn,'/','fs_hz', single(fs));
++                 this.has_raw = true;
++             else
++                 % Already initialized: assert against cached sizes
++                 assert(this.N==N && this.T==T, 'bct:ShapeMismatch','(T,N) must match existing axes.');
++             end
++ 
++             % Write & refresh caches
++             h5write(this.fn, this.P.raw, X);
++             this.T=T; this.N=N; this.fs=fs;
+          end
+***************
+*** 100,120 ****
+          function write_raw_layers(this, XLTN, fs, layer_ids)
+              % XLTN: L×T×N, single
+              XLTN = single(XLTN);
+              [L,T,N] = size(XLTN);
+-             % ... existing logic (creates /axes/layer_id, /signals/raw_stack) ...
++             % ... existing logic (creates /axes/layer_id, /signals/raw_stack) ...
++             % After creating /signals/raw_stack, refresh caches:
++             this.has_stack = true; 
++             this.L = L;
++             % If you also materialize /signals/raw from layer 0 here, ensure:
++             %   this.has_raw = true; this.T = T; this.N = N; this.fs = fs;
++             % and attach dim scales via DimScale.attach using this.P.*
+          end
+***************
+*** 121,160 ****
+          function append_raw_layer(this, XTN, layer_id0)
+              % XTN: T×N (single), layer_id0: 0-based index where to place it
+              XTN = single(XTN);
+              [T,N] = size(XTN);
+-             % existing: check axes sizes by reading axes each time...
+-             tAxis = numel(h5read(this.fn,'/axes/time_s'));
+-             nAxis = numel(h5read(this.fn,'/axes/node_id'));
+-             assert(tAxis==T && nAxis==N, 'bct:ShapeMismatch', 'Layer (T,N) mismatch axes.');
++             % Faster: assert against cached sizes
++             assert(~isnan(this.T) && ~isnan(this.N), 'bct:AxesUnknown', ...
++                 'Axes must be established before appending a layer.');
++             assert(this.T==T && this.N==N, 'bct:ShapeMismatch', ...
++                 'Layer must be (T,N) matching cached axes.');
+  
+              % If stack doesn't exist yet, initialize it (L=1 at layer_id0)
+              if ~bct.internal.Util.pathExists(this.fn, '/signals/raw_stack')
+                  % ... your existing initialization path ...
+                  % create /axes/layer_id and /signals/raw_stack with [1 T N]
+                  % attach dim scales
++                 this.has_stack = true; 
++                 this.L = 1;
+              else
+                  % ... your existing extend + write hyperslab path ...
+              end
++ 
++             % Refresh cached L (max over appended index + 1)
++             if isnan(this.L), this.L = 0; end
++             this.L = max(this.L, double(layer_id0)+1);
++             this.has_stack = true;
+          end
+***************
+*** 161,195 ****
+          function set_default_layer(this, id1based)
+-             % existing: h5info on /signals/raw_stack to get T,N every time...
+-             s = h5info(this.fn,'/signals/raw_stack'); 
+-             T = s.Dataspace.Size(2); 
+-             N = s.Dataspace.Size(3);
++             % Prefer cached sizes if available
++             if ~isnan(this.T) && ~isnan(this.N)
++                 T = this.T; N = this.N;
++             else
++                 s = h5info(this.fn, this.P.stack);
++                 T = s.Dataspace.Size(2); 
++                 N = s.Dataspace.Size(3);
++             end
+              % ... your existing logic to read layer (id1based-1) and copy into /signals/raw ...
+              % ... reattach dim scales to /signals/raw if you recreate it ...
++             % Refresh caches
++             this.has_raw = true;
++             this.T = T; this.N = N;
+          end
+***************
+*** 196,230 ****
+          function X = read_raw(this, tSpan, nodeIdx, layerOpt)
+-             % existing: uses internal IO helper; ensure it uses constant paths
+-             % and does not re-h5info/h5exists in hot path.
++             % existing: uses internal IO helper; ensure it uses this.P.* constants
++             % and does not call pathExists/h5info in hot loops.
+              % recommended: treat ":" once using cached N, do contiguous read,
+              % then MATLAB subindex if nodeIdx is non-contiguous.
+              % X must be single(Tsel×Nsel)
+          end
+      end
++ 
++ end % classdef

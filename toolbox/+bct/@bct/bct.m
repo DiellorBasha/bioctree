@@ -2,9 +2,31 @@ classdef bct < handle
   % bct: BioCTree HDF5 facade (schema v1.0.0, skeleton Option A)
   properties (SetAccess=private)
     fn string
-    T double = NaN; N double = NaN; fs double = NaN
+    T double = NaN; N double = NaN; L double = NaN ;  F double = NaN ;fs double = NaN
     schema struct
+
+    % Presence flags (set once at open)
+    has_raw   logical = false
+    has_stack logical = false
+    has_tf    logical = false
+
+    % Open only if you will use H5D/H5S in hot loops; otherwise leave [].
+    h5 = struct('fid',[], 'd_raw',[], 'd_stack',[], 'd_tfR',[], 'd_tfI',[], ...
+                's_raw',[], 's_stack',[], 's_tfR',[], 's_tfI',[])
   end
+  % In classdef bct (add near other properties)
+properties (Access=private, Constant)
+    P = struct( ...
+      'axes_time', "/axes/time_s", ...
+      'axes_node', "/axes/node_id", ...
+      'axes_layer',"/axes/layer_id", ...
+      'axes_freq', "/axes/freq_hz", ...
+      'raw',       "/signals/raw", ...
+      'stack',     "/signals/raw_stack", ...
+      'tfR',       "/decomp/time_freq/coeffs_real", ...
+      'tfI',       "/decomp/time_freq/coeffs_imag" ...
+    )
+end
   methods (Static)
    function obj = create(outSpec)
     target = bct.internal.Paths.underData(outSpec, fullfile('bioctree_files','raw'));
@@ -14,18 +36,114 @@ classdef bct < handle
     bct.internal.Schema.writeSkeleton(target, M);   % will create groups & embed manifest
     obj.schema = M;
   end
-    function obj = open(fn)
-      obj = bct.bct(); obj.fn = string(fn);
-      obj.schema = bct.internal.Schema.readManifest(fn);
-      bct.internal.Validator.validateSkeleton(fn, obj.schema);
-      if bct.internal.Util.pathExists(fn, "/signals/raw")
-        s = h5info(fn,"/signals/raw");
-        obj.T = s.Dataspace.Size(1); obj.N = s.Dataspace.Size(2);
-        try obj.fs = double(h5readatt(fn,'/','fs_hz')); catch, end
-      end
+function obj = open(fn)
+    obj = bct.bct(); obj.fn = string(fn);
+    % Manifest + skeleton check (you already do this)
+    obj.schema = bct.internal.Schema.readManifest(fn);
+    bct.internal.Validator.validateSkeleton(fn, obj.schema);
+
+    % Presence flags (ONE TIME — trust schema + Validator after this)
+    obj.has_raw   = bct.internal.Util.pathExists(fn, obj.P.raw);
+    obj.has_stack = bct.internal.Util.pathExists(fn, obj.P.stack);
+    obj.has_tf    = bct.internal.Util.pathExists(fn, obj.P.tfR) && ...
+                    bct.internal.Util.pathExists(fn, obj.P.tfI);
+
+    % Shapes (ONE TIME)
+    if obj.has_raw
+        s = h5info(fn, obj.P.raw);
+        obj.T = s.Dataspace.Size(1);
+        obj.N = s.Dataspace.Size(2);
+        % Root fs_hz (optional)
+        try obj.fs = double(h5readatt(fn,'/','fs_hz')); catch, obj.fs = NaN; end
+    else
+        % If no /signals/raw, fall back to axes if present
+        if bct.internal.Util.pathExists(fn, obj.P.axes_time)
+            obj.T = numel(h5read(fn, obj.P.axes_time));
+        end
+        if bct.internal.Util.pathExists(fn, obj.P.axes_node)
+            obj.N = numel(h5read(fn, obj.P.axes_node));
+        end
+        try obj.fs = double(h5readatt(fn,'/','fs_hz')); catch, obj.fs = NaN; end
+    end
+
+    if obj.has_stack
+        sRS = h5info(fn, obj.P.stack);
+        obj.L = sRS.Dataspace.Size(1);
+        % Sanity: ensure layer axis length matches L (Validator enforces this too)
+        % (No need to re-check every call.)
+    end
+
+    if obj.has_tf
+        obj.F = numel(h5read(fn, obj.P.axes_freq));
+    end
+
+    obj.h5.fid = H5F.open(fn, 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
+    if obj.has_raw
+        obj.h5.d_raw = H5D.open(obj.h5.fid, obj.P.raw);
+        obj.h5.s_raw = H5D.get_space(obj.h5.d_raw);
+    end
+    if obj.has_stack
+        obj.h5.d_stack = H5D.open(obj.h5.fid, obj.P.stack);
+        obj.h5.s_stack = H5D.get_space(obj.h5.d_stack);
+    end
+    if obj.has_tf
+        obj.h5.d_tfR = H5D.open(obj.h5.fid, obj.P.tfR);
+        obj.h5.s_tfR = H5D.get_space(obj.h5.d_tfR);
+        obj.h5.d_tfI = H5D.open(obj.h5.fid, obj.P.tfI);
+        obj.h5.s_tfI = H5D.get_space(obj.h5.d_tfI);
     end
   end
+  end
   methods
+    function delete(this)
+    % Close low-level handles if they were opened (safe to call multiple times)
+    try
+      if ~isempty(this.h5.d_raw),  H5D.close(this.h5.d_raw);  end
+      if ~isempty(this.h5.s_raw),  H5S.close(this.h5.s_raw);  end
+      if ~isempty(this.h5.d_stack),H5D.close(this.h5.d_stack);end
+      if ~isempty(this.h5.s_stack),H5S.close(this.h5.s_stack);end
+      if ~isempty(this.h5.d_tfR),  H5D.close(this.h5.d_tfR);  end
+      if ~isempty(this.h5.s_tfR),  H5S.close(this.h5.s_tfR);  end
+      if ~isempty(this.h5.d_tfI),  H5D.close(this.h5.d_tfI);  end
+      if ~isempty(this.h5.s_tfI),  H5S.close(this.h5.s_tfI);  end
+      if ~isempty(this.h5.fid),    H5F.close(this.h5.fid);    end
+    catch
+      % swallow; best-effort close
+    end
+  end
+    %% -------- small public getters (keep callers B-bound)
+    function v = read_axis(this, name)
+        p = "/axes/" + string(name);
+        if ~bct.internal.Util.pathExists(this.fn, p)
+            error('bct:AxisMissing','Axis not found: %s', p);
+        end
+        v = h5read(this.fn, char(p));
+    end
+
+    function tf = has(this, path)
+        tf = bct.internal.Util.pathExists(this.fn, char(path));
+    end
+
+    function C = read_coords(this)
+        if this.has('/graph/nodes/coords')
+            C = h5read(this.fn, '/graph/nodes/coords');
+        else
+            C = [];
+        end
+    end
+
+    function G = read_graph_gsp(this)
+        if ~this.has('/graph/edges/coo_i'), G = []; return; end
+        i0 = h5read(this.fn,'/graph/edges/coo_i'); 
+        j0 = h5read(this.fn,'/graph/edges/coo_j');
+        w  = h5read(this.fn,'/graph/edges/coo_w');
+        i = double(i0)+1; j = double(j0)+1; w = double(w);
+        nNodes = numel(this.read_axis('node_id'));
+        W = sparse(i,j,w,nNodes,nNodes); W = max(W,W.');
+        G = struct('W',W,'N',nNodes);
+        C = this.read_coords(); if ~isempty(C), G.coords = double(C); end
+        try G = gsp_estimate_lmax(G); catch, end
+    end
     function write_raw(this, X, fs)
       X = single(X); [T,N] = size(X);
       if bct.internal.Util.pathExists(this.fn,"/axes/node_id")
@@ -180,7 +298,12 @@ h5writeatt(this.fn,'/','fs_hz', single(fs));
 if ~bct.internal.Util.pathExists(this.fn,"/signals/raw")
    h5create(this.fn,'/signals/raw',[T N],'Datatype','single', ...
       'ChunkSize',[min(T,2048) min(N,256)], 'Deflate',5, 'Shuffle',true);
-   h5write(this.fn,'/signals/raw', squeeze(Xltn(1,:,:)));
+   % Ensure proper T×N dimensions even when T=1
+   first_layer = squeeze(Xltn(1,:,:));
+   if T == 1 && isvector(first_layer)
+       first_layer = reshape(first_layer, 1, N);  % Ensure 1×N for T=1 case
+   end
+   h5write(this.fn,'/signals/raw', first_layer);
    bct.internal.DimScale.attach(this.fn,"/signals/raw", ...
       {"/axes/time_s","/axes/node_id"}, {'time_s','node_id'});
 end
@@ -236,7 +359,6 @@ function id = get_default_layer(this)
     end
     id = double(h5readatt(this.fn,'/','default_layer_id')) + 1; % MATLAB 1-based
 end
-
 function set_default_layer(this, id1based)
     ids = h5read(this.fn,'/axes/layer_id');       % 0-based in file
     assert(ismember(int32(id1based-1), ids), 'bct:BadDefaultLayer', 'Layer does not exist.');
@@ -253,9 +375,6 @@ function set_default_layer(this, id1based)
     h5write(this.fn,'/signals/raw', Y);
 end
 function write_tf_coeffs(this, C, freq_hz, tf_attrs)
-% C: (L,F,T,N) complex single/double OR (F,T,N) -> promoted to L=1
-% Stores split real/imag at /decomp/time_freq/coeffs_real|imag
-
 % --- shape & axes
 if ndims(C)==3, C = reshape(C,[1 size(C)]); end
 [L,F,T,N] = size(C);
@@ -335,7 +454,6 @@ end
 bct.internal.Attr.write(this.fn, grp, 'tf_complex_storage', 'split');
 
 end
-
 function Y = read_tf_band(this, fHz, tSpan, nIdx, layers)
 % Returns (Lsel × Tsel × Nsel) reconstructed band-limited signal
 if nargin < 5 || isempty(layers), layers = this.get_default_layer(); end

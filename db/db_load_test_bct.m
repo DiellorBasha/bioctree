@@ -1,6 +1,9 @@
 function data = db_load_test_bct(varargin)
 % DB_LOAD_TEST_BCT Load the standard test BCT file for bioctree development
 %
+% ⚠️  DEPRECATED: This function is deprecated and will be removed in a future version.
+% Use the BCT class system instead: obj = bct.open('test_bioctree_standard.h5')
+%
 % This function loads the canonical test BCT file created by db_create_test_bct().
 % If the file doesn't exist, it will be created automatically.
 %
@@ -42,6 +45,10 @@ data_type = lower(p.Results.DataType);
 create_if_missing = p.Results.CreateIfMissing;
 verbose = p.Results.Verbose;
 
+% Issue deprecation warning
+warning('bioctree:DeprecatedFunction', ...
+    'db_load_test_bct is deprecated. Use BCT class: obj = bct.open(''test_bioctree_standard.h5'')');
+
 %% Determine File Path
 if isempty(file_path)
     % Try to use bioctree_config first
@@ -81,24 +88,46 @@ if ~exist(file_path, 'file')
     end
 end
 
-%% Load Data
+%% Load Data using BCT class
 if verbose
     fprintf('Loading standard test BCT file: %s\n', file_path);
 end
 
+% Issue deprecation warning
+warning('DB_LOAD_TEST_BCT:Deprecated', ['db_load_test_bct() is deprecated. ' ...
+    'Use BCT class methods: bct.open() and bct object read methods for data loading.']);
+
 try
+    % Open BCT file
+    bct_obj = bct.open(file_path);
+    
+    % Load data based on type using BCT class methods
     switch data_type
         case 'all'
-            data = inbct(file_path, 'Verbose', verbose);
+            data = struct();
+            data.graph = bct_obj.readGraph();
+            try
+                data.X = bct_obj.readSignal('signal');
+            catch
+                % Signal might not exist
+            end
+            try
+                data.metadata = bct_obj.readMetadata();
+            catch
+                % Metadata might not exist
+            end
             
         case 'graph'
-            data = inbct(file_path, 'DataType', 'graph', 'Verbose', verbose);
+            data = struct();
+            data.graph = bct_obj.readGraph();
             
         case 'signal'
-            data = inbct(file_path, 'DataType', 'signal', 'Verbose', verbose);
+            data = struct();
+            data.X = bct_obj.readSignal('signal');
             
         case 'metadata'
-            data = inbct(file_path, 'DataType', 'metadata', 'Verbose', verbose);
+            data = struct();
+            data.metadata = bct_obj.readMetadata();
     end
     
     if verbose
