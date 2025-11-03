@@ -157,9 +157,6 @@ function [u, v] = compute_sphere_uv(sphere_vertices)
     y = y ./ norm_factor;
     z = z ./ norm_factor;
     
-    % Clamp z values to valid range for asin to avoid NaN
-    z = max(-1, min(1, z));
-    
     % FreeSurfer spherical to UV mapping
     u = mod(atan2(y, x) / (2 * pi), 1);  % [0, 1]
     v = asin(z) / pi + 0.5;              % [0, 1]
