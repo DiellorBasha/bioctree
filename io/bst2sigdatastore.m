@@ -1,5 +1,8 @@
 bstdb='/export02/export01/data/dbasha/code/brainstorm-compiled/brainstorm_db/TutorialOmega/data/';
-
+addpath('/export01/data/dbasha/code/brainstorm/brainstorm3/')
+addpath('/export02/export01/data/dbasha/code/bioctree')
+bioctree_start
+brainstorm nogui
 fds = fileDatastore(bstdb,"ReadFcn",@load,"FileExtensions",".mat");
 p = read(fds);
 names = string({p.ProtocolStudies.Study.Name});
@@ -8,7 +11,8 @@ keepMask = startsWith(names, "@raw") & ~contains(names, "emptyroom", 'IgnoreCase
 rawNames = names(keepMask);
 rawPaths = fnames(keepMask);   % the matches
 idx      = find(keepMask);    % their indices (into the flattened Study list)
-
+%%
+% Import in database and downsample
 for k = 1:length(idx)
  thisidx =idx(k)
 fn=p.ProtocolStudies.Study(thisidx).Data.FileName;
@@ -38,26 +42,20 @@ files = unique(files);   % just in case there are duplicates
 %% 
 % files : cellstr of absolute paths (you already built this)
 outSuffix = '';              % '' to overwrite in place, or e.g. '.v73' to write side-by-side
-
 for i = 1:numel(files)
     in  = files{i};
     [p,n,e] = fileparts(in);
     out = fullfile(p, [n outSuffix e]);
-
     fprintf('Converting to -v7.3: %s\n', in);
-
     % Load everything (or list specific variables to reduce peak RAM)
     S = load(in);
-
     % Optional: drop unneeded bulky fields before saving
     % S.SomeHugeThing = [];  % if not needed
-
     % Save as v7.3 (HDF5 / chunked). Use '-nocompression' for faster I/O if disk space is OK.
     save(out, '-struct', 'S', '-v7.3');           % or: save(out,'-struct','S','-v7.3','-nocompression')
-
     % Optional: verify that partial loading works now
     m = matfile(out);
-    szF = size(m, 'F'); %#ok<NASGU>
+    szF = size(m, 'F'); 
 end
 %% 
 
@@ -67,11 +65,71 @@ opts = struct( ...
     'useMatfile', true);
 % 3) Make the datastore (pass options via anonymous function)
 fds = fileDatastore(files, ...
-    'ReadFcn',        @(fn) read_bs_block(fn, opts), ...
+    'ReadFcn',        @load, ...
+    'FileExtensions', '.mat', ...
+    'IncludeSubfolders', false);
+preview(fds)
+%% 
+sds = signalDatastore(files, ...
+    'ReadFcn', @read_bs_tt, ...
     'FileExtensions', '.mat', ...
     'IncludeSubfolders', false);
 
-preview(fds)
+preview(sds)   % shows a timetable with ch001..ch300, SampleRate set
+
+%%
+% Config for CWT
+flim = [0.5 60];
+vpo  = 12;
+
+reset(sds);
+while hasdata(sds)
+    TT = read(sds);                        % timetable T×Ch
+    Fs = TT.Properties.SampleRate;
+    T  = height(TT);
+    X  = TT.Variables;                     % numeric [T x Ch], single
+
+    % Reusable filter bank for FULL time
+    fb = cwtfilterbank(SamplingFrequency=Fs, ...
+                       FrequencyLimits=flim, ...
+                       VoicesPerOctave=vpo, ...
+                       SignalLength=T);
+
+    % Frequency axis
+    [~, fvec] = wt(fb, X(1,:).');         % (F x T) for one channel; get F
+    F = numel(fvec);
+
+    % Decide channel batch from free VRAM
+    g = gpuDevice;
+    safety = 0.70;
+    avail  = g.AvailableMemory * safety;  % bytes
+    bytesPerChan = F*T*4;                 % power (real single)
+    eff = 2*bytesPerChan;                 % crude temp factor
+    batch = max(1, floor(avail/eff));
+    batch = min(batch, size(X,2));
+
+    % Preallocate a GPU slab [F x T x batch] (power recommended)
+    Pg = gpuArray.zeros(F, T, batch, 'single');
+
+    % Destination on CPU for this file, if you want to keep it
+    P = zeros(F, T, size(X,2), 'single');
+
+    % Loop over channel batches (no time windowing)
+    for sIdx = 1:batch:size(X,2)
+        k = sIdx:min(sIdx+batch-1, size(X,2));
+        Xg = gpuArray(X(:,k));            % [T x batch]
+        for i = 1:numel(k)
+            % wt expects row vector; transpose one channel at a time
+            Cg = wt(fb, Xg(:,i).');       % [F x T] complex gpuArray
+            Pg(:,:,i) = abs(Cg).^2;       % store power (real single)
+        end
+        P(:,:,k) = gather(Pg(:,:,1:numel(k)));
+    end
+
+    % Example: do something with P here (save, summarize, etc.)
+    % save('cwt_<file>.mat','P','fvec','-v7.3');
+
+end
 
 %% CWT on GPU for multi-channel data (R2025b+)
 % Data: dblock1.F is 300 x 30000 (channels x time), Fs = 300 Hz

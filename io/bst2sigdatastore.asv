@@ -1,5 +1,6 @@
 bstdb='/export02/export01/data/dbasha/code/brainstorm-compiled/brainstorm_db/TutorialOmega/data/';
-
+addpath('/export01/data/dbasha/code/brainstorm/brainstorm3/')
+brainstorm nogui
 fds = fileDatastore(bstdb,"ReadFcn",@load,"FileExtensions",".mat");
 p = read(fds);
 names = string({p.ProtocolStudies.Study.Name});
@@ -8,7 +9,8 @@ keepMask = startsWith(names, "@raw") & ~contains(names, "emptyroom", 'IgnoreCase
 rawNames = names(keepMask);
 rawPaths = fnames(keepMask);   % the matches
 idx      = find(keepMask);    % their indices (into the flattened Study list)
-
+%%
+% Import in database and downsample
 for k = 1:length(idx)
  thisidx =idx(k)
 fn=p.ProtocolStudies.Study(thisidx).Data.FileName;
@@ -35,19 +37,54 @@ end
 files = arrayfun(@(s) fullfile(bstdb, s.Data.FileName), sFilesIn, ...
                  'UniformOutput', false);
 files = unique(files);   % just in case there are duplicates
+%% 
+% files : cellstr of absolute paths (you already built this)
+outSuffix = '';              % '' to overwrite in place, or e.g. '.v73' to write side-by-side
 
-dblock=load(file)
+for i = 1:numel(files)
+    in  = files{i};
+    [p,n,e] = fileparts(in);
+    out = fullfile(p, [n outSuffix e]);
+
+    fprintf('Converting to -v7.3: %s\n', in);
+
+    % Load everything (or list specific variables to reduce peak RAM)
+    S = load(in);
+
+    % Optional: drop unneeded bulky fields before saving
+    % S.SomeHugeThing = [];  % if not needed
+
+    % Save as v7.3 (HDF5 / chunked). Use '-nocompression' for faster I/O if disk space is OK.
+    save(out, '-struct', 'S', '-v7.3');           % or: save(out,'-struct','S','-v7.3','-nocompression')
+
+    % Optional: verify that partial loading works now
+    m = matfile(out);
+    szF = size(m, 'F'); %#ok<NASGU>
+end
+%% 
+
+opts = struct( ...
+    'channels',   [],        ... % [] = all channels, or e.g., 1:128
+    'cast',       'single',  ... % 'single' (GPU-friendly) or 'double'
+    'useMatfile', true);
+% 3) Make the datastore (pass options via anonymous function)
+fds = fileDatastore(files, ...
+    'ReadFcn',        @(fn) read_bs_block(fn, opts), ...
+    'FileExtensions', '.mat', ...
+    'IncludeSubfolders', false);
+
+preview(fds)
 
 %% CWT on GPU for multi-channel data (R2025b+)
 % Data: dblock1.F is 300 x 30000 (channels x time), Fs = 300 Hz
 % Bands: 0.5–60 Hz, 12 voices/octave
 
-X = single(dblock1.F);                             % 300 x 30000
-Fs   = 1/diff(dblock1.Time(1:2));
+X = single(dblock.F);                             % 300 x 30000
+Fs   = 1/diff(dblock.Time(1:2));
 flim = [0.5 60];
 vpo  = 12;
 [Ch, T] = size(X);
-TimeSec=dblock1.Time;
+TimeSec=dblock.Time;
 storeMode = "complex";          % "power" (real single, recommended) or "complex"
 
 fprintf('MATLAB %s | GPU(s)=%d | Data: %d ch x %d samples @ %.1f Hz\n', ...
