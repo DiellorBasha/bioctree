@@ -17,3 +17,7 @@ scripts/### bct ###
 /external/meshfix
 /external/toolbox_graph
 /external/gptoolbox
+
+# Test files
+test_*.m
+test_*.py

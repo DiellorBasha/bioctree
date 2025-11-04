@@ -405,23 +405,35 @@ end
 function write_glb_file(gltf, filename)
     % Write GLB (binary glTF) file
     
-    % Convert gltf struct to JSON
-    json_str = jsonencode(gltf, 'PrettyPrint', false);
-    json_bytes = uint8(json_str);
-    
-    % Extract binary data
+    % Extract binary data first
     binary_data = [];
     if isfield(gltf, 'buffers')
+        % Pre-calculate total size for efficiency
+        total_size = 0;
         for i = 1:length(gltf.buffers)
             if isfield(gltf.buffers(i), 'data')
-                binary_data = [binary_data; gltf.buffers(i).data(:)];
-                % Remove data field from JSON
-                gltf.buffers(i) = rmfield(gltf.buffers(i), 'data');
+                total_size = total_size + length(gltf.buffers(i).data(:));
+            end
+        end
+        
+        % Pre-allocate array
+        if total_size > 0
+            binary_data = zeros(total_size, 1, 'uint8');
+            offset = 1;
+            
+            for i = 1:length(gltf.buffers)
+                if isfield(gltf.buffers(i), 'data')
+                    data_chunk = gltf.buffers(i).data(:);
+                    binary_data(offset:offset+length(data_chunk)-1) = data_chunk;
+                    offset = offset + length(data_chunk);
+                    % Remove data field from JSON
+                    gltf.buffers(i) = rmfield(gltf.buffers(i), 'data');
+                end
             end
         end
     end
     
-    % Re-encode JSON without binary data
+    % Convert gltf struct to JSON (after removing binary data)
     json_str = jsonencode(gltf, 'PrettyPrint', false);
     json_bytes = uint8(json_str);
     
@@ -438,8 +450,12 @@ function write_glb_file(gltf, filename)
     % Create GLB header
     magic = uint32(0x46546C67);  % 'glTF'
     version = uint32(2);
-    total_length = uint32(12 + 8 + length(json_bytes) + ...
-                         (isempty(binary_data) ? 0 : 8 + length(binary_data)));
+    if isempty(binary_data)
+        bin_size = 0;
+    else
+        bin_size = 8 + length(binary_data);
+    end
+    total_length = uint32(12 + 8 + length(json_bytes) + bin_size);
     
     % JSON chunk header
     json_chunk_length = uint32(length(json_bytes));
@@ -483,8 +499,10 @@ function write_glb_file(gltf, filename)
     fclose(fid);
 end
 
-function uv_coords = compute_uv_from_sphere(sphere_vertices)
+function uv_coords = compute_uv_from_sphere(sphere_vertices) %#ok<DEFNU>
     % Compute UV coordinates from spherical surface
+    % This is a utility function that can be called externally
+    % Example: uv_coords = compute_uv_from_sphere(subject.lh.sphere.vertices);
     x = sphere_vertices(:, 1);
     y = sphere_vertices(:, 2);
     z = sphere_vertices(:, 3);
