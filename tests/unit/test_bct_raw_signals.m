@@ -53,11 +53,19 @@ function test_write_raw_creates_axes(testCase)
     verifyClass(testCase, node_id, 'int32', 'node_id should be int32');
     verifyEqual(testCase, node_id, int32(0:N-1)', 'node_id should be 0-based sequence');
     
-    % Verify sampling rate attribute (skip direct file access)
-    % fs is stored internally in BCT object
+    % Verify sampling rate attribute exists
+    fs_stored = h5readatt(testFile, '/', 'fs_hz');
+    verifyEqual(testCase, double(fs_stored), fs, 'Stored sampling rate should match input');
     
     % Verify signal dataset
     verifyTrue(testCase, B.has('/signals/raw'), 'raw signal dataset should exist');
+    
+    % Test enhanced schema compatibility - node descriptors could be added
+    % This verifies the schema allows for optional node descriptors
+    if B.has('/node_info/channel_name')
+        channel_names = h5read(testFile, '/node_info/channel_name');
+        verifyEqual(testCase, length(channel_names), N, 'Channel names should match N if present');
+    end
     
     % Verify cached properties
     verifyEqual(testCase, B.T, T, 'Cached T should match');
@@ -177,6 +185,64 @@ function test_dimension_scale_attachment(testCase)
     verifyEqual(testCase, length(node_axis), N, 'Node axis should match signal N');
     
     fprintf('Dimension scale functionality verified through BCT API\n');
+    
+    % Cleanup
+    delete(testFile);
+end
+
+function test_enhanced_schema_compatibility(testCase)
+    % Test: BCT works correctly with enhanced schema optional features
+    testFile = fullfile(testCase.TestData.tempDir, 'enhanced_compat.h5');
+    
+    % Create BCT file and add basic signal
+    B = bct.bct.create(testFile);
+    T = 20; N = 6; fs = 100;
+    X = single(randn(T, N));
+    B.write_raw(X, fs);
+    
+    % Add enhanced schema features
+    % 1. Subject metadata
+    h5writeatt(testFile, '/', 'subject_name', 'TEST_SUBJ');
+    h5writeatt(testFile, '/', 'session_id', 'SES01');
+    
+    % 2. Node descriptors
+    channel_names = string(compose("CH%d", 1:N));
+    h5create(testFile, '/node_info/channel_name', [N, 1], 'Datatype', 'string');
+    h5write(testFile, '/node_info/channel_name', channel_names');
+    
+    % 3. Preprocessed signals
+    X_preproc = single(0.9 * X);
+    h5create(testFile, '/signals/preproc', [T, N], 'Datatype', 'single');
+    h5write(testFile, '/signals/preproc', X_preproc);
+    h5writeatt(testFile, '/signals/preproc', 'sampling_rate_hz', fs);
+    
+    % Verify BCT still works correctly
+    verifyEqual(testCase, B.T, T, 'BCT should read T correctly with enhanced schema');
+    verifyEqual(testCase, B.N, N, 'BCT should read N correctly with enhanced schema');
+    verifyEqual(testCase, B.fs, fs, 'BCT should read fs correctly with enhanced schema');
+    
+    % Verify enhanced features are accessible
+    subject = h5readatt(testFile, '/', 'subject_name');
+    verifyEqual(testCase, subject, 'TEST_SUBJ', 'Subject metadata should be accessible');
+    
+    channels_read = h5read(testFile, '/node_info/channel_name');
+    verifyEqual(testCase, length(channels_read), N, 'Channel descriptors should be accessible');
+    
+    preproc_fs = h5readatt(testFile, '/signals/preproc', 'sampling_rate_hz');
+    verifyEqual(testCase, preproc_fs, fs, 'Preprocessed signal metadata should be accessible');
+    
+    % Verify BCT methods still work
+    time_axis = B.read_axis('time_s');
+    node_axis = B.read_axis('node_id');
+    verifyEqual(testCase, length(time_axis), T, 'BCT axis reading should work');
+    verifyEqual(testCase, length(node_axis), N, 'BCT axis reading should work');
+    
+    % Test that has() method works with enhanced paths
+    verifyTrue(testCase, B.has('/node_info/channel_name'), 'BCT should detect enhanced schema elements');
+    verifyTrue(testCase, B.has('/signals/preproc'), 'BCT should detect preprocessed signals');
+    verifyFalse(testCase, B.has('/nonexistent/path'), 'BCT should correctly identify missing paths');
+    
+    fprintf('Enhanced schema backward compatibility verified\n');
     
     % Cleanup
     delete(testFile);

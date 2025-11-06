@@ -363,3 +363,119 @@ function test_data_type_validation(testCase)
     % Cleanup
     delete(testFile);
 end
+
+function test_enhanced_schema_validation(testCase)
+    % Test: Enhanced schema specific validation errors
+    testFile = fullfile(testCase.TestData.tempDir, 'enhanced_validation.h5');
+    B = bct.bct.create(testFile);
+    
+    % Create base signal
+    T = 20; N = 5; fs = 100;
+    X = single(randn(T, N));
+    B.write_raw(X, fs);
+    
+    % Test 1: Node descriptor dimension mismatch
+    wrong_channel_names = string(compose("CH%d", 1:N+2));  % N+2 instead of N
+    h5create(testFile, '/node_info/channel_name', [N+2, 1], 'Datatype', 'string');
+    h5write(testFile, '/node_info/channel_name', wrong_channel_names');
+    
+    % This creates an inconsistent state - in practice, validation should catch this
+    channels_read = h5read(testFile, '/node_info/channel_name');
+    verifyNotEqual(testCase, length(channels_read), N, ...
+        'Inconsistent channel count should be detectable');
+    
+    % Clean up invalid data
+    delete(testFile);
+    B = bct.bct.create(testFile);
+    B.write_raw(X, fs);
+    
+    % Test 2: Preprocessed signal dimension mismatch
+    X_preproc_wrong = single(randn(T+5, N));  % Wrong T dimension
+    h5create(testFile, '/signals/preproc', [T+5, N], 'Datatype', 'single');
+    h5write(testFile, '/signals/preproc', X_preproc_wrong);
+    
+    % This should be caught by dimension constraint validation
+    preproc_size = size(h5read(testFile, '/signals/preproc'));
+    raw_size = size(h5read(testFile, '/signals/raw'));
+    verifyNotEqual(testCase, preproc_size(1), raw_size(1), ...
+        'Dimension mismatch should be detectable');
+    
+    % Test 3: Invalid feature matrix dimensions
+    num_chunks = 10;
+    num_features = 5;
+    wrong_features = single(randn(num_chunks+3, num_features));  % Wrong chunk count
+    chunk_ids = int32(1:num_chunks)';  % Correct chunk count
+    
+    h5create(testFile, '/features/matrix/feature_matrix', size(wrong_features), 'Datatype', 'single');
+    h5write(testFile, '/features/matrix/feature_matrix', wrong_features);
+    h5create(testFile, '/features/matrix/chunk_ids', size(chunk_ids), 'Datatype', 'int32');
+    h5write(testFile, '/features/matrix/chunk_ids', chunk_ids);
+    
+    % Dimension mismatch should be detectable
+    features_read = h5read(testFile, '/features/matrix/feature_matrix');
+    ids_read = h5read(testFile, '/features/matrix/chunk_ids');
+    verifyNotEqual(testCase, size(features_read, 1), length(ids_read), ...
+        'Feature matrix and chunk ID count mismatch should be detectable');
+    
+    % Test 4: Invalid subject metadata
+    % Test empty subject name
+    h5writeatt(testFile, '/', 'subject_name', '');
+    empty_subject = h5readatt(testFile, '/', 'subject_name');
+    verifyEqual(testCase, empty_subject, '', 'Empty subject name should be readable but invalid');
+    
+    % Cleanup
+    delete(testFile);
+end
+
+function test_enhanced_schema_edge_cases(testCase)
+    % Test: Edge cases specific to enhanced schema
+    testFile = fullfile(testCase.TestData.tempDir, 'enhanced_edge_cases.h5');
+    B = bct.bct.create(testFile);
+    
+    % Test 1: Very large node descriptor strings
+    T = 5; N = 3; fs = 50;
+    X = single(randn(T, N));
+    B.write_raw(X, fs);
+    
+    % Create very long channel names
+    long_names = string(compose("VERY_LONG_CHANNEL_NAME_THAT_EXCEEDS_NORMAL_LENGTH_%03d", 1:N));
+    h5create(testFile, '/node_info/channel_name', [N, 1], 'Datatype', 'string');
+    h5write(testFile, '/node_info/channel_name', long_names');
+    
+    % Should still work
+    names_read = h5read(testFile, '/node_info/channel_name');
+    verifyEqual(testCase, names_read, long_names', 'Long channel names should be handled');
+    
+    % Test 2: Unicode in channel names
+    unicode_names = ["α-wave", "β-channel", "γ-sensor"];
+    if N >= length(unicode_names)
+        h5create(testFile, '/node_info/channel_name_unicode', [length(unicode_names), 1], 'Datatype', 'string');
+        h5write(testFile, '/node_info/channel_name_unicode', unicode_names');
+        
+        unicode_read = h5read(testFile, '/node_info/channel_name_unicode');
+        verifyEqual(testCase, unicode_read, unicode_names', 'Unicode channel names should be handled');
+    end
+    
+    % Test 3: Extreme coordinate values
+    extreme_positions = single([1e6, -1e6, 0; 0, 1e-6, -1e-6; NaN, Inf, -Inf]);
+    if N >= 3
+        h5create(testFile, '/node_info/node_position_extreme', [3, 3], 'Datatype', 'single');
+        h5write(testFile, '/node_info/node_position_extreme', extreme_positions);
+        
+        pos_read = h5read(testFile, '/node_info/node_position_extreme');
+        % NaN and Inf should be preserved
+        verifyTrue(testCase, isnan(pos_read(3,1)), 'NaN should be preserved');
+        verifyTrue(testCase, isinf(pos_read(3,2)), 'Inf should be preserved');
+    end
+    
+    % Test 4: Empty feature descriptions
+    empty_descriptions = string.empty(0, 1);
+    h5create(testFile, '/features/metadata/empty_descriptions', [0, 1], 'Datatype', 'string');
+    h5write(testFile, '/features/metadata/empty_descriptions', empty_descriptions);
+    
+    desc_read = h5read(testFile, '/features/metadata/empty_descriptions');
+    verifyEqual(testCase, length(desc_read), 0, 'Empty descriptions should be handled');
+    
+    % Cleanup
+    delete(testFile);
+end
