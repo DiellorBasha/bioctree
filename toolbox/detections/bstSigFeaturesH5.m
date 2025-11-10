@@ -198,7 +198,7 @@ function FTT = extract_channel_features(TT, timeFE, freqFE, Fs, frame, hop)
         FTT = array2timetable(FT, 'RowTimes', seconds(frame_times));
         
     catch ME
-        warning('Feature extraction failed: %s', ME.message);
+        warning('%s', ['Feature extraction failed: ' ME.message]);
         FTT = timetable();
     end
 end

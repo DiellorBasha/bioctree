@@ -1,0 +1,218 @@
+
+addpath('C:\CodingProjects\brainstorm3\')
+addpath('C:\CodingProjects\bioctree\');
+bstdb='Z:\brainstorm_protocols\TutorialOmega\data';
+bstdbanat='Z:\brainstorm_protocols\TutorialOmega\anat';
+bioctree_start
+brainstorm nogui
+
+fds = fileDatastore(bstdb,"ReadFcn",@load,"FileExtensions",".mat");
+p = read(fds);
+    names = string({p.ProtocolStudies.Study.Name});
+    fnames = string({p.ProtocolStudies.Study.FileName});
+    keepMask = startsWith(names, "@raw") & ~contains(names, "emptyroom", 'IgnoreCase', true);
+    rawNames = names(keepMask);
+    rawPaths = fnames(keepMask);   % the matches
+    idx      = find(keepMask);    % their indices (into the flattened Study list)
+
+%% 
+% Import in database and downsample
+for k = 1:length(idx)
+ thisidx =idx(k)
+fn=p.ProtocolStudies.Study(thisidx).Data.FileName;
+[sStudy, iStudy, iData] = bst_get('DataFile', fn);
+[sSubject, iSubject] = bst_get('Subject', sStudy.BrainStormSubject);
+% Process: Import MEG/EEG: Time
+sFilesIn(k).Data = bst_process('CallProcess', 'process_import_data_time', sFiles{k}, [], ...
+    'subjectname',   SubjectNames{k}, ...
+    'condition',     '', ...
+    'timewindow',    [], ...
+    'split',         0, ...
+    'ignoreshort',   1, ...
+    'usectfcomp',    1, ...
+    'usessp',        1, ...
+    'freq',          300, ...
+    'baseline',      [], ...
+    'blsensortypes', 'MEG, EEG');
+
+prot(k).Study=sStudy;
+prot(k).Subject=sSubject;
+prot(k).SensorMetadata = sFilesIn(k).Data;
+prot(k).SensorData = load(fullfile(bstdb,sFilesIn(k).Data.FileName));
+prot(k).ImagingKernel = load(fullfile(bstdb,prot(k).Study.Result.FileName));
+prot(k).Surface = load(fullfile(bstdbanat, ikernel.SurfaceFile));
+prot(k).chans=prot(k).ImagingKernel.GoodChannel;
+end
+%% === Load source & infer sampling rate ===================================
+d   = load("test-data/sFiles.mat");
+
+for k = 1:length(idx)
+ thisidx =idx(k)
+fn=p.ProtocolStudies.Study(thisidx).Data.FileName;
+[sStudy, iStudy, iData] = bst_get('DataFile', fn);
+[sSubject, iSubject] = bst_get('Subject', sStudy.BrainStormSubject);
+prot(k).Study=sStudy;
+prot(k).Subject=sSubject;
+prot(k).SensorMetadata = d.sFilesIn(k).Data;
+prot(k).SensorData = load(fullfile(bstdb,d.sFilesIn(k).Data.FileName));
+prot(k).ImagingKernel = load(fullfile(bstdb,prot(k).Study.Result.FileName));
+prot(k).Surface = load(fullfile(bstdbanat, prot(k).ImagingKernel.SurfaceFile));
+prot(k).chans=prot(k).ImagingKernel.GoodChannel;
+end
+%% 
+
+sIn = load(d.files{1});                      % sIn.F [nChan x nSamp], sIn.Time [1 x nSamp]
+sF=sIn.F(prot(1).chans, :);
+sIk = prot(1).ImagingKernel.ImagingKernel;
+sSurf = prot(1).Surface;
+dt  = diff(sIn.Time(1:2));
+fs  = 1/dt;
+chanFile = load(fullfile(bstdb,prot(1).SensorMetadata.ChannelFile));
+chanNames=string({chanFile.Channel.Name});
+chanNames=chanNames(prot(1).chans)
+% Ensure uniform time spacing (optional but recommended)
+tol = 1e-9;
+assert(all(abs(diff(sIn.Time) - dt) < tol), 'Time axis is not strictly uniform.');
+
+[nChan, nSamp] = size(sF);
+fprintf('fs = %.6f Hz | nChan=%d | nSamp=%d\n', fs, nChan, nSamp);
+
+
+%% === Channel names (as string column) ===================================
+assert(numel(chanNames) == nChan, 'chanNames length must equal number of channels.');
+
+% Sanitize for HDF5 dataset-friendly names if needed later
+sanNames = regexprep(chanNames, '[^\w\-]+', '_');
+sanNames = strip(sanNames, '_');
+
+%% === Write ONE HDF5 with all channels (time×channels) ===================
+frameSec    = 4;                               % EXACT 4-second chunks
+frameSamps  = round(frameSec * fs);            % e.g., 1200 @ 300 Hz
+Cchunk      = 1;                                % 1 column per chunk (optimize per-channel reads)
+chunkSize   = [frameSamps, Cchunk];
+
+src = d.sFilesIn(1).Data;
+% Split on either / or \ and take the 2nd component if it exists
+outFile = fullfile(pwd, 'data', 'bioctree_files','raw', src.SubjectName + ".h5");                    % -> sub-0002_ses-01_task-rest_run-01_meg_notch_high.h5
+fprintf('Output HDF5: %s\n', outFile);
+
+if isfile(outFile), delete(outFile); end
+fprintf('Writing %s with chunk = [%d × %d] (%.3f s × %d ch)\n', ...
+        outFile, chunkSize(1), chunkSize(2), frameSamps/fs, Cchunk);
+
+% Tiny dataset to attach root attributes
+h5create(outFile, '/.init', [1 1], 'Datatype', 'uint8');
+h5write(outFile, '/.init', uint8(0));
+
+% 1) Simple root attributes
+h5writeatt(outFile, '/', 'SourceFileName', src.FileName);
+h5writeatt(outFile, '/', 'SourceFileType', src.FileType);
+h5writeatt(outFile, '/', 'SourceComment',  src.Comment);
+h5writeatt(outFile, '/', 'Condition',      src.Condition);
+h5writeatt(outFile, '/', 'SubjectFile',    src.SubjectFile);
+h5writeatt(outFile, '/', 'SubjectName',    src.SubjectName);
+h5writeatt(outFile, '/', 'ChannelFile',    src.ChannelFile);
+h5writeatt(outFile, '/', 'iStudy',         int32(src.iStudy));
+h5writeatt(outFile, '/', 'iItem',          int32(src.iItem));
+% Root attributes
+h5writeatt(outFile, '/', 'CreationDate', string(datetime('now')));
+h5writeatt(outFile, '/', 'SampleRateHz', fs);
+h5writeatt(outFile, '/', 'NumChannels',  nChan);
+h5writeatt(outFile, '/', 'NumSamples',   nSamp);
+if isfield(sIn,'Comment'), h5writeatt(outFile, '/', 'Comment', sIn.Comment); end
+if isfield(sIn,'Device'),  h5writeatt(outFile, '/', 'Device',  sIn.Device);  end
+
+% 2) Lists (cellstr works best for variable-length string attributes)
+if isfield(src,'ChannelTypes') && ~isempty(src.ChannelTypes)
+    h5writeatt(outFile, '/', 'ChannelTypes', cellstr(src.ChannelTypes));
+end
+
+% 3) Full original struct as JSON (preserves everything)
+originJSON = jsonencode(src);                    % char row vector
+h5writeatt(outFile, '/', 'OriginJSON', originJSON);
+
+% (Optional) Who/when
+h5writeatt(outFile, '/', 'WrittenBy', getenv("USERNAME"));
+h5writeatt(outFile, '/', 'WriteTimestamp', char(string(datetime('now'))));
+
+% Main signal dataset: [nSamp × nChan]
+Ftc = single(sF.');                          % transpose to time-major
+h5create(outFile, '/signals/F', size(Ftc), ...
+    'Datatype', 'single', 'ChunkSize', chunkSize, 'Deflate', 3);
+h5write(outFile, '/signals/F', Ftc);
+
+% Channel names dataset (fixed-width char array for portability)
+% Channel names as a root attribute (portable + simple)
+names = cellstr(string(chanNames(:)));        % cellstr required by h5writeatt
+h5writeatt(outFile, '/', 'ChannelNames', names);
+
+fprintf('HDF5 written.\n');
+
+
+%% === Use the datastore (save class below as H5ChannelDatastore.m) ========
+outFile=fullfile(pwd, 'data', 'bioctree_files','raw', "sub-0002" + ".h5");     
+ds = H5ChannelDatastore(outFile);
+
+% Quick sanity check
+hasdata(ds)
+[TT, info] = read(ds);      % TT: timetable with variable 'x', Time in seconds
+disp(info)
+head(TT)
+reset(ds)
+%% 
+[TT, info] = read(ds);        % TT: timetable with var 'x', time in seconds
+[TTp, newFs] = preprocessTT(TT);
+
+% 4 s frames with 1 s hop
+frame   = round(4*ds.Fs);     % e.g., 1200 at 300 Hz
+hop     = round(1*ds.Fs);     % 300
+overlap = frame - hop;        % 900
+
+
+% Simple time-domain feature extractor (defaults are fine to start)
+sFE = signalTimeFeatureExtractor( ...
+          'SampleRate', ds.Fs, ...
+          'FrameSize', frame, ...
+          'FrameOverlapLength', overlap, ...
+          'Mean', true, ...
+          'CrestFactor', true);
+
+% Extract features (pass the signal vector only)
+[T, Tinfo] = extract(sFE, TT.x);
+
+% Build frame-center timestamps (duration) from your framing
+nFr   = size(T,1);
+txsec = ( (0:nFr-1)*hop + (frame-1)/2 ) / ds.Fs;   % seconds (numeric)
+tx    = seconds(txsec);                            % duration vector
+
+% Indices for the features you picked
+iMean  = Tinfo.Mean;
+iCrest = Tinfo.CrestFactor;
+
+% Make a FEATURES TIMETABLE (row times = frame centers)
+FeatTT = timetable(tx(:), T(:,iMean), T(:,iCrest), ...
+    'VariableNames', {'Mean','CrestFactor'});
+
+% Plot with linked x-axes
+figure(1); clf
+subplot(2,1,1)
+s1 = stackedplot(FeatTT, 'Title', sprintf('%s — Time features', info.ChannelName));
+
+subplot(2,1,2)
+s2 = stackedplot(TT, 'Title','Original Signal');
+
+% Link all x-axes across both stackedplots
+ax_all = [findobj(s1.NodeChildren,'Type','Axes'); findobj(s2.NodeChildren,'Type','Axes')];
+linkaxes(ax_all, 'x');
+
+% Optional: set an initial common x-range (full duration)
+set(ax_all, 'XLim', [TT.Time(1) TT.Time(end)]);
+
+%%
+frame   = round(4*ds.Fs);   % 4 s
+hop     = round(1*ds.Fs);   % 1 s
+overlap = frame - hop;
+
+tfe  = signalTimeFeatureExtractor('SampleRate',ds.Fs,'FrameSize',frame,'FrameOverlapLength',overlap);
+ffe  = signalFrequencyFeatureExtractor('SampleRate',ds.Fs,'FrameSize',frame,'FrameOverlapLength',overlap);
+tffe = signalTimeFrequencyFeatureExtractor('SampleRate',ds.Fs,'FrameSize',frame,'FrameOverlapLength',overlap);
