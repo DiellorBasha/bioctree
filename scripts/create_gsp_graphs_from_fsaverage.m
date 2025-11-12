@@ -51,7 +51,7 @@ try
     
     % Convert from FreeSurfer 0-based to MATLAB 1-based indexing
     F_lh = F_lh + 1;
-    
+   
     % Flip faces for right-hand orientation (as done in fs2gsp)
     F_lh = F_lh(:, [1 3 2]);
     

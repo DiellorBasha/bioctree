@@ -62,7 +62,7 @@ for h = 1:length(hemispheres)
             fprintf('  ✓ Loaded using read_surf: %d vertices, %d faces\n', size(vertices, 1), size(faces, 1));
         elseif exist('freesurfer_read_surf', 'file')
             % Alternative FreeSurfer reader
-            [vertices, faces] = freesurfer_read_surf(sphere_path);
+            [vertices, faces] = in_fs_read_surf(sphere_path);
             fprintf('  ✓ Loaded using freesurfer_read_surf: %d vertices, %d faces\n', size(vertices, 1), size(faces, 1));
         else
             fprintf('  ❌ No FreeSurfer surface reader found. Available options:\n');

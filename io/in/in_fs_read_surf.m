@@ -114,7 +114,7 @@ tic;
 
 magic = in_fs_fread3(fid);
 
-if (magic == QUAD_FILE_MAGIC_NUMBER),
+if (magic == QUAD_FILE_MAGIC_NUMBER)
     Nvertices = in_fs_fread3(fid);
     Nfaces = in_fs_fread3(fid);
     fprintf('...reading %d quad file vertices\n',Nvertices);
@@ -122,15 +122,15 @@ if (magic == QUAD_FILE_MAGIC_NUMBER),
     if (nargout > 1),
         fprintf('...reading %d quad file faces (please wait)\n',Nfaces);
         faces = zeros(Nfaces,4);
-        for iface = 1:Nfaces,
-            for n=1:4,
+        for iface = 1:Nfaces
+            for n=1:4
                 faces(iface,n) = in_fs_fread3(fid) ;
             end
             if(~rem(iface, 10000)), fprintf(' %7.0f',iface); end
             if(~rem(iface,100000)), fprintf('\n'); end
         end
     end
-elseif (magic == TRIANGLE_FILE_MAGIC_NUMBER),
+elseif (magic == TRIANGLE_FILE_MAGIC_NUMBER)
     fprintf('...reading triangle file\n');
     tline = fgets(fid); % read creation date text line
     tline = fgets(fid); % read info text line

@@ -17,6 +17,7 @@ scripts/### bct ###
 /external/meshfix
 /external/toolbox_graph
 /external/gptoolbox
+/app/node_modules/
 
 # Test files
 test_*.m

@@ -4,7 +4,6 @@ classdef bct < handle
     fn string
     T double = NaN; N double = NaN; L double = NaN ;  F double = NaN ;fs double = NaN
     schema struct
-
     % Presence flags (set once at open)
     has_raw   logical = false
     has_stack logical = false
@@ -27,6 +26,34 @@ properties (Access=private, Constant)
       'tfI',       "/decomp/time_freq/coeffs_imag" ...
     )
 end
+
+properties (Access=private, Transient)
+    cache struct = struct();     % holds Vertices, Faces, A, W, E, mesh, mgraph, gsp, w
+    signal_stack struct = struct('data', {}, 'labels', {}, 'metadata', {});  % Signal stack storage
+end
+
+properties
+    directed  logical = false;   % descriptor only (public)
+    hypergraph logical = false;  % descriptor only (public)
+end
+
+properties (Dependent)
+    signals    % Access to signal stack with metadata
+end
+properties (Dependent)
+    Vertices
+    Faces
+    mesh       % surfaceMesh
+    mgraph     % MATLAB graph / digraph (depends on `directed`)
+    gsp        % GSP struct (built from symmetrized W)
+    E          % P×2 int32 (undirected edge list from (A or Faces))
+    w
+    BoundaryEdges
+    Edge2Face
+    Face2Edge
+end
+
+
   methods (Static)
    function obj = create(outSpec)
     target = bct.internal.Paths.underData(outSpec, fullfile('bioctree_files','raw'));
@@ -487,4 +514,276 @@ end
       report = bct.internal.Validator.validateAll(this.fn, this.schema);
     end
   end
+ methods (Static)
+  function obj = fromAdjacency(A, coords)
+    obj = bct.bct();
+    obj.directed  = false;           % descriptor
+    obj.hypergraph = false;
+
+    obj.cache.A = bct.cleanAdj(A);   % internal structural adjacency
+    obj.N = size(obj.cache.A,1);
+
+    if nargin>1 && ~isempty(coords)
+      obj.cache.Vertices = double(coords);
+    end
+  end
+
+  function obj = fromEdges(E, N, coords, w)
+    obj = bct.bct();
+    obj.directed  = false;
+    obj.hypergraph = false;
+
+    E = bct.cleanEdges(E);
+    if nargin<2 || isempty(N), N = max(E(:)); end
+    obj.N = double(N);
+    obj.cache.E = int32(E);
+
+    if nargin>4 && ~isempty(w), obj.cache.w = double(w(:)); end
+
+    % Seed structural adjacency from edges (undirected)
+    A = sparse(E(:,1),E(:,2),true,N,N);
+    A = A + A.';  A = A - diag(diag(A));
+    obj.cache.A = spones(A)>0;
+
+    if nargin>2 && ~isempty(coords)
+      obj.cache.Vertices = double(coords);
+    end
+  end
+
+  function obj = fromMesh(V,F)
+    obj = bct.bct();
+    obj.directed  = false;
+    obj.hypergraph = false;
+
+    obj.cache.Vertices = double(V);
+    obj.cache.Faces    = int32(F);
+    obj.N = size(V,1);
+    obj.F = size(F,1);
+    % Edges / adjacency built lazily on first access
+  end
+end
+methods
+  function V = get.Vertices(this)
+    if isfield(this.cache,'Vertices'), V = this.cache.Vertices; return; end
+    % Optional file-backed fallback (safe if not using files)
+    C = this.read_coords();   % may return []
+    if ~isempty(C), this.cache.Vertices = double(C); end
+    V = this.cache.Vertices;
+  end
+
+  function F = get.Faces(this)
+    if isfield(this.cache,'Faces'), F = this.cache.Faces; return; end
+    if isfield(this,'Faces') && ~isempty(this.Faces) %#ok<MCSUP>
+      this.cache.Faces = int32(this.Faces);
+    elseif this.has('/graph/mesh/faces')
+      this.cache.Faces = int32(h5read(this.fn,'/graph/mesh/faces'));
+    else
+      this.cache.Faces = int32([]);
+    end
+    F = this.cache.Faces;
+  end
+
+  function S = get.signals(this)
+    % Return signal stack with data, labels, and metadata
+    S = this.signal_stack;
+  end
+
+  function M = get.mesh(this)                % <— replaces TR/surface
+    if isfield(this.cache,'mesh'), M = this.cache.mesh; return; end
+    V = this.Vertices; F = this.Faces;
+    if ~isempty(V) && ~isempty(F)
+      this.cache.mesh = surfaceMesh(V, F);
+    else
+      this.cache.mesh = [];
+    end
+    M = this.cache.mesh;
+  end
+
+  function g = get.mgraph(this)
+    if isfield(this.cache,'mgraph'), g = this.cache.mgraph; return; end
+    A = this.i_need_A();
+    if this.directed
+      g = digraph(A);
+    else
+      g = graph(A);
+    end
+    this.cache.mgraph = g;
+  end
+
+  function g = get.gsp(this)
+    if isfield(this.cache,'gsp'), g = this.cache.gsp; return; end
+    g = this.read_graph_gsp();
+    if isempty(g)
+      A = this.i_need_A();
+      W = double(A);
+      g = struct('W', W, 'N', this.N);
+    end
+    this.cache.gsp = g;
+  end
+
+  function E = get.E(this)
+    if isfield(this.cache,'E'), E = this.cache.E; return; end
+    A = this.i_need_A();                    % internal builder
+    [i,j] = find(triu(A,1));
+    this.cache.E = int32([i j]);
+    E = this.cache.E;
+  end
+
+  function w = get.w(this)
+    if isfield(this.cache,'w'), w = this.cache.w; return; end
+    % Try file-backed weights if present, else empty
+    try
+      G = this.read_graph_gsp();
+      if ~isempty(G) && isfield(G,'W') && ~isempty(G.W)
+        [i,j] = deal(double(this.E(:,1)), double(this.E(:,2)));
+        Wsym  = 0.5*(G.W + G.W.');
+        this.cache.w = full(Wsym(sub2ind(size(Wsym), i, j)));
+        w = this.cache.w; return;
+      end
+    catch, end
+    this.cache.w = [];
+    w = [];
+  end
+
+  function B = get.BoundaryEdges(this)
+    if isfield(this.cache,'BoundaryEdges'), B = this.cache.BoundaryEdges; return; end
+    F = this.Faces; if isempty(F), this.cache.BoundaryEdges = int32([]); B = []; return; end
+    e12 = sort(F(:,[1 2]),2); e23 = sort(F(:,[2 3]),2); e31 = sort(F(:,[3 1]),2);
+    FE  = [e12; e23; e31];
+    [U,~,ic] = unique(FE,'rows');
+    cnt = accumarray(ic,1,[size(U,1) 1]);
+    B = U(cnt==1,:); this.cache.BoundaryEdges = int32(B);
+  end
+
+  function f2e = get.Face2Edge(this)
+    if isfield(this.cache,'Face2Edge'), f2e = this.cache.Face2Edge; return; end
+    F = this.Faces; if isempty(F), f2e = int32([]); return; end
+    E = double(this.E); Ekey = sort(E,2);
+    fe12 = sort(F(:,[1 2]),2); fe23 = sort(F(:,[2 3]),2); fe31 = sort(F(:,[3 1]),2);
+    FE = [fe12; fe23; fe31];
+    [~,loc] = ismember(FE, Ekey, 'rows');   % 3M×1
+    f2e = reshape(loc, [size(F,1), 3]);
+    this.cache.Face2Edge = int32(f2e);
+  end
+
+  function e2f = get.Edge2Face(this)
+    if isfield(this.cache,'Edge2Face'), e2f = this.cache.Edge2Face; return; end
+    F = this.Faces; if isempty(F), e2f = int32([]); return; end
+    f2e = double(this.Face2Edge);    % M×3
+    P   = size(this.E,1);
+    e2f = zeros(P,2,'int32');
+    whichFace = repelem(int32((1:size(F,1)).'), 3, 1); % 3M×1
+    for k = 1:numel(f2e)
+      e = f2e(k);
+      if e==0, continue; end
+      if e2f(e,1)==0, e2f(e,1)=whichFace(k);
+      else,           e2f(e,2)=whichFace(k);
+      end
+    end
+    this.cache.Edge2Face = e2f;
+  end
+end
+
+% Signal stack management methods
+methods
+  function addSignal(this, signal_data, label, metadata)
+    % Add a signal to the signal stack
+    % signal_data: [N×1] vector matching graph vertices
+    % label: string label for the signal
+    % metadata: struct with additional information
+    
+    if nargin < 4, metadata = struct(); end
+    if nargin < 3, label = sprintf('signal_%d', length(this.signal_stack.data) + 1); end
+    
+    % Validate signal dimensions
+    if ~isnan(this.N) && this.N > 0
+      if length(signal_data) ~= this.N
+        error('bct:SignalDimensionMismatch', ...
+          'Signal length (%d) must match graph vertices (%d)', ...
+          length(signal_data), this.N);
+      end
+    end
+    
+    % Add to signal stack
+    idx = length(this.signal_stack.data) + 1;
+    this.signal_stack.data{idx} = signal_data(:);  % Ensure column vector
+    this.signal_stack.labels{idx} = string(label);
+    this.signal_stack.metadata{idx} = metadata;
+  end
+  
+  function clearSignals(this)
+    % Clear all signals from the stack
+    this.signal_stack = struct('data', {}, 'labels', {}, 'metadata', {});
+  end
+  
+  function signal_data = getSignal(this, index_or_label)
+    % Get signal by index or label
+    if isnumeric(index_or_label)
+      idx = index_or_label;
+      if idx < 1 || idx > length(this.signal_stack.data)
+        error('bct:SignalIndexOutOfRange', 'Signal index %d out of range', idx);
+      end
+    else
+      % Find by label
+      labels = [this.signal_stack.labels{:}];
+      idx = find(labels == string(index_or_label), 1);
+      if isempty(idx)
+        error('bct:SignalLabelNotFound', 'Signal label "%s" not found', string(index_or_label));
+      end
+    end
+    signal_data = this.signal_stack.data{idx};
+  end
+end
+
+methods (Access=private)
+  function A = i_need_A(this)
+    if isfield(this.cache,'A'), A = this.cache.A; return; end
+
+    % Prefer file-backed W if present (build structure from it)
+    try
+      G = this.read_graph_gsp();
+      if ~isempty(G) && isfield(G,'W') && ~isempty(G.W)
+        A = spones(0.5*(G.W+G.W.'))>0;
+        A = A - diag(diag(A));
+        this.cache.A = A; return;
+      end
+    catch, end
+
+    if isfield(this.cache,'W')
+      A = spones(0.5*(this.cache.W + this.cache.W.'))>0;
+      A = A - diag(diag(A));
+      this.cache.A = A; return;
+    end
+
+    if isfield(this.cache,'E')
+      N = this.N; E = this.cache.E;
+      A = sparse(E(:,1),E(:,2),true,N,N); A = A + A.'; A = A - diag(diag(A));
+      this.cache.A = spones(A)>0; return;
+    end
+
+    F = this.Faces;
+    if ~isempty(F)
+      e = unique(sort([F(:,[1 2]); F(:,[2 3]); F(:,[3 1])],2),'rows');
+      N = max(F(:));
+      A = sparse(e(:,1),e(:,2),true,N,N); A = A + A.'; A = A - diag(diag(A));
+      this.cache.A = spones(A)>0; return;
+    end
+
+    A = sparse(this.N,this.N); this.cache.A = A;
+  end
+end
+
+methods (Static)
+  function A = cleanAdj(A)
+    if ~issparse(A), A = sparse(A); end
+    A = (A|A.'); A = A - diag(diag(A));
+    A = spones(A)>0;
+  end
+  function E = cleanEdges(E)
+    E = double(E); if size(E,2)>2, E = E(:,1:2); end
+    E = sort(E,2); E(E(:,1)==E(:,2),:) = [];
+    E = unique(E,'rows');
+  end
+end
+
 end
