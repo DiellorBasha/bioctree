@@ -2,8 +2,17 @@ bioctree_start
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
 B = bct.io.graph.Import.fromFreeSurfer(path);
 % Now load curvature signal into the existing B object
-curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';  % Path to your curvature file
-B = bct.io.signal.Import.fromFreeSurfer(curv_path, B);
+
+% Load curvature manually
+curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';
+raw = bct.io.signal.In.readFreeSurferCurv(curv_path);
+curv_data = raw.curv(:);  % Ensure column vector
+
+% Clear signals first to ensure proper initialization
+B.clearSignals();
+
+% Now add the signal (this should work after clearSignals)
+B.addSignal(curv_data, 'lh_curvature');
 
 
 
@@ -110,3 +119,10 @@ h5writeatt(fname, '/signals/data', 'S', int32(S));
 h5writeatt(fname, '/signals/data', 'N', int32(N));
 h5writeatt(fname, '/signals/data', 'C', int32(C));
 h5writeatt(fname, '/signals/data', 'T', int32(T));
+
+%% 
+fname = "data/test_LUT.h5";
+info = h5info(fname);              % tree of groups/datasets/attrs
+disp({info.Groups.Name})           % e.g. '/signals'  '/lut'
+h5disp(fname)                      % verbose printout (handy!)
+

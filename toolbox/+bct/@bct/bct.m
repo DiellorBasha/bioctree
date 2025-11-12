@@ -693,16 +693,7 @@ methods
     % metadata: struct with additional information
     
     if nargin < 4, metadata = struct(); end
-    
-    % Ensure signal_stack is properly initialized
-    if isempty(this.signal_stack)
-        this.signal_stack = struct('data', {}, 'labels', {}, 'metadata', {});
-    end
-    if ~isfield(this.signal_stack, 'data'), this.signal_stack.data = {}; end
-    if ~isfield(this.signal_stack, 'labels'), this.signal_stack.labels = {}; end
-    if ~isfield(this.signal_stack, 'metadata'), this.signal_stack.metadata = {}; end
-    
-    if nargin < 3, label = sprintf('signal_%d', length(this.signal_stack.data) + 1); end
+    if nargin < 3, label = 'signal_1'; end  % Simple fallback
     
     % Validate signal dimensions
     if ~isnan(this.N) && this.N > 0
@@ -713,8 +704,24 @@ methods
       end
     end
     
-    % Add to signal stack
-    idx = length(this.signal_stack.data) + 1;
+    % Force initialization of signal_stack
+    this.signal_stack = struct('data', {{}}, 'labels', {{}}, 'metadata', {{}});
+    
+    % Get current signals and determine next index
+    current_signals = this.signals;  % Use the getter which should work
+    if isfield(current_signals, 'data') && ~isempty(current_signals.data)
+        % Copy existing signals
+        for i = 1:length(current_signals.data)
+            this.signal_stack.data{i} = current_signals.data{i};
+            this.signal_stack.labels{i} = current_signals.labels{i};
+            this.signal_stack.metadata{i} = current_signals.metadata{i};
+        end
+        idx = length(current_signals.data) + 1;
+    else
+        idx = 1;
+    end
+    
+    % Add new signal
     this.signal_stack.data{idx} = signal_data(:);  % Ensure column vector
     this.signal_stack.labels{idx} = string(label);
     this.signal_stack.metadata{idx} = metadata;
