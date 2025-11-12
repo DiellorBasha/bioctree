@@ -21,6 +21,8 @@ function varargout = bioctree_config(varargin)
 %   'MaxCacheSize'    - Maximum cache size in MB (default: 1000)
 %   'CleanupInterval' - Hours between automatic temp cleanup (default: 24)
 %   'Verbose'         - Default verbosity for operations (true/false)
+%   'BCTValidation'   - Enable BCT schema validation (default: true)
+%   'BCTAutoBackup'   - Backup files before overwriting (default: true)
 %
 % Examples:
 %   % Set custom data directory
@@ -38,11 +40,10 @@ function varargout = bioctree_config(varargin)
 % Output:
 %   If called with output arguments, returns the requested configuration values
 %
-% See also: outbct, inbct, bioctree_data_info
+% See also: bct.create, bct.open, db_data_info, bioctree_init
 
-% Get the directory where this function is located
-functionDir = fileparts(mfilename('fullpath'));
-bioctreeRoot = fileparts(functionDir); % Go up one level from toolbox to bioctree root
+% Get the directory where this function is located (bioctree root)
+bioctreeRoot = fileparts(mfilename('fullpath'));
 defaultDataPath = fullfile(bioctreeRoot, 'data');
 
 % Configuration file path
@@ -64,7 +65,9 @@ defaultConfig = struct(...
     'MaxCacheSize', 1000, ...
     'CleanupInterval', 24, ...
     'Verbose', false, ...
-    'Version', '1.0', ...
+    'BCTValidation', true, ...
+    'BCTAutoBackup', true, ...
+    'Version', '2.0', ...
     'LastModified', datestr(now) ...
 );
 
@@ -180,6 +183,18 @@ fprintf('  Max Cache Size:    %d MB\n', config.MaxCacheSize);
 fprintf('  Cleanup Interval:  %d hours\n', config.CleanupInterval);
 fprintf('  Verbose Output:    %s\n', mat2str(config.Verbose));
 
+fprintf('\nBCT Class Settings:\n');
+if isfield(config, 'BCTValidation')
+    fprintf('  Schema Validation: %s\n', mat2str(config.BCTValidation));
+else
+    fprintf('  Schema Validation: true (default)\n');
+end
+if isfield(config, 'BCTAutoBackup')
+    fprintf('  Auto Backup:       %s\n', mat2str(config.BCTAutoBackup));
+else
+    fprintf('  Auto Backup:       true (default)\n');
+end
+
 fprintf('\nSystem Info:\n');
 fprintf('  Config Version:    %s\n', config.Version);
 fprintf('  Last Modified:     %s\n', config.LastModified);
@@ -294,6 +309,18 @@ switch lower(param)
             error('BioctreeConfig:InvalidValue', 'Verbose must be true or false');
         end
         config.Verbose = value;
+        
+    case 'bctvalidation'
+        if ~islogical(value)
+            error('BioctreeConfig:InvalidValue', 'BCTValidation must be true or false');
+        end
+        config.BCTValidation = value;
+        
+    case 'bctautobackup'
+        if ~islogical(value)
+            error('BioctreeConfig:InvalidValue', 'BCTAutoBackup must be true or false');
+        end
+        config.BCTAutoBackup = value;
         
     otherwise
         error('BioctreeConfig:UnknownParameter', 'Unknown parameter: %s', param);

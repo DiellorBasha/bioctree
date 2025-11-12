@@ -1,0 +1,71 @@
+{
+  "datatype": "bct",
+  "schema_name": "bct-core",
+  "schema_version": "1.0.0",
+  "root_attributes_required": ["datatype","schema_name","schema_version","indexing","uuid","created_utc"],
+  "root_attributes_optional": ["subject_name", "session_id", "recording_date"],
+  "axes": {
+    "time_s":       {"path": "/axes/time_s",       "dtype": "float64", "rank": 1, "optional": false},
+    "node_id":      {"path": "/axes/node_id",      "dtype": "int32",   "rank": 1, "optional": false},
+    "freq_hz":      {"path": "/axes/freq_hz",      "dtype": "float32", "rank": 1, "optional": true},
+    "graph_lambda": {"path": "/axes/graph_lambda", "dtype": "float32", "rank": 1, "optional": true}
+  },
+  "node_descriptors": {
+    "node_name":     {"path": "/node_info/node_name",     "dtype": "string",  "rank": 1, "optional": true},
+    "node_type":     {"path": "/node_info/node_type",     "dtype": "string",  "rank": 1, "optional": true},
+    "node_position": {"path": "/node_info/node_position", "dtype": "float32", "rank": 2, "shape": ["N", 3], "optional": true},
+    "node_units":    {"path": "/node_info/node_units",    "dtype": "string",  "rank": 1, "optional": true},
+    "channel_name":  {"path": "/node_info/channel_name",  "dtype": "string",  "rank": 1, "optional": true}
+  },
+  "datasets": {
+    "/signals/raw":              {"shape": ["T","N"], "dtype_any_of": ["float32"], "dim_scales": ["time_s","node_id"], "optional": false, "attributes": ["sampling_rate_hz"]},
+    "/signals/preproc":          {"shape": ["T","N"], "dtype_any_of": ["float32"], "dim_scales": ["time_s","node_id"], "optional": true, "attributes": ["sampling_rate_hz", "preprocessing_steps"]},
+    "/decomp/time_freq/coeffs":  {"shape": ["F","T","N"], "dtype_any_of": ["float32","complex64"], "dim_scales": ["freq_hz","time_s","node_id"], "optional": true},
+    "/decomp/graph_freq/coeffs": {"shape": ["K","T","N"], "dtype_any_of": ["float32","complex64"], "dim_scales": ["graph_lambda","time_s","node_id"], "optional": true}
+  },
+  "feature_extraction": {
+    "chunk_descriptors": {
+      "path": "/features/chunks",
+      "attributes": ["chunk_duration_s", "hop_size_s", "sampling_rate_hz", "frame_size_samples", "overlap_samples"],
+      "datasets": {
+        "chunk_id":         {"dtype": "int32",   "rank": 1, "description": "Unique identifier for each chunk"},
+        "node_id":          {"dtype": "int32",   "rank": 1, "description": "Node/channel identifier for chunk"},
+        "start_time_s":     {"dtype": "float64", "rank": 1, "description": "Chunk start time in seconds"},
+        "end_time_s":       {"dtype": "float64", "rank": 1, "description": "Chunk end time in seconds"},
+        "center_time_s":    {"dtype": "float64", "rank": 1, "description": "Chunk center time in seconds"},
+        "sample_start":     {"dtype": "int32",   "rank": 1, "description": "Starting sample index"},
+        "sample_end":       {"dtype": "int32",   "rank": 1, "description": "Ending sample index"},
+        "chunk_duration_s": {"dtype": "float32", "rank": 1, "description": "Duration of chunk in seconds"}
+      },
+      "optional": true
+    },
+    "feature_matrix": {
+      "path": "/features/matrix",
+      "datasets": {
+        "feature_matrix":   {"dtype": "float32", "rank": 2, "shape": ["chunks", "features"], "description": "Matrix of extracted features"},
+        "feature_names":    {"dtype": "string",  "rank": 1, "description": "Names of extracted features"},
+        "chunk_ids":        {"dtype": "int32",   "rank": 1, "description": "Chunk IDs corresponding to feature matrix rows"}
+      },
+      "attributes": ["num_features", "extraction_method"],
+      "optional": true
+    },
+    "extraction_metadata": {
+      "path": "/features/metadata",
+      "attributes": ["extraction_time", "extraction_software", "frame_size_samples", "hop_size_samples", "num_nodes", "feature_extractor_version"],
+      "datasets": {
+        "feature_descriptions": {"dtype": "string", "rank": 1, "description": "Detailed descriptions of each feature"},
+        "frequency_bands":      {"dtype": "float32", "rank": 2, "shape": ["bands", 2], "description": "Frequency band definitions [low, high] Hz", "optional": true}
+      },
+      "optional": true
+    }
+  },
+  "dimension_constraints": [
+    {"equals": ["len(/axes/node_id)", "shape(/signals/raw)[1]"], "optional_left": false, "optional_right": false},
+    {"equals": ["len(/axes/time_s)",  "shape(/signals/raw)[0]"], "optional_left": false, "optional_right": false},
+    {"equals": ["shape(/signals/preproc)", "shape(/signals/raw)"], "optional_left": true, "optional_right": false},
+    {"equals": ["len(/node_info/node_name)", "len(/axes/node_id)"], "optional_left": true, "optional_right": false},
+    {"equals": ["len(/node_info/channel_name)", "len(/axes/node_id)"], "optional_left": true, "optional_right": false},
+    {"equals": ["shape(/decomp/time_freq/coeffs)[1:3]", "shape(/signals/raw)"], "optional_left": true},
+    {"equals": ["shape(/decomp/graph_freq/coeffs)[1:3]", "shape(/signals/raw)"], "optional_left": true}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "bioctree-viewer",
+  "version": "1.0.0",
+  "description": "Three.js BCT data visualization integrated with bioctree",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "python -m http.server 8080"
+  },
+  "dependencies": {
+    "three": "^0.158.0",
+    "dat.gui": "^0.7.9"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@types/three": "^0.158.0"
+  },
+  "keywords": [
+    "bioctree",
+    "three.js",
+    "brain",
+    "visualization",
+    "bct",
+    "mesh"
+  ],
+  "author": "bioctree team",
+  "license": "MIT"
+}

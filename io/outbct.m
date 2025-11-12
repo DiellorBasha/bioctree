@@ -1,16 +1,16 @@
 function success = outbct(filePath, analysisData, varargin)
-% OUTBCT Export Bioctree analysis results to structured HDF5 format
+% OUTBCT Export Bioctree analysis results to structured BCT format
 %
-% This function creates a comprehensive HDF5 file optimized for querying Bioctree
-% analysis results by time periods, graph patches, frequency bands, and any 
-% combination thereof.
+% This function creates a comprehensive BCT file (HDF5 format) optimized for 
+% querying Bioctree analysis results by time periods, graph patches, frequency 
+% bands, and any combination thereof.
 %
 % Usage:
 %   success = outbct(filePath, analysisData)
 %   success = outbct(filePath, analysisData, 'param', value, ...)
 %
 % Inputs:
-%   filePath     - Output HDF5 file path (e.g., 'bioctree_results.h5')
+%   filePath     - Output BCT file path (e.g., 'bioctree_results.h5')
 %   analysisData - Structure containing Bioctree analysis results with fields:
 %     .graph       - Graph structure with adjacency, coordinates, eigendecomposition
 %     .X           - Time-vertex signal matrix [N x T]
@@ -31,7 +31,7 @@ function success = outbct(filePath, analysisData, varargin)
 %   'IncludeSpectral'- Include spectral decompositions (default: true)
 %   'Verbose'        - Display progress information (default: true)
 %
-% Output HDF5 Structure:
+% Output BCT Structure:
 % ├── /metadata/
 % │   ├── analysis_info          (analysis parameters, timestamps)
 % │   ├── graph_properties       (N, connectivity, eigenvalues)
@@ -253,25 +253,25 @@ end
 % ============================================================================
 
 function createHDF5Groups(filePath, verbose)
-% Create the standard Bioctree HDF5 group structure using JSON configuration
+% Create the standard Bioctree BCT group structure using JSON configuration
     
     if verbose
-        fprintf('Creating HDF5 group structure...\n');
+        fprintf('Creating BCT group structure...\n');
     end
     
     try
         % Load structure configuration from JSON file
-        structure_config = db_load_hdf5_config();
+        structure_config = db_load_bct_config();
         
         % Create structure using configuration
-        success = db_create_hdf5_structure(filePath, structure_config, verbose);
+        success = db_create_bct_structure(filePath, structure_config, verbose);
         
         if ~success
-            error('Failed to create HDF5 structure from configuration');
+            error('Failed to create BCT structure from configuration');
         end
         
         if verbose
-            fprintf('   ✓ HDF5 structure created from configuration (version %s)\n', ...
+            fprintf('   ✓ BCT structure created from configuration (version %s)\n', ...
                 structure_config.version);
         end
         

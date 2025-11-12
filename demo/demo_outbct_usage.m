@@ -1,9 +1,9 @@
 %% OUTBCT Function Usage Guide
 % This script demonstrates how to use the outbct function to export 
-% Bioctree analysis results to structured HDF5 format.
+% Bioctree analysis results to structured BCT format.
 
 %% Basic Usage
-% The outbct function exports graph signal analysis data to HDF5 format
+% The outbct function exports graph signal analysis data to BCT format
 % with a standardized structure for efficient querying and analysis.
 
 % Basic syntax:
@@ -12,8 +12,8 @@
 
 %% Required Inputs
 
-% 1. filePath: Output HDF5 file path (string or char)
-output_file = 'data/my_bioctree_analysis.h5';  % .h5 extension recommended
+% 1. filePath: Output BCT file path (string or char)
+output_file = 'example1_graph_only.h5';  % .h5 extension required for BCT files
 
 % 2. analysisData: Structure containing analysis results with required field 'G'
 % The analysisData structure must contain at least:
