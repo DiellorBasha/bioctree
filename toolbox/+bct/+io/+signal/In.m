@@ -36,7 +36,7 @@ classdef In
       bct.io.signal.In.raw(B, snap.X, snap.fs);
     end
     
-    function readFreeSurferCurv(path)
+    function raw = readFreeSurferCurv(path)
     % Read FreeSurfer curvature file
     % Returns struct with curv data and metadata
       

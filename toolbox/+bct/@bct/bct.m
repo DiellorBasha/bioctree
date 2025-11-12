@@ -693,6 +693,15 @@ methods
     % metadata: struct with additional information
     
     if nargin < 4, metadata = struct(); end
+    
+    % Ensure signal_stack is properly initialized
+    if isempty(this.signal_stack)
+        this.signal_stack = struct('data', {}, 'labels', {}, 'metadata', {});
+    end
+    if ~isfield(this.signal_stack, 'data'), this.signal_stack.data = {}; end
+    if ~isfield(this.signal_stack, 'labels'), this.signal_stack.labels = {}; end
+    if ~isfield(this.signal_stack, 'metadata'), this.signal_stack.metadata = {}; end
+    
     if nargin < 3, label = sprintf('signal_%d', length(this.signal_stack.data) + 1); end
     
     % Validate signal dimensions
