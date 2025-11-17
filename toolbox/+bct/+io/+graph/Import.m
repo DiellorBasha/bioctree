@@ -3,7 +3,7 @@ classdef Import
     function B = fromFreeSurfer(path)
       raw  = bct.io.graph.In.readFreeSurferSurf(path);
       snap = bct.io.graph.Convert.freeSurferRawToSnapshot(raw);
-      B    = bct.io.graph.Construct.buildBct(snap.V, snap.F);
+      B    = bct.io.graph.Construct.buildBct(snap.V, snap.F, ManifoldType="graph");
       % if isfield(snap,'meta'), B.cache.meta = snap.meta; end
     end
     function B = fromBrainstorm(path, optsIn, optsCvt, optsBld)

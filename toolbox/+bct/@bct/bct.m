@@ -582,7 +582,7 @@ end
 methods
   function V = get.Vertices(this)
     % Delegate to Manifold if available
-    if ~isempty(this.Manifold) && this.Manifold.Type == "mesh"
+    if ~isempty(this.Manifold)
       V = this.Manifold.V;
       return;
     end

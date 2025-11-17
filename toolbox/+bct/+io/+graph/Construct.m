@@ -2,14 +2,46 @@ classdef Construct
   methods (Static)
     % ========= NEW: orchestrator to create an in-memory bct from (V,F) =========
 
-    function B = buildBct(V, F)
+    function B = buildBct(V, F, opts)
+      % buildBct Build a bct object from vertices and faces
+      %
+      % Inputs:
+      %   V - Nx3 vertices
+      %   F - Mx3 faces
+      %   opts.ManifoldType - 'mesh' (default) or 'graph'
+      
+      arguments
+        V double
+        F double
+        opts.ManifoldType (1,1) string {mustBeMember(opts.ManifoldType, ["mesh", "graph"])} = "mesh"
+      end
+      
       % 1) Ensure outward normals (right-hand flip)
       if ~isempty(F), F = F(:,[1 3 2]); end
 
       % 2) Clean & make a surfaceMesh (normals, center, defects removal)
       mesh = bct.io.graph.Construct.makeCleanMesh(V, F,'Precenter',true,'RightHandFlip',false,'SkipNormals',false); % already flipped above
-      % 3) Seed a minimal in-memory bct with V/F
-      B = bct.bct.fromMesh(mesh.Vertices, mesh.Faces);
+      
+      % 3) Create Manifold based on requested type
+      if opts.ManifoldType == "graph"
+        % Extract edges from faces
+        E = bct.io.graph.Construct.edgesFromFaces(mesh.Faces);
+        
+        % Create edges table with EndNodes as Mx2 matrix and default weights
+        EdgesTable = table(double(E), ones(size(E,1),1), 'VariableNames', {'EndNodes', 'Weight'});
+        
+        % Create graph-type Manifold with edges
+        manifold = bct.manifold.Manifold(size(mesh.Vertices,1), EdgesTable);
+        % Store vertices for spatial embedding
+        manifold.V = mesh.Vertices;
+      else
+        % Create mesh-type Manifold
+        manifold = bct.manifold.Manifold(mesh.Vertices, mesh.Faces);
+      end
+      
+      % 4) Create bct object with the Manifold
+      B = bct.bct();
+      B.Manifold = manifold;
 
       % Optionally tag cache/meta
       % B.cache.mesh = mesh;
