@@ -47,15 +47,16 @@ properties (Dependent)
 end
 properties (Dependent)
     % Legacy properties for backward compatibility
-    % NOTE: New code should access B.Manifold directly for mesh topology
-    % These properties delegate to Manifold when available
+    % NOTE: New code should use bct.manifold.toSurfaceMesh(B.Manifold),
+    %       bct.manifold.toMatlabGraph(B.Manifold), or bct.manifold.toGspGraph(B.Manifold)
+    % These properties delegate to Manifold and conversion functions
     Vertices   % [N×3] Vertex coordinates - delegates to Manifold.V
     Faces      % [M×3] Face connectivity - delegates to Manifold.F  
-    mesh       % surfaceMesh object - built from Manifold.V and Manifold.F
+    mesh       % surfaceMesh object - use bct.manifold.toSurfaceMesh(B.Manifold)
     
-    % Graph properties (legacy - consider using Manifold methods)
-    mgraph     % MATLAB graph/digraph object
-    gsp        % GSP struct with W (adjacency), N (nodes)
+    % Graph properties (legacy - use conversion functions instead)
+    mgraph     % MATLAB graph/digraph - use bct.manifold.toMatlabGraph(B.Manifold)
+    gsp        % GSP struct - use bct.manifold.toGspGraph(B.Manifold)
     E          % [P×2] Edge list (undirected)
     w          % Edge weights vector
     
@@ -620,21 +621,27 @@ methods
     S = this.signal_stack;
   end
 
-  function M = get.mesh(this)                % <— replaces TR/surface
-    % Delegate to Manifold if available (uses surfaceMesh internally)
+  function M = get.mesh(this)
+    % Returns surfaceMesh object for visualization
+    % Delegates to bct.manifold.toSurfaceMesh for construction
+    
+    % Use Manifold if available
     if ~isempty(this.Manifold) && this.Manifold.Type == "mesh"
-      V = this.Manifold.V;
-      F = this.Manifold.F;
-      if ~isempty(V) && ~isempty(F)
-        if ~isfield(this.cache,'mesh')
-          this.cache.mesh = surfaceMesh(V, F);
-        end
+      if isfield(this.cache,'mesh') && ~isempty(this.cache.mesh)
         M = this.cache.mesh;
         return;
       end
+      
+      try
+        M = bct.manifold.toSurfaceMesh(this.Manifold);
+        this.cache.mesh = M;
+        return;
+      catch ME
+        warning('bct:MeshConversionFailed', 'Failed to create surfaceMesh: %s', ME.message);
+      end
     end
     
-    % Legacy path
+    % Legacy path - build from cached vertices/faces
     if isfield(this.cache,'mesh'), M = this.cache.mesh; return; end
     V = this.Vertices; F = this.Faces;
     if ~isempty(V) && ~isempty(F)
@@ -646,7 +653,23 @@ methods
   end
 
   function g = get.mgraph(this)
+    % Returns MATLAB graph/digraph object
+    % Delegates to bct.manifold.toMatlabGraph for construction
+    
     if isfield(this.cache,'mgraph'), g = this.cache.mgraph; return; end
+    
+    % Use Manifold if available
+    if ~isempty(this.Manifold)
+      try
+        g = bct.manifold.toMatlabGraph(this.Manifold, this.directed);
+        this.cache.mgraph = g;
+        return;
+      catch ME
+        warning('bct:GraphConversionFailed', 'Failed to create MATLAB graph: %s', ME.message);
+      end
+    end
+    
+    % Legacy path - build from adjacency
     A = this.i_need_A();
     if this.directed
       g = digraph(A);
@@ -657,13 +680,41 @@ methods
   end
 
   function g = get.gsp(this)
+    % Returns GSPBox graph structure
+    % Delegates to bct.manifold.toGspGraph for construction
+    
     if isfield(this.cache,'gsp'), g = this.cache.gsp; return; end
-    g = this.read_graph_gsp();
-    if isempty(g)
-      A = this.i_need_A();
-      W = double(A);
-      g = struct('W', W, 'N', this.N);
+    
+    % Try Manifold first
+    if ~isempty(this.Manifold)
+      try
+        g = bct.manifold.toGspGraph(this.Manifold);
+        this.cache.gsp = g;
+        return;
+      catch ME
+        warning('bct:GspConversionFailed', 'Failed to create GSP graph: %s', ME.message);
+      end
     end
+    
+    % Try file-backed graph
+    g = this.read_graph_gsp();
+    if ~isempty(g)
+      this.cache.gsp = g;
+      return;
+    end
+    
+    % Legacy path - build from adjacency
+    A = this.i_need_A();
+    W = double(A);
+    g = struct('W', W, 'N', this.N);
+    
+    % Add coords if available
+    if ~isempty(this.Manifold) && ~isempty(this.Manifold.V)
+      g.coords = double(this.Manifold.V);
+    elseif isfield(this.cache, 'Vertices') && ~isempty(this.cache.Vertices)
+      g.coords = double(this.cache.Vertices);
+    end
+    
     this.cache.gsp = g;
   end
 
