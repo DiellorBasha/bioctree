@@ -1,4 +1,4 @@
-classdef Manifold
+classdef Manifold < handle
     properties
         Type (1,1) string {mustBeMember(Type,["mesh","graph"])} = "graph"
         % --- Mesh data ---

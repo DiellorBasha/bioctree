@@ -28,29 +28,40 @@ properties (Access=private, Constant)
 end
 
 properties (Access=private, Transient)
-    cache struct = struct();     % holds Vertices, Faces, A, W, E, mesh, mgraph, gsp, w
+    cache struct = struct();     % holds legacy A, W, E, mesh, mgraph, gsp, w
     signal_stack struct = struct('data', {}, 'labels', {}, 'metadata', {});  % Signal stack storage
 end
 
 properties
     directed  logical = false;   % descriptor only (public)
     hypergraph logical = false;  % descriptor only (public)
+    
+    % Manifold object encapsulates mesh/graph topology
+    % NEW: Preferred way to access mesh geometry and topology
+    % Access as: B.Manifold.V, B.Manifold.F, B.Manifold.meshFourier(), etc.
+    Manifold               % bct.manifold.Manifold object
 end
 
 properties (Dependent)
     signals    % Access to signal stack with metadata
 end
 properties (Dependent)
-    Vertices
-    Faces
-    mesh       % surfaceMesh
-    mgraph     % MATLAB graph / digraph (depends on `directed`)
-    gsp        % GSP struct (built from symmetrized W)
-    E          % P×2 int32 (undirected edge list from (A or Faces))
-    w
-    BoundaryEdges
-    Edge2Face
-    Face2Edge
+    % Legacy properties for backward compatibility
+    % NOTE: New code should access B.Manifold directly for mesh topology
+    % These properties delegate to Manifold when available
+    Vertices   % [N×3] Vertex coordinates - delegates to Manifold.V
+    Faces      % [M×3] Face connectivity - delegates to Manifold.F  
+    mesh       % surfaceMesh object - built from Manifold.V and Manifold.F
+    
+    % Graph properties (legacy - consider using Manifold methods)
+    mgraph     % MATLAB graph/digraph object
+    gsp        % GSP struct with W (adjacency), N (nodes)
+    E          % [P×2] Edge list (undirected)
+    w          % Edge weights vector
+    
+    % Mesh topology mappings (legacy)
+    Edge2Face  % [P×2] Edge to face mapping
+    Face2Edge  % [M×3] Face to edge mapping
 end
 
 
@@ -555,16 +566,30 @@ end
     obj.directed  = false;
     obj.hypergraph = false;
 
-    obj.cache.Vertices = double(V);
-    obj.cache.Faces    = int32(F);
+    % Create Manifold object for topology/geometry
+    obj.Manifold = bct.manifold.Manifold(double(V), int32(F));
+    
+    % Set dimension properties
     obj.N = size(V,1);
     obj.F = size(F,1);
+    
+    % Legacy cache (for backward compatibility if needed)
+    % obj.cache.Vertices = double(V);
+    % obj.cache.Faces    = int32(F);
     % Edges / adjacency built lazily on first access
   end
 end
 methods
   function V = get.Vertices(this)
+    % Delegate to Manifold if available
+    if ~isempty(this.Manifold) && this.Manifold.Type == "mesh"
+      V = this.Manifold.V;
+      return;
+    end
+    
+    % Legacy: check cache
     if isfield(this.cache,'Vertices'), V = this.cache.Vertices; return; end
+    
     % Optional file-backed fallback (safe if not using files)
     C = this.read_coords();   % may return []
     if ~isempty(C), this.cache.Vertices = double(C); end
@@ -572,6 +597,13 @@ methods
   end
 
   function F = get.Faces(this)
+    % Delegate to Manifold if available
+    if ~isempty(this.Manifold) && this.Manifold.Type == "mesh"
+      F = this.Manifold.F;
+      return;
+    end
+    
+    % Legacy: check cache
     if isfield(this.cache,'Faces'), F = this.cache.Faces; return; end
     if isfield(this,'Faces') && ~isempty(this.Faces) %#ok<MCSUP>
       this.cache.Faces = int32(this.Faces);
@@ -589,6 +621,20 @@ methods
   end
 
   function M = get.mesh(this)                % <— replaces TR/surface
+    % Delegate to Manifold if available (uses surfaceMesh internally)
+    if ~isempty(this.Manifold) && this.Manifold.Type == "mesh"
+      V = this.Manifold.V;
+      F = this.Manifold.F;
+      if ~isempty(V) && ~isempty(F)
+        if ~isfield(this.cache,'mesh')
+          this.cache.mesh = surfaceMesh(V, F);
+        end
+        M = this.cache.mesh;
+        return;
+      end
+    end
+    
+    % Legacy path
     if isfield(this.cache,'mesh'), M = this.cache.mesh; return; end
     V = this.Vertices; F = this.Faces;
     if ~isempty(V) && ~isempty(F)
@@ -643,16 +689,6 @@ methods
     catch, end
     this.cache.w = [];
     w = [];
-  end
-
-  function B = get.BoundaryEdges(this)
-    if isfield(this.cache,'BoundaryEdges'), B = this.cache.BoundaryEdges; return; end
-    F = this.Faces; if isempty(F), this.cache.BoundaryEdges = int32([]); B = []; return; end
-    e12 = sort(F(:,[1 2]),2); e23 = sort(F(:,[2 3]),2); e31 = sort(F(:,[3 1]),2);
-    FE  = [e12; e23; e31];
-    [U,~,ic] = unique(FE,'rows');
-    cnt = accumarray(ic,1,[size(U,1) 1]);
-    B = U(cnt==1,:); this.cache.BoundaryEdges = int32(B);
   end
 
   function f2e = get.Face2Edge(this)
