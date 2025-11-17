@@ -15,11 +15,13 @@ disp(signals);
 
 
 
-Gmat=B.mgraph;
-Gmesh = B.mesh;
-G=gsp_graph(B.gsp.W, B.Vertices);
+% Use new Manifold API
+Gmat = bct.manifold.toMatlabGraph(B.Manifold);
+Gmesh = bct.manifold.toSurfaceMesh(B.Manifold);
+Gsp = bct.manifold.toGspGraph(B.Manifold);
+G = gsp_graph(Gsp.W, B.Manifold.V);
 figure(1)
-surfaceMeshShow(B.mesh)
+surfaceMeshShow(Gmesh)
 
 
 fname = "data/test_LUT.h5";
@@ -39,10 +41,10 @@ subj.sex   = 'F';
 %% -------- Make toy signals --------
 % coords: simple ring in XY for clarity
 theta = linspace(0, 2*pi, N+1); theta(end) = [];
-coords = B.Vertices;          % [3,N]
+coords = B.Manifold.V;        % [N,3]
 % normals: outward in XY plane (same as coords here, unit length)
-B.mesh.computeNormals;
-normals = B.mesh.VertexNormals;                                        % [3,N]
+Gmesh.computeNormals;
+normals = Gmesh.VertexNormals;                                        % [3,N]
 
 % curvature: toy scalar (e.g., cos wave)
 curv = B.signals.data{1};                     % [1,N]
@@ -58,12 +60,12 @@ signals(3,:,1,1)   = single(curv);      % [N,1]
 
 
     % --- Build cotangent-weight adjacency & mass matrix ---
-    [W_cot, M] = cot_weights(B.Vertices, B.Faces);
+    [W_cot, M] = cot_weights(B.Manifold.V, B.Manifold.F);
     % --- Build GSP graph (use cotangent adjacency as W, attach coords) ---
-    G = gsp_graph(W_cot, B.Vertices);
+    G = gsp_graph(W_cot, B.Manifold.V);
     %G.type = 'mesh-cotangent';
     G.plotting.vertex_size = 1;
-    G.Faces = B.Faces;
+    G.Faces = B.Manifold.F;
     G.M = M;                      % lumped vertex areas (mass)
              % [E,2] uint32
 [i,j] = find(triu(G.A, 1));        % column vectors

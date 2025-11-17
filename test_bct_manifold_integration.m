@@ -1,4 +1,5 @@
 % Test BCT integration with Manifold object
+bioctree_start
 clear; close all;
 
 %% Test 1: Create BCT from FreeSurfer mesh
@@ -18,15 +19,10 @@ if exist(path, 'file')
         fprintf('  Manifold.Type: %s\n', B.Manifold.Type);
         fprintf('  Manifold V size: [%d x %d]\n', size(B.Manifold.V));
         fprintf('  Manifold F size: [%d x %d]\n', size(B.Manifold.F));
+        fprintf('  Manifold.N: %d\n', B.Manifold.N);
     else
         fprintf('\n✗ Manifold object is empty\n');
     end
-    
-    % Test dependent properties still work
-    fprintf('\nTesting dependent properties:\n');
-    fprintf('  B.Vertices size: [%d x %d]\n', size(B.Vertices));
-    fprintf('  B.Faces size: [%d x %d]\n', size(B.Faces));
-    fprintf('  B.mesh class: %s\n', class(B.mesh));
 else
     fprintf('FreeSurfer test data not found, skipping Test 1\n');
 end
@@ -62,18 +58,20 @@ catch ME
     fprintf('✗ Error computing Fourier basis: %s\n', ME.message);
 end
 
-%% Test 4: Backward compatibility - dependent properties
-fprintf('\n\nTest 4: Testing backward compatibility...\n');
-fprintf('  B2.Vertices delegates to Manifold.V: %s\n', ...
-    mat2str(isequal(B2.Vertices, B2.Manifold.V)));
-fprintf('  B2.Faces delegates to Manifold.F: %s\n', ...
-    mat2str(isequal(B2.Faces, B2.Manifold.F)));
+%% Test 4: Test conversion functions
+fprintf('\n\nTest 4: Testing conversion functions...\n');
+sm = bct.manifold.toSurfaceMesh(B2.Manifold);
+fprintf('  surfaceMesh: %d vertices, %d faces\n', size(sm.Vertices,1), size(sm.Faces,1));
+g = bct.manifold.toMatlabGraph(B2.Manifold);
+fprintf('  MATLAB graph: %d nodes, %d edges\n', numnodes(g), numedges(g));
+Gsp = bct.manifold.toGspGraph(B2.Manifold);
+fprintf('  GSP graph: N=%d, W is %dx%d\n', Gsp.N, size(Gsp.W,1), size(Gsp.W,2));
 
 %% Test 5: Visualize eigenmode
 if B2.Manifold.NumModes > 0
     fprintf('\n\nTest 5: Visualizing eigenmode...\n');
     figure('Name', 'BCT Manifold - First Eigenmode');
-    trisurf(B2.Faces, B2.Vertices(:,1), B2.Vertices(:,2), B2.Vertices(:,3), ...
+    trisurf(B2.Manifold.F, B2.Manifold.V(:,1), B2.Manifold.V(:,2), B2.Manifold.V(:,3), ...
         B2.Manifold.Eigenvectors(:,1), 'EdgeColor', 'none');
     axis equal off;
     colorbar;
