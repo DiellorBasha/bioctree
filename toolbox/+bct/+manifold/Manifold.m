@@ -28,7 +28,11 @@ classdef Manifold < handle
         function obj = Manifold(varargin)
             if nargin==0, return; end
             if nargin==2 && size(varargin{1},2)==3 && size(varargin{2},2)==3
-                obj.Type = "mesh"; obj.V = varargin{1}; obj.F = varargin{2}; return
+                obj.Type = "mesh"; 
+                obj.V = varargin{1}; 
+                obj.F = varargin{2}; 
+                obj.N = size(obj.V, 1);  % Number of vertices
+                return
             end
             if nargin==1
                 X = varargin{1};
