@@ -33,11 +33,8 @@ properties (Access=private, Transient)
 end
 
 properties
-    directed  logical = false;   % descriptor only (public)
-    hypergraph logical = false;  % descriptor only (public)
-    
     % Manifold object encapsulates mesh/graph topology
-    % NEW: Preferred way to access mesh geometry and topology
+    % Preferred way to access mesh geometry and topology
     % Access as: B.Manifold.V, B.Manifold.F, B.Manifold.meshFourier(), etc.
     Manifold               % bct.manifold.Manifold object
 end
@@ -510,8 +507,6 @@ end
  methods (Static)
   function obj = fromAdjacency(A, coords)
     obj = bct.bct();
-    obj.directed  = false;           % descriptor
-    obj.hypergraph = false;
 
     obj.cache.A = bct.cleanAdj(A);   % internal structural adjacency
     obj.N = size(obj.cache.A,1);
@@ -523,8 +518,6 @@ end
 
   function obj = fromEdges(E, N, coords, w)
     obj = bct.bct();
-    obj.directed  = false;
-    obj.hypergraph = false;
 
     E = bct.cleanEdges(E);
     if nargin<2 || isempty(N), N = max(E(:)); end
@@ -545,8 +538,6 @@ end
 
   function obj = fromMesh(V,F)
     obj = bct.bct();
-    obj.directed  = false;
-    obj.hypergraph = false;
 
     % Create Manifold object for topology/geometry
     obj.Manifold = bct.manifold.Manifold(double(V), int32(F));
