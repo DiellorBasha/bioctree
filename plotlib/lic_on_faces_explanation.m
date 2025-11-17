@@ -1,0 +1,385 @@
+%% demo_lic_on_mesh.m
+% Line-Integral Convolution (LIC) of the gradient field of a scalar signal on a triangle mesh.
+% This script is written as a tutorial: every block explains what it's doing.
+
+%% 0) Inputs: mesh and a scalar signal x (per vertex)
+% Replace these three lines with your own mesh and signal.
+V = double(B.mesh.Vertices);      % n x 3, units: mm
+F = double(B.mesh.Faces);         % m x 3
+i=1
+xrec = X{i};RGB = x2rgb(xrec); B.mesh.VertexColors = RGB; surfaceMeshShow(B.mesh);
+x = xrec(:);                      % n x 1 scalar field you want to visualize (e.g., a reconstruction)
+
+% Optional: ensure normals exist (unit length)
+if isprop(B.mesh,'FaceNormals') && ~isempty(B.mesh.FaceNormals)
+    Nf = B.mesh.FaceNormals;
+    Nf = Nf ./ max(1e-12, vecnorm(Nf,2,2));
+else
+B.mesh.computeNormals;    
+Nf = B.mesh.FaceNormals;           % m x 3 unit normals (gptoolbox)
+Nf = Nf ./ max(1e-12, vecnorm(Nf,2,2));
+end
+
+%% 1) Build the discrete gradient operator and get ∇x per face
+% grad(V,F) maps vertex scalars (n x 1) to stacked face gradients ((3m) x 1).
+% Each triangle's gradient is constant over that triangle (P1 FEM).
+G = grad(double(V), double(F));
+g_stacked = G * x;                      % (3m) x 1
+grad_face = reshape(g_stacked, [], 3);  % m x 3, one 3D vector per face (units: x/mm)
+% The PL gradient is already tangent in exact arithmetic.
+% Numerically project away any tiny normal component for robustness:
+grad_face = grad_face - sum(grad_face.*Nf,2).*Nf;
+
+%% 2) Normalize the vector field (direction only) for advection
+% LIC needs directions to follow; magnitude influences only the step scaling.
+mag = vecnorm(grad_face,2,2) + eps;
+vf  = grad_face ./ mag;                 % unit tangent field per face, m x 3
+
+%% 3) Build face-to-face adjacency (who is across each edge)
+% We'll advect across triangles. F2F(f,1..3) gives the neighbor face across
+% the edge opposite the corresponding vertex of face f (0 if boundary).
+%F2F = face_adjacency(F);  % use gptoolbox triangle_triangle_adjacency
+[TT, ~] = triangle_triangle_adjacency(double(F));  % TT: m×3 neighbors across opposite edges
+F2F = TT;  % exactly what we need
+
+%% 4) Prepare seeds and a white-noise texture on faces
+% The idea of LIC: place white noise on the domain, then blur *along* streamlines
+% of the vector field. The directional blur creates the streaks characteristic of LIC.
+m = size(F,1);
+C = (V(F(:,1),:)+V(F(:,2),:)+V(F(:,3),:))/3;   % centroids for visualization or seeding
+C = barycenter(V,F);   % gptoolbox helper, returns m×3 centroids
+
+rng(7);                         % reproducible noise
+eta = randn(m,1);               % one noise value per face (could also use per-vertex)
+% per-vertex white noise
+
+% when sampling at point p inside face f with barycentric (u,v,w):
+% eta_sample = u*eta_v(F(f,1)) + v*eta_v(F(f,2)) + w*eta_v(F(f,3));
+
+%% 5) Choose LIC kernel parameters
+kernel_len_mm = 25;   % convolution half-length along the streamline (mm). Larger => longer streaks
+nSteps        = 30;   % number of discrete samples (per direction) along the curve
+h             = kernel_len_mm / nSteps;  % step size (mm)
+% We'll use a Gaussian weighting along arclength s: w(s) = exp(-(s/σ)^2/2), with σ = kernel_len_mm.
+% Put this once after V,F are defined:
+E = [F(:,[1 2]); F(:,[2 3]); F(:,[3 1])];
+L = vecnorm(V(E(:,1),:) - V(E(:,2),:), 2, 2);
+h_target = 0.25 * median(L);          % ~25% of median edge length
+
+kernel_len_mm = 40;                   % longer streaks (try 40–60)
+nSteps        = max(50, round(kernel_len_mm / h_target));
+h             = kernel_len_mm / nSteps;   % this will now be ~h_target
+
+%% 5.5) Prep: make a per-vertex tangent field and per-vertex noise
+
+% Area-weighted average of face gradients to vertices
+Atri = doublearea(Vd,Fd)/2;                      % m×1 face areas
+S    = sparse(Fd(:), repelem((1:m)',3), 1, n, m);% n×m face→vertex incidence
+Wf   = spdiags(Atri, 0, m, m);                   % m×m area weights
+
+% Area-weighted sum of face gradients at vertices, then normalize by total area
+grad_vert = (S * Wf) * grad_face;                % n×3
+w_v       = S * Atri;                             % n×1 total incident area
+grad_vert = grad_vert ./ max(w_v, eps);          % area-weighted average
+
+% Project to vertex tangent plane and unit-normalize
+if isprop(B.mesh,'VertexNormals') && ~isempty(B.mesh.VertexNormals)
+    Nv = B.mesh.VertexNormals;
+else
+    Nv = per_vertex_normals(Vd,Fd);              % or your own normal routine
+end
+Nv = Nv ./ max(1e-12, vecnorm(Nv,2,2));
+grad_vert = grad_vert - sum(grad_vert.*Nv,2).*Nv;
+grad_vert = grad_vert ./ max(vecnorm(grad_vert,2,2), 1e-12);
+
+% Per-vertex white noise for smooth LIC sampling
+rng(7);
+eta_v = randn(n,1);
+
+%% 6) Compute LIC value per face
+% For each face f0:
+%   - start at its centroid
+%   - march forward along vf and backward against vf
+%   - sample the noise on faces you traverse and weight by a Gaussian kernel
+%   - average the samples => LIC value for that face
+
+%% 6) Compute LIC value per face (vectorized; all seeds advanced together)
+
+m = size(F,1);
+
+% Accumulators
+lic_face = zeros(m,1);
+wsum     = zeros(m,1);
+
+% Helper to pick per-row elements without a loop:
+pick_rowcol = @(M,r,c) M(sub2ind(size(M), r, c));
+
+for sgn = [-1, +1]
+
+    % One seed per face (start at centroids)
+    f = (1:m)';                      % m×1 current face index
+    p = C;                           % m×3 current points (centroids)
+
+    % ----- k = 0: include the seed locations (centroids) -----
+    k  = 0;
+    s  = sgn*k*h;
+    w  = exp(-0.5*(s/kernel_len_mm).^2);      % scalar weight (same for all)
+    % CHANGED: sample per-vertex noise at centroid (u=v=w=1/3)
+    eta0 = (eta_v(F(:,1)) + eta_v(F(:,2)) + eta_v(F(:,3)))/3;
+    lic_face = lic_face + w * eta0;
+    wsum     = wsum     + w;
+
+    % ----- March nSteps steps along the field -----
+    for k = 1:nSteps
+        % Weight at this arc-length sample
+        s  = sgn*k*h;
+        w  = exp(-0.5*(s/kernel_len_mm).^2);
+
+        % --- Vectorized barycentrics of current point p in its current triangles ---
+        tri1 = V(F(f,1),:); tri2 = V(F(f,2),:); tri3 = V(F(f,3),:);
+        e0   = tri2 - tri1;
+        e1   = tri3 - tri1;
+        e2   = p   - tri1;                         % CHANGED: field at p (not p_try)
+        d00 = sum(e0.*e0,2); d01 = sum(e0.*e1,2); d11 = sum(e1.*e1,2);
+        d20 = sum(e2.*e0,2); d21 = sum(e2.*e1,2);
+        denom = d00.*d11 - d01.*d01 + eps;
+        vbc_p = (d11.*d20 - d01.*d21)./denom;      % v at p
+        wbc_p = (d00.*d21 - d01.*d20)./denom;      % w at p
+        ubc_p = 1 - vbc_p - wbc_p;                 % u at p
+
+        % --- CHANGED: interpolate tangent field at p (smooth directions) ---
+% ---- RK2 (midpoint) ----
+% v1 at p
+gv1 = grad_vert(F(f,1),:);
+gv2 = grad_vert(F(f,2),:);
+gv3 = grad_vert(F(f,3),:);
+v1  = ubc_p.*gv1 + vbc_p.*gv2 + wbc_p.*gv3;
+v1  = v1 ./ max(vecnorm(v1,2,2), 1e-12);
+
+% half step to midpoint
+p_mid = p + 0.5*h*sgn * v1;
+
+% barycentrics at midpoint (reuse tri1, e0, e1, denom already computed)
+e2_mid = p_mid - tri1;
+d20m = sum(e2_mid.*e0,2); d21m = sum(e2_mid.*e1,2);
+vbc_m = (d11.*d20m - d01.*d21m)./denom;
+wbc_m = (d00.*d21m - d01.*d20m)./denom;
+ubc_m = 1 - vbc_m - wbc_m;
+
+% v2 at midpoint
+v2  = ubc_m.*gv1 + vbc_m.*gv2 + wbc_m.*gv3;
+v2  = v2 ./ max(vecnorm(v2,2,2), 1e-12);
+
+% full step using midpoint direction
+p_try = p + h*sgn * v2;
+
+
+        % --- Barycentrics of p_try in current triangles (for inside test) ---
+        e2_try = p_try - tri1;
+        d20t = sum(e2_try.*e0,2); d21t = sum(e2_try.*e1,2);
+        vbc   = (d11.*d20t - d01.*d21t)./denom;
+        wbc   = (d00.*d21t - d01.*d20t)./denom;
+        ubc   = 1 - vbc - wbc;
+        bc    = [ubc vbc wbc];
+
+        % Seeds staying inside their current triangles:
+        inside = all(bc >= -1e-12, 2);
+        if any(inside)
+            fi = f(inside);
+            % CHANGED: sample per-vertex noise at p_try via bc
+            eta_step_in = ubc(inside).*eta_v(F(fi,1)) + ...
+                          vbc(inside).*eta_v(F(fi,2)) + ...
+                          wbc(inside).*eta_v(F(fi,3));
+            lic_face(inside) = lic_face(inside) + w .* eta_step_in;
+            wsum(inside)     = wsum(inside)     + w;
+
+            % Update p for inside seeds
+            p(inside,:) = p_try(inside,:);
+        end
+
+        % Seeds that leave: hop across the crossed edge to the neighbor face
+        if ~all(inside)
+            J   = ~inside;                 % leaving subset
+            fJ  = f(J);                    % their current faces
+            bcJ = bc(J,:);
+
+            % Crossed edge is at the most negative barycentric component
+            [~, whichNeg] = min(bcJ, [], 2);                 % 1..3
+            % Neighbor face across that edge (0 on boundary/nonmanifold)
+            fN = pick_rowcol(TT, fJ, whichNeg);
+
+            % Clamp p_try to the crossed edge (inside current tri) -> new point on boundary
+            bcJc = max(bcJ,0); bcJc = bcJc ./ sum(bcJc,2);
+            tri1J = V(F(fJ,1),:); tri2J = V(F(fJ,2),:); tri3J = V(F(fJ,3),:);
+            p_edge = bcJc(:,1).*tri1J + bcJc(:,2).*tri2J + bcJc(:,3).*tri3J;
+
+            % CHANGED: accumulate noise at the clamped point on the edge (smoothly)
+            eta_edge = bcJc(:,1).*eta_v(F(fJ,1)) + ...
+                       bcJc(:,2).*eta_v(F(fJ,2)) + ...
+                       bcJc(:,3).*eta_v(F(fJ,3));
+
+            % Update only the leaving seeds
+ % Update only the leaving seeds
+p(J,:) = p_edge;
+f(J)   = fN;
+
+% Accumulate noise at the clamped point on the edge (smoothly)
+% (only for those with a valid neighbor; on closed hemisphere it's all of them)
+Jidx = find(J);           % indices in 1..m that left
+ok   = (fN ~= 0);         % valid neighbor flag for that subset
+if any(ok)
+    lic_face(Jidx(ok)) = lic_face(Jidx(ok)) + w .* eta_edge(ok);
+    wsum(Jidx(ok))     = wsum(Jidx(ok))     + w;
+end
+
+        end
+    end
+end
+
+% Normalize LIC response per face (then scale 0..1 for display convenience)
+lic_face = lic_face ./ max(wsum, eps);
+lic_face = (lic_face - min(lic_face)) / max(eps, (max(lic_face) - min(lic_face)));
+% (keep your existing normalization first)
+mu = mean(lic_face); sig = std(lic_face) + 1e-12;
+g  = 1.5;                                % contrast gain (1–2 is sensible)
+lic_face = 0.5 + 0.5 * tanh(g * (lic_face - mu) / sig);
+
+%% 7) (Optional) Push face values to vertices for smooth colored rendering
+Atri  = doublearea(V,F)/2;     % m x 1 triangle areas
+lic_v = zeros(size(V,1),1);
+w_v   = zeros(size(V,1),1);
+for c = 1:3
+    I = F(:,c);
+    lic_v = lic_v + accumarray(I, lic_face .* Atri, [size(V,1),1], @sum, 0);
+    w_v   = w_v   + accumarray(I, Atri,                 [size(V,1),1], @sum, 0);
+end
+lic_v = lic_v ./ max(w_v,eps);
+%% 8) Visualize the result
+% Normalize to [0,1]
+lf = lic_face(:);
+lf = (lf - min(lf)) / max(eps, max(lf)-min(lf));
+lf=lic_face;
+RGBf = x2rgb(lf);
+B.mesh.FaceColors = RGBf;                         % one RGB per face
+B.mesh.VertexColors = [];                         % (ensure vertex color not used)
+surfaceMeshShow(B.mesh);
+
+%% 8) Visualize the result
+% Area-weighted face→vertex average
+V = double(B.mesh.Vertices);
+F = double(B.mesh.Faces);
+Atri = doublearea(V,F)/2;                 % m×1
+
+lic_v = zeros(size(V,1),1);
+w_v   = zeros(size(V,1),1);
+for c = 1:3
+    I = F(:,c);
+    lic_v = lic_v + accumarray(I, lic_face.*Atri, [size(V,1),1], @sum, 0);
+    w_v   = w_v   + accumarray(I, Atri,             [size(V,1),1], @sum, 0);
+end
+lic_v = lic_v ./ max(w_v,eps);
+
+% Normalize + colorize
+lv = lic_v(:);
+lv = (lv - min(lv)) / max(eps, max(lv)-min(lv));
+cm  = parula(256);
+idx = max(1, min(256, 1 + floor(lv*(size(cm,1)-1))));
+RGBv = cm(idx, :);                                % n×3
+
+% Assign per-vertex colors and show
+B.mesh.VertexColors = RGBv;
+B.mesh.FaceColors   = [];                          % (ensure face color not used)
+surfaceMeshShow(B.mesh);
+title('LIC (vertex colors, smoothed)'); axis image off
+
+
+%% 9) (Optional) Streamline overlay (short segments) for intuition
+nSeeds   = 300;     % number of seed faces
+step_mm  = 2.0;     % step per segment
+nSegs    = 150;     % segments per streamline
+seed_faces = randi(m,[nSeeds,1]);
+figure(3); clf; hold on
+tsurf(F,V,'FaceAlpha',0.15,'EdgeAlpha',0.05); axis image off
+title('Streamlines of \nabla x'); camlight; lighting gouraud
+for s = 1:nSeeds
+    f = seed_faces(s); p = C(f,:);
+    for t = 1:nSegs
+        v  = vf(f,:);
+        p2 = p + step_mm * v;
+        [f2, q] = step_across_face(p, p2, V, F, f, F2F);
+        if f2==0, break; end
+        plot3([p(1) q(1)],[p(2) q(2)],[p(3) q(3)], 'k-');
+        p = q; f = f2;
+    end
+end
+
+%% ———————————— Helpers ————————————
+
+function Nf = compute_face_normals(V,F)
+    e1 = V(F(:,2),:) - V(F(:,1),:);
+    e2 = V(F(:,3),:) - V(F(:,1),:);
+    Nf = cross(e1,e2,2);
+    Nf = Nf ./ max(1e-12, vecnorm(Nf,2,2));
+end
+
+function F2F = face_adjacency(F)
+    % Build a face-to-face adjacency across opposite edges.
+    % F2F(f,1) is neighbor across edge opposite F(f,1), etc.
+    m = size(F,1);
+    F2F = zeros(m,3);
+
+    % List each face's three opposite edges (as sorted vertex pairs), tagging face & slot
+    E = [F(:,[2 3]) (1:m)' repmat(1,m,1);
+         F(:,[3 1]) (1:m)' repmat(2,m,1);
+         F(:,[1 2]) (1:m)' repmat(3,m,1)];
+    E(:,1:2) = sort(E(:,1:2),2);
+
+    % Pair identical edges (they are shared by two faces)
+    [~,~,J] = unique(E(:,1:2),'rows');
+    counts  = accumarray(J,1);
+    shared  = find(counts==2);
+    for k = 1:numel(shared)
+        idx = find(J==shared(k));
+        e1 = E(idx(1),:); e2 = E(idx(2),:);
+        % e = [vA vB face slot]
+        F2F(e1(3), e1(4)) = e2(3);
+        F2F(e2(3), e2(4)) = e1(3);
+    end
+end
+
+function [f_next, p_next] = step_across_face(p, p_try, V, F, f, F2F)
+    % Try to move from point p in face f toward p_try (straight segment in 3D).
+    % If p_try leaves the triangle, clamp to the boundary edge and hop to the neighbor face.
+    tri = F(f,:);
+    bc = barycentric_coords(p_try, V(tri,:));  % barycentric of proposed point
+
+    if all(bc >= -1e-12)
+        % Still inside the same triangle: accept
+        f_next = f; p_next = p_try; return
+    end
+
+    % Leaving the face: identify the edge crossed (most negative barycentric)
+    [~, whichNeg] = min(bc);               % 1..3 (oppose vertex #whichNeg)
+    f_next = F2F(f, whichNeg);             % neighbor across that edge (0 if none)
+    if f_next == 0
+        % No neighbor (boundary); clamp onto the edge and stop
+        bc = max(bc,0); bc = bc/sum(bc);
+        p_next = bc(1)*V(tri(1),:) + bc(2)*V(tri(2),:) + bc(3)*V(tri(3),:);
+        return
+    end
+
+    % Clamp to the crossed edge within the current face as the next point
+    bc = max(bc,0); bc = bc/sum(bc);
+    p_next = bc(1)*V(tri(1),:) + bc(2)*V(tri(2),:) + bc(3)*V(tri(3),:);
+end
+
+function bc = barycentric_coords(p, triV)
+    % Compute barycentric coordinates of 3D point p w.r.t. triangle triV (3x3)
+    v0 = triV(2,:)-triV(1,:); v1 = triV(3,:)-triV(1,:); v2 = p-triV(1,:);
+    d00=dot(v0,v0); d01=dot(v0,v1); d11=dot(v1,v1); d20=dot(v2,v0); d21=dot(v2,v1);
+    denom = d00*d11 - d01*d01 + eps;
+    v = (d11*d20 - d01*d21)/denom;
+    w = (d00*d21 - d01*d20)/denom;
+    u = 1 - v - w;
+    bc = [u v w];
+end

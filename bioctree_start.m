@@ -83,6 +83,27 @@ else
     cd(current_dir);
 end
 
+% Initialize gptoolbox
+gptoolbox_path = fullfile(bioctree_root, 'external', 'gptoolbox');
+if exist(gptoolbox_path, 'dir')
+    fprintf('Initializing gptoolbox...\n');
+    addpath(genpath(gptoolbox_path));
+    fprintf('  ✓ gptoolbox added to path\n');
+    
+    % Verify key functions are available
+    if exist('cotmatrix', 'file') && exist('massmatrix', 'file')
+        fprintf('  ✓ gptoolbox geometry functions available (cotmatrix, massmatrix)\n');
+    else
+        warning('BIOCTREE:GPTOOLBOXFunctions', 'gptoolbox functions not found on path');
+        fprintf('  ✗ Some gptoolbox functions may not be available\n');
+    end
+else
+    warning('BIOCTREE:GPTOOLBOXNotFound', 'gptoolbox not found at: %s', gptoolbox_path);
+    fprintf('  ✗ gptoolbox not found. Mesh processing functions (meshFourier) will not work.\n');
+    fprintf('    To install, clone to external/gptoolbox:\n');
+    fprintf('    git clone https://github.com/alecjacobson/gptoolbox.git external/gptoolbox\n');
+end
+
 % Add external utilities
 external_path = fullfile(bioctree_root, 'external');
 if exist(external_path, 'dir')

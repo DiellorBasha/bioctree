@@ -198,7 +198,7 @@ classdef Manifold < handle
             
             % Default number of modes
             if nargin < 2 || isempty(k)
-                k = min(600, nVerts - 1);
+                k = min(200, nVerts - 1);
             end
             
             % Validate k

@@ -1,7 +1,7 @@
 %% BIOCTREE — Simulator end-to-end demo (B-bound, aligned with your bct workflow)
-% This single script mirrors the style of your CWT demo:
+% This single script demonstrates bct.sim package functions:
 %  - Uses bct.bct to create the file and do ALL I/O.
-%  - Lets bct.sim.sim auto-create a default graph if none exists (gsp_bunny + lmax).
+%  - Uses bct.sim.gaussian_growth() to generate signals directly from B.Manifold.
 %  - Generates a default growth series X(T×N) with T=100 @ fs=10 Hz (width increases over time).
 %  - Writes X to /signals/raw using B.write_raw (your typical pattern).
 %  - Initializes /signals/raw_stack and appends layers using B.append_raw_layer.
@@ -15,15 +15,10 @@ outfn = 'sub-01_sim_demo.bct.h5';                     % will be placed under /da
 if exist(outfn,'file'), delete(outfn); end
 B = bct.bct.create(outfn);                            % new, schema-correct file
 
-%% 1) Simulator (B-bound)
-% If the file has no graph, S will:
-%  - create default bunny graph (gsp_bunny), estimate lmax
-%  - persist coords + edges via B.write_graph(...)
-S = bct.sim.sim(B);
-
-%% 2) Generate the DEFAULT growth series: T=100, fs=10 Hz (time × nodes)
+%% 1) Generate the DEFAULT growth series: T=100, fs=10 Hz (time × nodes)
 % The Gaussian width starts tiny at t=1 and grows linearly to t=100.
-X_TN = S.gaussian_growth_default();                   % size: [100 × N], single
+% Note: Requires B.Manifold to be set (e.g., via bct.io.graph.Import or manual creation)
+X_TN = bct.sim.gaussian_growth(B, 'T', 100, 'fs', 10); % size: [100 × N], single
 fs   = 10;                                            % Hz
 
 % -- Write this as the "typical" default layer (/signals/raw), like your CWT demo
@@ -45,7 +40,7 @@ B.append_raw_layer(X_TN, 0);                          % creates /signals/raw_sta
 
 % 3b) Create a STATIC Gaussian (single frame) and append it as layer 1
 center_node = min(250, N);                            % clamp example index to valid range
-x_static_N  = S.gaussian('center', center_node, 'sigma', 3);  % N×1
+x_static_N  = bct.sim.gaussian(B, 'center', center_node, 'sigma', 3);  % N×1
 B.append_raw_layer(reshape(x_static_N, 1, N), 1);     % store as T=1 × N, layer_id=1
 
 % 3c) Set default layer (copy chosen stack layer into /signals/raw for fast access)

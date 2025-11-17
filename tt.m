@@ -6,6 +6,7 @@ B = bct.io.graph.Import.fromFreeSurfer(path);
 % Import curvature signal directly
 curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';
 B = bct.io.signal.Import.fromFreeSurfer(curv_path, B);
+%% 
 
 % Check imported signals
 signals = B.signals;
@@ -40,10 +41,11 @@ subj.sex   = 'F';
 theta = linspace(0, 2*pi, N+1); theta(end) = [];
 coords = B.Vertices;          % [3,N]
 % normals: outward in XY plane (same as coords here, unit length)
+B.mesh.computeNormals;
 normals = B.mesh.VertexNormals;                                        % [3,N]
 
 % curvature: toy scalar (e.g., cos wave)
-curv = single(0.5 + 0.5*cos(theta));                     % [1,N]
+curv = B.signals.data{1};                     % [1,N]
 
 % Pack into SNCT = [S,N,C,T] with C=3 (pad scalar with NaNs)
 signals = nan(S, N, C, T, 'single');

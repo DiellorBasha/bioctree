@@ -1,0 +1,175 @@
+path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
+B = bct.io.graph.Import.fromFreeSurfer(path);
+curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';
+B = bct.io.signal.Import.fromFreeSurfer(curv_path, B);
+%% needs gptoolbox in external/gptoolbox/mesh
+x = B.signals.data{1};          % N×1 (e.g., lh.curv)
+V = B.mesh.Vertices; 
+F = B.mesh.Faces;
+
+% Operators (gptoolbox)
+K = -cotmatrix(V, F);                                   % PSD stiffness
+M = massmatrix(V, F, 'barycentric');                    % diagonal, >0
+K = (K+K.')/2;                                          % enforce symmetry
+d = full(diag(M)); 
+M = spdiags(d,0,length(d),length(d));
+
+% --- Choose units: make sure V is in mm if you want cycles/mm ---
+% If V is in meters, do:  V = 1000*V;  and then rebuild K,M above.
+
+% Normalized Laplacian (more numerically tame since M is diagonal)
+Sinv = spdiags(1./sqrt(d), 0, length(d), length(d));
+Ls = (Sinv*K*Sinv); 
+Ls = (Ls + Ls.')/2;
+
+% --- Eigen solve near zero: use a tiny positive shift to aid convergence ---
+k = 600;                                 % number of modes you want
+opts.tol = 1e-10; 
+opts.maxit = 5000; 
+opts.isreal = true;                       % harmless hint
+sigma = 1e-6;                             % small, improves conditioning
+
+[U, D] = eigs(Ls, k, sigma, opts);        % shift-invert around ~0+
+lam = real(diag(D));
+
+% Clean numerical fuzz
+tol = 1e-10 * max(1, max(abs(lam)));      % tolerant but safe
+lam(lam < 0 & lam > -tol) = 0;
+
+% Drop DC and any negatives beyond tolerance
+mask = lam > tol;
+lam  = lam(mask);
+U    = U(:,mask);
+%% 
+
+% Spectral coefficients and power
+x = x(:);
+a = U' * (Sinv * x);                      % = Phi'*(M*x) in generalized form
+P = a.^2;
+
+% Frequencies (cycles per mm if V is in mm)
+freq = sqrt(lam) / (2*pi);
+
+% Optional: sort by frequency
+[freq, idx] = sort(freq);
+P = P(idx);
+
+%% 
+
+% Plot
+figure(1); clf
+plot(freq, P, '.-'); grid on
+xlabel('spatial frequency (cycles/mm)');
+ylabel('power');
+title('Manifold spatial spectrum');
+
+% Energy sanity check (Parseval in normalized basis)
+E_space = x'*(M*x);
+E_spec  = sum( (U'*(Sinv*x)).^2 );
+fprintf('Energy space=%.6g, spectrum=%.6g (should match within ~1e-6 to 1e-8)\n', E_space, E_spec);
+
+
+%% 
+x = x(:);
+xRGB = x2rgb(x); 
+x_recon = Phi * a;
+xrecRGB = x2rgb(x_recon); 
+
+% Assign colors (either update the object or recreate with colors)
+B.mesh.VertexColors = RGB;           % if your class allows setting
+
+%%
+
+% Assign colors (either update the object or recreate with colors)
+B.mesh.VertexColors = xRGB;           % if your class allows setting
+surfaceMeshShow(B.mesh); title('Original signal'); axis image off;
+% Low-pass reconstruction with current k (best M-orthogonal k-mode approx)
+B.mesh.VertexColors = xrecRGB;           % if your class allows setting
+surfaceMeshShow(B.mesh); title(sprintf('Reconstruction (k=%d)',k)); axis image off;
+
+
+figure;
+semilogx(freq, P, '.-'); grid on;
+xlabel('spatial frequency (cycles/mm)'); ylabel('power');
+title('Manifold spatial spectrum');
+
+
+%% 
+
+% From edges (Mx2) → Edges table, Weight=1
+E = [1 3; 3 4; 2 5];
+M = bct.manifold.Manifold(6, E);                      % Weight auto = 1
+M = M.addVertexData("Normals", rand(6,3));
+M = M.addEdgeData("Length",   rand(height(M.Edges),1));
+
+E = [1 3; 3 4; 2 5];
+M = bct.manifold.Manifold(6, E);        % matrices auto-computed
+size(M.Adjacency), size(M.Laplacian), size(M.Incidence), size(M.Degree)
+
+V=B.mesh.Vertices;
+F=B.mesh.Faces;
+% V: 3×N nodes, F: 3×T triangles (1-based)
+model = createpde(1);
+geometryFromMesh(model, V, F);
+specifyCoefficients(model, 'm',0,'d',1,'c',1,'a',0,'f',0);  % Laplace-type
+FEM = assembleFEMatrices(model);
+
+K = FEM.K;      % stiffness
+M = FEM.M;      % mass (consistent)
+% (lumped mass if needed)
+Ml = spdiags(sum(M,2), 0, size(M,1), size(M,1));
+%% 
+V = B.mesh.Vertices;     % n x 3
+F = B.mesh.Faces;        % m x 3  (1-based)
+
+% Per-triangle areas (mm^2 if V is in mm)
+Atri = doublearea(V,F)/2;          % doublearea returns 2*area
+A_mm2 = sum(Atri);                 % total surface area
+
+fprintf('Hemisphere area: %.0f mm^2 (%.2f cm^2, %.3f m^2)\n', ...
+        A_mm2, A_mm2/100, A_mm2/1e6);
+%% 
+M = massmatrix(V,F,'barycentric'); % or 'voronoi'
+A_from_M = sum(full(diag(M)));
+fprintf('Area from mass matrix: %.0f mm^2 (diff = %.3g%%)\n', ...
+        A_from_M, 100*(A_from_M - A_mm2)/A_mm2);
+%% ============= Gradient operator ===============
+% Inputs
+% --- 1) Gradient operator (piecewise-linear basis)
+V = B.mesh.Vertices; 
+F = B.mesh.Faces;
+Vd = double(V);
+Fd = double(F);      % <- key line
+G  = grad(Vd, Fd);   % (3m) x n
+
+g_stacked = G * x;                      % (3m) x 1
+grad_face = reshape(g_stacked, [], 3);  % m x 3, units: x per mm
+
+
+% Convenience: face-area block-diagonal repeated for x,y,z
+A = doublearea(V,F)/2;         % m x 1 (areas)
+A3 = kron(speye(3), spdiags(A,0,length(A),length(A)));   % (3m) x (3m)
+
+% ---------- Gradient of a scalar vertex field x ----------
+% x: n x 1
+g_stacked = G * x;             % (3m) x 1
+grad_x = reshape(g_stacked, [], 3);   % m x 3, constant vector per face (units: value/mm)
+
+% ---------- Divergence of a face vector field u_f ----------
+% u_f: m x 3 (a 3D vector per face, e.g., tangential field)
+u = u_f(:);                    % (3m) x 1
+div_weak = - G' * (A3 * u);    % n x 1   (integrated divergence against hat functions)
+div_u = M \ div_weak;          % n x 1   (pointwise divergence; units: value/mm)
+
+% ---------- Consistency check: Laplacian = -div(grad) ----------
+lap_strong = M \ (K * x);      % n x 1  (units: value/mm^2)
+lap_from_ops = M \ ( - G' * (A3 * (G*x)) );
+
+fprintf('||Δx - (-div∇x)|| / ||Δx|| = %.3e\n', ...
+    norm(lap_strong - lap_from_ops) / max(1e-16, norm(lap_strong)));
+%%
+
+opts = struct('method','chol','tol',1e-6,'maxit',1000); % or: opts.fast = true;
+tic
+[Uchol, lamchol] = meshFourierChol(mesh, 600, opts);
+toc
