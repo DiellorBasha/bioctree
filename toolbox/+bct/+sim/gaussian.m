@@ -19,7 +19,7 @@ function x = gaussian(B, varargin)
 %       x - N×1 single precision signal on manifold vertices
 %
 %   Example:
-%       B = bct.io.graph.Import.fromFreeSurfer('lh.pial');
+%       B = bct.io.import.mesh('lh.pial');
 %       x = bct.sim.gaussian(B, 'center', 1000, 'sigma', 10);
 %
 %   See also: bct.sim.gaussian_growth, bct.sim.multi_gaussian

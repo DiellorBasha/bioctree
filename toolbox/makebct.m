@@ -154,7 +154,7 @@ h5create(fname, dsg, [S C N T], 'Datatype', 'single');
 %%
 bioctree_start
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B = bct.io.graph.Import.fromFreeSurfer(path);
+B = bct.io.import.graph(path);
 
 % Import curvature signal directly
 curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';

@@ -38,7 +38,7 @@ function [xrec, a, f] = synth_mesh_signal(B, spec, varargin)
 %       f    - k×1 spatial frequencies
 %
 %   Example:
-%       B = bct.io.graph.Import.fromFreeSurfer('lh.pial');
+%       B = bct.io.import.mesh('lh.pial');
 %       
 %       % Narrowband signal around 0.1 cycles/mm
 %       spec.type = 'narrowband';

@@ -1,34 +1,20 @@
 classdef Import
   methods (Static)
     function B = fromFreeSurfer(path)
-      raw  = bct.io.graph.In.readFreeSurferSurf(path);
-      snap = bct.io.graph.Convert.freeSurferRawToSnapshot(raw);
-      B    = bct.io.graph.Construct.buildBct(snap.V, snap.F, ManifoldType="graph");
-      % if isfield(snap,'meta'), B.cache.meta = snap.meta; end
+      warning('bct:io:DeprecatedAPI', ...
+          'bct.io.graph.Import is deprecated. Use bct.io.import.graph() instead:\n  B = bct.io.import.graph(''%s'')', path);
+      B = bct.io.import.graph(path, 'Format', 'FreeSurfer');
     end
-    function B = fromBrainstorm(path, optsIn, optsCvt, optsBld)
-      if nargin<2, optsIn  = struct(); end
-      if nargin<3, optsCvt = struct(); end
-      if nargin<4, optsBld = struct(); end
-
-      raw  = bct.io.graph.In.readBrainstormAnat(path, optsIn);
-      snap = bct.io.graph.Convert.fromRaw(raw, optsCvt);
-      B    = bct.io.graph.Construct.buildBct(snap, optsBld);
+    function B = fromBrainstorm(path, varargin)
+      warning('bct:io:DeprecatedAPI', ...
+          'bct.io.graph.Import is deprecated. Use bct.io.import.graph() instead:\n  B = bct.io.import.graph(''%s'', ''Format'', ''Brainstorm'')', path);
+      B = bct.io.import.graph(path, 'Format', 'Brainstorm');
     end
 
-    function B = fromFile(path, optsIn, optsCvt, optsBld)
-      if nargin<2, optsIn  = struct(); end
-      if nargin<3, optsCvt = struct(); end
-      if nargin<4, optsBld = struct(); end
-
-      % auto-detect (reuse Convert lookups or add dedicated detector)
-      if bct.io.graph.Convert.looksLikeFreeSurfer(path)
-        B = bct.io.graph.Import.fromFreeSurfer(path, optsIn, optsCvt, optsBld);
-      elseif bct.io.graph.Convert.looksLikeBrainstorm(path)
-        B = bct.io.graph.Import.fromBrainstorm(path, optsIn, optsCvt, optsBld);
-      else
-        error('bct:Import:UnknownFormat','Cannot infer format from: %s', string(path));
-      end
+    function B = fromFile(path, varargin)
+      warning('bct:io:DeprecatedAPI', ...
+          'bct.io.graph.Import is deprecated. Use bct.io.import.graph() instead:\n  B = bct.io.import.graph(''%s'')', path);
+      B = bct.io.import.graph(path);
     end
 
     % Optional aliases

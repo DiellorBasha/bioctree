@@ -27,8 +27,8 @@ function [signal, params] = patch_signal(B, varargin)
 %       signal - N×1 or N×T single precision graph signal
 %       params - Structure with generation parameters used
 %
-%   Examples:
-%       B = bct.io.graph.Import.fromFreeSurfer('lh.pial');
+%   Example:
+%       B = bct.io.import.mesh('lh.pial');
 %       
 %       % Static patch (10% of nodes)
 %       signal = bct.sim.patch_signal(B);

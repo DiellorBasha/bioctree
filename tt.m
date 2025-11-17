@@ -1,7 +1,7 @@
 bioctree_start
 clear B
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B = bct.io.graph.Import.fromFreeSurfer(path);
+B = bct.io.import.graph(path);
 
 % Import curvature signal directly
 curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';

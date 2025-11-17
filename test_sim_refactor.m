@@ -16,7 +16,7 @@ try
     % Adjust path as needed
     fs_dir = 'C:\Users\diell\Desktop\freesurfer\subjects\fsaverage\surf';
     if exist(fullfile(fs_dir, 'lh.pial'), 'file')
-        B = bct.io.graph.Import.fromFreeSurfer(fullfile(fs_dir, 'lh.pial'));
+        B = bct.io.import.graph(fullfile(fs_dir, 'lh.pial'));
         fprintf('✓ Loaded mesh with %d vertices\n', size(B.Manifold.V, 1));
     else
         fprintf('⚠ FreeSurfer data not found, skipping mesh test\n');

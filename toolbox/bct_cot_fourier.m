@@ -1,5 +1,5 @@
-path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B = bct.io.graph.Import.fromFreeSurfer(path);
+path = 'test-data\\freesurfer\\fsaverage\\surf\\lh.pial';
+B = bct.io.import.graph(path);
 curv_path = 'test-data\freesurfer\fsaverage\surf\lh.curv';
 B = bct.io.signal.Import.fromFreeSurfer(curv_path, B);
 %% needs gptoolbox in external/gptoolbox/mesh

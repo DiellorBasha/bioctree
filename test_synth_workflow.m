@@ -13,7 +13,7 @@ if ~exist(path, 'file')
 end
 
 fprintf('1. Loading mesh from FreeSurfer...\n');
-B = bct.io.mesh.Import.fromFreeSurfer(path);
+B = bct.io.import.mesh(path);
 fprintf('   ✓ Loaded: %d vertices, %d faces\n\n', size(B.Manifold.V,1), size(B.Manifold.F,1));
 
 % Pre-compute Fourier basis

@@ -25,8 +25,8 @@ classdef test_graph_import < matlab.unittest.TestCase
     
     methods (Test)
         function testGraphTypeCreation(testCase)
-            % Test that fromFreeSurfer creates a graph-type Manifold
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            % Test that import.graph creates a graph-type Manifold
+            B = bct.io.import.graph(testCase.TestDataPath);
             
             % Verify Manifold type
             testCase.verifyEqual(B.Manifold.Type, "graph", ...
@@ -35,7 +35,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testEdgesCreated(testCase)
             % Test that edges are properly created from faces
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             
             % Verify edges exist
             testCase.verifyGreaterThan(height(B.Manifold.Edges), 0, ...
@@ -54,7 +54,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testVerticesPreserved(testCase)
             % Test that vertices are preserved for spatial embedding
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             
             % Verify vertices exist
             testCase.verifyFalse(isempty(B.Manifold.V), ...
@@ -67,7 +67,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testNMatchesVertexCount(testCase)
             % Test that N property matches number of vertices
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             
             testCase.verifyEqual(B.Manifold.N, size(B.Manifold.V, 1), ...
                 'N should match vertex count');
@@ -75,7 +75,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testAdjacencyMatrix(testCase)
             % Test adjacency matrix creation
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             A = B.Manifold.adjacency();
             
             % Verify sparse matrix
@@ -99,7 +99,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testLaplacian(testCase)
             % Test Laplacian computation
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             L = B.Manifold.laplacian();
             
             % Verify sparse matrix
@@ -117,7 +117,7 @@ classdef test_graph_import < matlab.unittest.TestCase
         
         function testBackwardCompatibilityProperties(testCase)
             % Test that backward compatibility properties still work
-            B = bct.io.graph.Import.fromFreeSurfer(testCase.TestDataPath);
+            B = bct.io.import.graph(testCase.TestDataPath);
             
             % Test that legacy properties delegate to Manifold
             testCase.verifyEqual(B.Vertices, B.Manifold.V, ...

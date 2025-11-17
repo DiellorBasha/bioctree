@@ -18,7 +18,7 @@ function X_TN = gaussian_growth(B, varargin)
 %       X_TN - T×N single precision time series
 %
 %   Example:
-%       B = bct.io.graph.Import.fromFreeSurfer('lh.pial');
+%       B = bct.io.import.mesh('lh.pial');
 %       X = bct.sim.gaussian_growth(B, 'T', 200, 'fs', 20);
 %
 %   The function automatically selects a center node (nearest to coordinate

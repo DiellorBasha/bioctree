@@ -6,7 +6,7 @@ fprintf('Test 1: Loading FreeSurfer mesh...\n');
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
 
 if exist(path, 'file')
-    B = bct.io.mesh.Import.fromFreeSurfer(path);
+    B = bct.io.import.mesh(path);
     
     fprintf('BCT object created:\n');
     fprintf('  N (vertices): %d\n', B.N);

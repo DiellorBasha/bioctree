@@ -17,7 +17,15 @@ B = bct.bct.create(outfn);                            % new, schema-correct file
 
 %% 1) Generate the DEFAULT growth series: T=100, fs=10 Hz (time × nodes)
 % The Gaussian width starts tiny at t=1 and grows linearly to t=100.
-% Note: Requires B.Manifold to be set (e.g., via bct.io.graph.Import or manual creation)
+%% WORKFLOW_BCT_SIM Demonstration of BCT simulation workflow
+%
+% This workflow demonstrates:
+%   1. Loading/creating a BCT object with Manifold
+%   2. Generating synthetic signals using bct.sim package
+%   3. Writing signals to BCT file
+%   4. Visualizing results
+%
+% Note: Requires B.Manifold to be set (e.g., via bct.io.import or manual creation)
 X_TN = bct.sim.gaussian_growth(B, 'T', 100, 'fs', 10); % size: [100 × N], single
 fs   = 10;                                            % Hz
 
