@@ -22,5 +22,4 @@ scripts/
 /app/node_modules/
 
 # Test files
-test_*.m
 test_*.py
