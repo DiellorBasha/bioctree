@@ -197,7 +197,7 @@ sMesh.VertexColors = x2rgb(B.Signals(1).Data);  % Returns [N×1] single array
 viewer = viewer3d;
 viewer.BackgroundGradient="off"
 viewer.BackgroundColor = [ 0 0 0]
-for k = 1:B.Manifold.Time.T
+for k = 1:10
 sMesh.VertexColors = x2rgb(B.Signals(3).Data(:,k));  % Returns [N×1] single array
 
 surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")

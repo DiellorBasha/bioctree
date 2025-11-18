@@ -8,6 +8,8 @@ classdef Manifold < handle
         Edges table = table(zeros(0,2), zeros(0,1), ...
                             'VariableNames',{'EndNodes','Weight'})
         N (1,1) double {mustBeInteger,mustBeNonnegative} = 0
+        % --- Time data (optional, for time-varying signals) ---
+        Time bct.manifold.Time = bct.manifold.Time.empty()  % Time dimension properties
     end
 
     properties (Access=private)

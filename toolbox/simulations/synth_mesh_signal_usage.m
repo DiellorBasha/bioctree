@@ -1,4 +1,37 @@
 % Inputs you already have
+% % Operators (gptoolbox)
+% K = -cotmatrix(V, F);                                   % PSD stiffness
+% M = massmatrix(V, F, 'barycentric');                    % diagonal, >0
+% K = (K+K.')/2;                                          % enforce symmetry
+% d = full(diag(M)); 
+% M = spdiags(d,0,length(d),length(d));
+% 
+% % --- Choose units: make sure V is in mm if you want cycles/mm ---
+% % If V is in meters, do:  V = 1000*V;  and then rebuild K,M above.
+% 
+% % Normalized Laplacian (more numerically tame since M is diagonal)
+% Sinv = spdiags(1./sqrt(d), 0, length(d), length(d));
+% Ls = (Sinv*K*Sinv); 
+% Ls = (Ls + Ls.')/2;
+% 
+% % --- Eigen solve near zero: use a tiny positive shift to aid convergence ---
+% k = 600;                                 % number of modes you want
+% opts.tol = 1e-10; 
+% opts.maxit = 5000; 
+% opts.isreal = true;                       % harmless hint
+% sigma = 1e-6;                             % small, improves conditioning
+% 
+% [U, D] = eigs(Ls, k, sigma, opts);        % shift-invert around ~0+
+% lam = real(diag(D));
+% 
+% % Clean numerical fuzz
+% tol = 1e-10 * max(1, max(abs(lam)));      % tolerant but safe
+% lam(lam < 0 & lam > -tol) = 0;
+% 
+% % Drop DC and any negatives beyond tolerance
+% mask = lam > tol;
+% lam  = lam(mask);
+% U    = U(:,mask);
 % U, lam, Sinv (not needed for synthesis), and M (via d = diag(M))
 %d = full(diag(M));
 % What range do we actually have?

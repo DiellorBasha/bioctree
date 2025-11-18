@@ -1,20 +1,25 @@
-function [xrec, a, f] = synth_mesh_signal(B, spec, varargin)
+function [B_out, a, f] = synth_mesh_signal(B, spec, varargin)
 %SYNTH_MESH_SIGNAL Synthesize graph signal from spectral power specification
 %
-%   xrec = bct.sim.synth_mesh_signal(B, spec) synthesizes a random graph signal
-%       with spectral content matching the specification.
+%   B_out = bct.sim.synth_mesh_signal(B, spec) synthesizes a random graph signal
+%       with spectral content matching the specification and returns a bct object
+%       with the signal added as a bct.signal.Signal object.
 %
-%   [xrec, a, f] = bct.sim.synth_mesh_signal(B, spec) also returns:
+%   [B_out, a, f] = bct.sim.synth_mesh_signal(B, spec) also returns:
 %       a - k×1 spectral coefficients used
 %       f - k×1 spatial frequencies (cycles/mm)
 %
 %   Parameters:
-%       'k'         - Number of eigenvalues/eigenvectors to use (default: 200)
-%                     If B.Manifold already has eigenvectors computed, will reuse them
+%       'k'         - (Optional) Number of eigenvalues/eigenvectors to use.
+%                     If not specified and B.Manifold has cached eigenvectors, uses all cached modes.
+%                     If not specified and no cache exists, computes k=200 modes.
+%                     If specified, uses exactly k modes (computing if necessary).
 %       'normalize' - Normalize output to unit RMS (default: true)
 %       'verbose'   - Print computation progress (default: true)
+%       'label'     - Label for the Signal object (default: auto-generated from spec)
+%       'return_raw'- If true, returns raw data [N×1] instead of bct object (legacy mode)
 %
-%   Spec Structure:
+%   Spec Structure (can be a single struct or array of structs):
 %       spec.type - 'narrowband', 'twoband', 'flat', 'powerlaw', 'bandpass'
 %
 %       For 'narrowband':
@@ -33,68 +38,145 @@ function [xrec, a, f] = synth_mesh_signal(B, spec, varargin)
 %           spec.fmin, spec.fmax - Frequency band limits
 %
 %   Returns:
-%       xrec - N×1 single precision synthesized vertex signal
-%       a    - k×1 spectral coefficients
-%       f    - k×1 spatial frequencies
+%       B_out - bct object with Signal(s) added (if return_raw=false)
+%       xrec  - N×1 single precision synthesized vertex signal (if return_raw=true)
+%       a     - k×1 spectral coefficients
+%       f     - k×1 spatial frequencies
 %
 %   Example:
-%       B = bct.io.import.mesh('lh.pial');
+%       % Single signal
+%       B = bct.bct.fromMesh(V, F);
+%       B.Manifold.meshFourier(600);  % Precompute eigenbasis
 %       
-%       % Narrowband signal around 0.1 cycles/mm
 %       spec.type = 'narrowband';
 %       spec.f0 = 0.1;
 %       spec.bw_abs = 0.02;
-%       x = bct.sim.synth_mesh_signal(B, spec);
+%       B = bct.sim.synth_mesh_signal(B, spec, 'label', 'alpha_band');
+%       
+%       % Multiple signals with same cached basis
+%       specs = struct('type', {}, 'f0', {}, 'bw_abs', {});
+%       for i = 1:5
+%           specs(i).type = 'narrowband';
+%           specs(i).f0 = 0.05 * i;
+%           specs(i).bw_abs = 0.01;
+%       end
+%       B = bct.sim.synth_mesh_signal(B, specs);
 %       
 %       % 1/f noise
 %       spec.type = 'powerlaw';
 %       spec.alpha = 1;
-%       x = bct.sim.synth_mesh_signal(B, spec);
+%       B = bct.sim.synth_mesh_signal(B, spec, 'k', 300, 'label', 'pink_noise');
+%       
+%       % Legacy mode (returns raw data)
+%       x = bct.sim.synth_mesh_signal(B, spec, 'return_raw', true);
 %
 %   The function uses the graph Laplacian eigenbasis to construct signals
 %   with desired spectral properties.
 %
-%   See also: bct.sim.gaussian, bct.sim.patch_signal
+%   See also: bct.sim.gaussian, bct.sim.patch_signal, bct.signal.Signal
 
     % Get dimensions from Manifold
     N = size(B.Manifold.V, 1);
     
     % Parse inputs
     p = inputParser;
-    p.addParameter('k', 200, @(x)isscalar(x)&&x>0);  % Default 200 modes
+    p.addParameter('k', [], @(x)isempty(x)||(isscalar(x)&&x>0));  % Empty = use cached or default 200
     p.addParameter('normalize', true, @islogical);
     p.addParameter('verbose', true, @islogical);
+    p.addParameter('label', '', @(x)ischar(x)||isstring(x));
+    p.addParameter('return_raw', false, @islogical);
     p.parse(varargin{:});
     
-    k = min(round(p.Results.k), N-1);  % Ensure k < N for eigendecomposition
-    k = max(k, 1);  % Ensure at least 1 mode
+    k_requested = p.Results.k;
     do_normalize = p.Results.normalize;
     verbose = p.Results.verbose;
+    user_label = string(p.Results.label);
+    return_raw = p.Results.return_raw;
+    
+    % Handle array of specs (generate multiple signals)
+    if numel(spec) > 1
+        if verbose
+            fprintf('[bct.sim.synth_mesh_signal] Generating %d signals from spec array\n', numel(spec));
+        end
+        
+        % Copy input bct object
+        B_out = B;
+        
+        % Generate each signal
+        for i = 1:numel(spec)
+            if isempty(user_label)
+                label_i = generate_label(spec(i), i);
+            else
+                label_i = sprintf('%s_%d', user_label, i);
+            end
+            
+            % Generate single signal (recursive call with return_raw=true)
+            [xrec_i, a_i, f_i] = bct.sim.synth_mesh_signal(B, spec(i), ...
+                'k', k_requested, ...
+                'normalize', do_normalize, ...
+                'verbose', false, ...
+                'return_raw', true);
+            
+            % Create Signal object and add to bct
+            sig = bct.signal.Signal(B_out.Manifold, xrec_i, label_i);
+            B_out.addSignal(sig);
+            
+            % Store outputs for last signal (for backward compatibility)
+            if i == numel(spec)
+                a = a_i;
+                f = f_i;
+            end
+        end
+        
+        if verbose
+            fprintf('[bct.sim.synth_mesh_signal] ✓ Added %d signals to bct object\n', numel(spec));
+        end
+        
+        return;
+    end
     
     % Get eigenvectors and eigenvalues using cached Manifold methods
     if B.Manifold.Type == "mesh"
         % For mesh: check if eigenvectors already exist
-        % Note: meshFourier(k) may return fewer than k modes due to DC/negative filtering
         available_modes = B.Manifold.NumModes;
         
-        if available_modes > 0 && available_modes >= k - 1
-            % Use existing cached eigenvectors (allow k-1 tolerance for DC filtering)
-            k_actual = min(k, available_modes);
-            if verbose
-                fprintf('[bct.sim.synth_mesh_signal] Using cached eigenvectors (k=%d/%d modes)\n', ...
-                    k_actual, available_modes);
+        % Determine how many modes to use
+        if isempty(k_requested)
+            % No k specified: use cached modes if available, else default 200
+            if available_modes > 0
+                k = available_modes;
+                if verbose
+                    fprintf('[bct.sim.synth_mesh_signal] Using all cached eigenvectors (k=%d modes)\n', k);
+                end
+            else
+                k = min(200, N-1);
+                if verbose
+                    fprintf('[bct.sim.synth_mesh_signal] No cached modes found, computing default k=%d modes\n', k);
+                end
             end
-            U = B.Manifold.Eigenvectors(:, 1:k_actual);
-            lam = B.Manifold.Eigenvalues(1:k_actual);
+        else
+            % k was explicitly specified
+            k = min(round(k_requested), N-1);
+            k = max(k, 1);
+        end
+        
+        % Now get or compute the eigenvectors
+        if available_modes > 0 && available_modes >= k
+            % Use existing cached eigenvectors
+            if verbose && ~isempty(k_requested)
+                fprintf('[bct.sim.synth_mesh_signal] Using cached eigenvectors (k=%d/%d modes)\n', ...
+                    k, available_modes);
+            end
+            U = B.Manifold.Eigenvectors(:, 1:k);
+            lam = B.Manifold.Eigenvalues(1:k);
             M = B.Manifold.MassMatrix;
-            k = k_actual;  % Update k to actual number used
         else
             % Need to compute or recompute eigenvectors
             if verbose
                 fprintf('[bct.sim.synth_mesh_signal] Computing eigenvectors using meshFourier (k=%d)...\n', k);
             end
             [U, lam, ~, M] = B.Manifold.meshFourier(k);
-            k = size(U, 2);  % Update k to actual computed modes
+            k = size(U, 2);  % Update k to actual computed modes (may be less due to DC filtering)
             if verbose
                 fprintf('[bct.sim.synth_mesh_signal] ✓ Eigendecomposition complete (k=%d modes stored in B.Manifold)\n', k);
             end
@@ -103,6 +185,12 @@ function [xrec, a, f] = synth_mesh_signal(B, spec, varargin)
         lam = lam(:);       % Ensure column vector
     else
         % For graph: use eigenpairs with combinatorial Laplacian
+        if isempty(k_requested)
+            k = min(200, N-1);
+        else
+            k = min(round(k_requested), N-1);
+            k = max(k, 1);
+        end
         if verbose
             fprintf('[bct.sim.synth_mesh_signal] Computing graph eigenpairs (k=%d)...\n', k);
         end
@@ -140,9 +228,69 @@ function [xrec, a, f] = synth_mesh_signal(B, spec, varargin)
     
     % Convert to single precision
     xrec = single(xrec);
+    
+    % Return based on mode
+    if return_raw
+        % Legacy mode: return raw data
+        B_out = xrec;
+    else
+        % New mode: create Signal object and add to bct
+        B_out = B;  % Copy input bct object
+        
+        % Generate label if not provided
+        if isempty(user_label)
+            label = generate_label(spec, 1);
+        else
+            label = user_label;
+        end
+        
+        % Create Signal object
+        sig = bct.signal.Signal(B_out.Manifold, xrec, label);
+        
+        % Add to bct object
+        B_out.addSignal(sig);
+        
+        if verbose
+            fprintf('[bct.sim.synth_mesh_signal] ✓ Added signal "%s" to bct object\n', label);
+        end
+    end
 end
 
-%% Helper function
+%% Helper functions
+
+function label = generate_label(spec, idx)
+    % Generate automatic label based on spec
+    switch lower(spec.type)
+        case 'narrowband'
+            if isfield(spec, 'f0')
+                label = sprintf('narrowband_f%.3g', spec.f0);
+            else
+                label = sprintf('narrowband_%d', idx);
+            end
+        case 'twoband'
+            if isfield(spec, 'f1') && isfield(spec, 'f2')
+                label = sprintf('twoband_f%.3g_f%.3g', spec.f1, spec.f2);
+            else
+                label = sprintf('twoband_%d', idx);
+            end
+        case 'flat'
+            label = sprintf('flat_%d', idx);
+        case 'powerlaw'
+            if isfield(spec, 'alpha')
+                label = sprintf('powerlaw_a%.2g', spec.alpha);
+            else
+                label = sprintf('powerlaw_%d', idx);
+            end
+        case 'bandpass'
+            if isfield(spec, 'fmin') && isfield(spec, 'fmax')
+                label = sprintf('bandpass_%.3g_%.3g', spec.fmin, spec.fmax);
+            else
+                label = sprintf('bandpass_%d', idx);
+            end
+        otherwise
+            label = sprintf('signal_%d', idx);
+    end
+end
 
 function P = design_power(f, spec)
     % Returns power per mode for several shapes.

@@ -1,15 +1,39 @@
 classdef bct < handle
   % bct: BioCTree HDF5 facade (schema v1.0.0, skeleton Option A)
+  %
+  % MIGRATION NOTES (v2.0):
+  % The following properties have been DEPRECATED and moved to the Manifold object:
+  %   - T  → Use Manifold.Time.T (number of time points)
+  %   - N  → Use Manifold.N (number of vertices/nodes)
+  %   - fs → Use Manifold.Time.fs (sampling frequency)
+  %   - F  → Use size(Manifold.F, 1) for mesh faces, or context-specific for frequency bins
+  %   - L  → Number of layers (not yet migrated to new architecture)
+  %
+  % The deprecated properties are still accessible for backward compatibility but will
+  % be removed in a future release. Update your code to use the Manifold object instead.
+  %
+  % Example migration:
+  %   OLD: nVerts = B.N; timePoints = B.T; sampRate = B.fs;
+  %   NEW: nVerts = B.Manifold.N; timePoints = B.Manifold.Time.T; sampRate = B.Manifold.Time.fs;
+  %
   properties (SetAccess=private)
     fn string
-    T double = NaN; N double = NaN; L double = NaN ;  F double = NaN ;fs double = NaN
     schema struct
-    % Presence flags (set once at open)
+  end
+  
+  % DEPRECATED properties - kept for backward compatibility, will be removed in future versions
+  properties (SetAccess=private, Hidden)
+    % These properties are deprecated. Use Manifold.N, Manifold.Time.T, Manifold.Time.fs instead
+    T double = NaN;  % DEPRECATED: Use Manifold.Time.T
+    N double = NaN;  % DEPRECATED: Use Manifold.N
+    L double = NaN;  % DEPRECATED: Number of layers (not yet migrated to new architecture)
+    F double = NaN;  % DEPRECATED: Number of faces (use size(Manifold.F,1)) or frequency bins
+    fs double = NaN; % DEPRECATED: Use Manifold.Time.fs
+    
+    % HDF5 presence flags and handles (deprecated - internal use only)
     has_raw   logical = false
     has_stack logical = false
     has_tf    logical = false
-
-    % Open only if you will use H5D/H5S in hot loops; otherwise leave [].
     h5 = struct('fid',[], 'd_raw',[], 'd_stack',[], 'd_tfR',[], 'd_tfI',[], ...
                 's_raw',[], 's_stack',[], 's_tfR',[], 's_tfI',[])
   end
@@ -29,7 +53,6 @@ end
 
 properties (Access=private, Transient)
     cache struct = struct();     % holds legacy A, W, E, mesh, mgraph, gsp, w
-    signal_stack struct = struct('data', {}, 'labels', {}, 'metadata', {});  % Signal stack storage
 end
 
 properties
@@ -37,10 +60,11 @@ properties
     % Preferred way to access mesh geometry and topology
     % Access as: B.Manifold.V, B.Manifold.F, B.Manifold.meshFourier(), etc.
     Manifold               % bct.manifold.Manifold object
-end
-
-properties (Dependent)
-    signals    % Access to signal stack with metadata
+    
+    % Signals defined on the Manifold
+    % Can be a single bct.signal.Signal object or an array of Signal objects
+    % All signals must have dimensions matching B.Manifold (N and optionally T)
+    Signals bct.signal.Signal = bct.signal.Signal.empty()
 end
 
 
@@ -55,7 +79,7 @@ end
   end
 function obj = open(fn)
     obj = bct.bct(); obj.fn = string(fn);
-    % Manifest + skeleton check (you already do this)
+    % Manifest + skeleton check
     obj.schema = bct.internal.Schema.readManifest(fn);
     bct.internal.Validator.validateSkeleton(fn, obj.schema);
 
@@ -65,35 +89,53 @@ function obj = open(fn)
     obj.has_tf    = bct.internal.Util.pathExists(fn, obj.P.tfR) && ...
                     bct.internal.Util.pathExists(fn, obj.P.tfI);
 
-    % Shapes (ONE TIME)
+    % Read dimensions and populate both Manifold and deprecated properties
+    T_val = NaN; N_val = NaN; fs_val = NaN; L_val = NaN; F_val = NaN;
+    
     if obj.has_raw
         s = h5info(fn, obj.P.raw);
-        obj.T = s.Dataspace.Size(1);
-        obj.N = s.Dataspace.Size(2);
-        % Root fs_hz (optional)
-        try obj.fs = double(h5readatt(fn,'/','fs_hz')); catch, obj.fs = NaN; end
+        T_val = s.Dataspace.Size(1);
+        N_val = s.Dataspace.Size(2);
+        try fs_val = double(h5readatt(fn,'/','fs_hz')); catch, fs_val = NaN; end
     else
         % If no /signals/raw, fall back to axes if present
         if bct.internal.Util.pathExists(fn, obj.P.axes_time)
-            obj.T = numel(h5read(fn, obj.P.axes_time));
+            T_val = numel(h5read(fn, obj.P.axes_time));
         end
         if bct.internal.Util.pathExists(fn, obj.P.axes_node)
-            obj.N = numel(h5read(fn, obj.P.axes_node));
+            N_val = numel(h5read(fn, obj.P.axes_node));
         end
-        try obj.fs = double(h5readatt(fn,'/','fs_hz')); catch, obj.fs = NaN; end
+        try fs_val = double(h5readatt(fn,'/','fs_hz')); catch, fs_val = NaN; end
     end
 
     if obj.has_stack
         sRS = h5info(fn, obj.P.stack);
-        obj.L = sRS.Dataspace.Size(1);
-        % Sanity: ensure layer axis length matches L (Validator enforces this too)
-        % (No need to re-check every call.)
+        L_val = sRS.Dataspace.Size(1);
     end
 
     if obj.has_tf
-        obj.F = numel(h5read(fn, obj.P.axes_freq));
+        F_val = numel(h5read(fn, obj.P.axes_freq));
+    end
+    
+    % Populate deprecated properties for backward compatibility
+    obj.T = T_val; obj.N = N_val; obj.fs = fs_val; obj.L = L_val; obj.F = F_val;
+    
+    % Initialize Manifold object if we have graph/mesh data
+    % For now, create empty Manifold - will be populated when graph/mesh data is loaded
+    % User can explicitly set obj.Manifold later, or it will be set by fromMesh/fromAdjacency
+    if ~isnan(N_val) && N_val > 0
+        % Create a basic graph Manifold placeholder
+        obj.Manifold = bct.manifold.Manifold();
+        obj.Manifold.N = N_val;
+        obj.Manifold.Type = "graph";  % Default assumption; can be overridden
+        
+        % Set Time information if available
+        if ~isnan(T_val) && ~isnan(fs_val) && T_val > 0 && fs_val > 0
+            obj.Manifold.Time = bct.manifold.Time(T_val, fs_val);
+        end
     end
 
+    % Open HDF5 handles for performance-critical operations
     obj.h5.fid = H5F.open(fn, 'H5F_ACC_RDONLY', 'H5P_DEFAULT');
     if obj.has_raw
         obj.h5.d_raw = H5D.open(obj.h5.fid, obj.P.raw);
@@ -509,7 +551,13 @@ end
     obj = bct.bct();
 
     obj.cache.A = bct.cleanAdj(A);   % internal structural adjacency
-    obj.N = size(obj.cache.A,1);
+    N_val = size(obj.cache.A,1);
+    
+    % Create Manifold object
+    obj.Manifold = bct.manifold.Manifold(obj.cache.A);
+    
+    % Set deprecated property for backward compatibility
+    obj.N = N_val;
 
     if nargin>1 && ~isempty(coords)
       obj.cache.Vertices = double(coords);
@@ -521,15 +569,22 @@ end
 
     E = bct.cleanEdges(E);
     if nargin<2 || isempty(N), N = max(E(:)); end
-    obj.N = double(N);
+    N_val = double(N);
+    
     obj.cache.E = int32(E);
 
     if nargin>4 && ~isempty(w), obj.cache.w = double(w(:)); end
 
     % Seed structural adjacency from edges (undirected)
-    A = sparse(E(:,1),E(:,2),true,N,N);
+    A = sparse(E(:,1),E(:,2),true,N_val,N_val);
     A = A + A.';  A = A - diag(diag(A));
     obj.cache.A = spones(A)>0;
+    
+    % Create Manifold object
+    obj.Manifold = bct.manifold.Manifold(obj.cache.A);
+    
+    % Set deprecated property for backward compatibility
+    obj.N = N_val;
 
     if nargin>2 && ~isempty(coords)
       obj.cache.Vertices = double(coords);
@@ -542,87 +597,129 @@ end
     % Create Manifold object for topology/geometry
     obj.Manifold = bct.manifold.Manifold(double(V), int32(F));
     
-    % Set dimension properties
+    % Set deprecated properties for backward compatibility
     obj.N = size(V,1);
     obj.F = size(F,1);
-    
-    % Legacy cache (for backward compatibility if needed)
-    % obj.cache.Vertices = double(V);
-    % obj.cache.Faces    = int32(F);
-    % Edges / adjacency built lazily on first access
   end
 end
+% Signal management methods
 methods
-  function S = get.signals(this)
-    % Return signal stack with data, labels, and metadata
-    S = this.signal_stack;
-  end
-end
-
-% Signal stack management methods
-methods
-  function addSignal(this, signal_data, label, metadata)
-    % Add a signal to the signal stack
-    % signal_data: [N×1] vector matching graph vertices
-    % label: string label for the signal
-    % metadata: struct with additional information
+  function addSignal(this, signal_obj)
+    % Add a Signal object to the Signals array
+    %
+    %   B.addSignal(signal_obj) adds a bct.signal.Signal object
+    %
+    %   The signal dimensions are validated against B.Manifold
     
-    if nargin < 4, metadata = struct(); end
-    if nargin < 3, label = 'signal_1'; end  % Simple fallback
-    
-    % Validate signal dimensions
-    if ~isnan(this.N) && this.N > 0
-      if length(signal_data) ~= this.N
-        error('bct:SignalDimensionMismatch', ...
-          'Signal length (%d) must match graph vertices (%d)', ...
-          length(signal_data), this.N);
-      end
+    % Validate input
+    if ~isa(signal_obj, 'bct.signal.Signal')
+      error('bct:InvalidSignalType', ...
+        'Input must be a bct.signal.Signal object');
     end
     
-    % Force initialization of signal_stack
-    this.signal_stack = struct('data', {{}}, 'labels', {{}}, 'metadata', {{}});
+    % Validate signal matches manifold
+    this.validateSignalDimensions(signal_obj);
     
-    % Get current signals and determine next index
-    current_signals = this.signals;  % Use the getter which should work
-    if isfield(current_signals, 'data') && ~isempty(current_signals.data)
-        % Copy existing signals
-        for i = 1:length(current_signals.data)
-            this.signal_stack.data{i} = current_signals.data{i};
-            this.signal_stack.labels{i} = current_signals.labels{i};
-            this.signal_stack.metadata{i} = current_signals.metadata{i};
-        end
-        idx = length(current_signals.data) + 1;
+    % Add to array
+    if isempty(this.Signals)
+      this.Signals = signal_obj;
     else
-        idx = 1;
+      this.Signals(end+1) = signal_obj;
+    end
+  end
+  
+  function removeSignal(this, index_or_label)
+    % Remove a signal by index or label
+    %
+    %   B.removeSignal(idx) removes signal at index idx
+    %   B.removeSignal('label') removes signal with matching label
+    
+    if isempty(this.Signals)
+      warning('bct:NoSignals', 'No signals to remove');
+      return;
     end
     
-    % Add new signal
-    this.signal_stack.data{idx} = signal_data(:);  % Ensure column vector
-    this.signal_stack.labels{idx} = string(label);
-    this.signal_stack.metadata{idx} = metadata;
-  end
-  
-  function clearSignals(this)
-    % Clear all signals from the stack
-    this.signal_stack = struct('data', {}, 'labels', {}, 'metadata', {});
-  end
-  
-  function signal_data = getSignal(this, index_or_label)
-    % Get signal by index or label
     if isnumeric(index_or_label)
       idx = index_or_label;
-      if idx < 1 || idx > length(this.signal_stack.data)
-        error('bct:SignalIndexOutOfRange', 'Signal index %d out of range', idx);
+      if idx < 1 || idx > length(this.Signals)
+        error('bct:SignalIndexOutOfRange', ...
+          'Signal index %d out of range (1-%d)', idx, length(this.Signals));
       end
     else
       % Find by label
-      labels = [this.signal_stack.labels{:}];
+      labels = arrayfun(@(s) s.Label, this.Signals);
       idx = find(labels == string(index_or_label), 1);
       if isempty(idx)
-        error('bct:SignalLabelNotFound', 'Signal label "%s" not found', string(index_or_label));
+        error('bct:SignalLabelNotFound', ...
+          'Signal with label "%s" not found', string(index_or_label));
       end
     end
-    signal_data = this.signal_stack.data{idx};
+    
+    % Remove from array
+    this.Signals(idx) = [];
+  end
+  
+  function sig = getSignalByLabel(this, label)
+    % Get signal object by label
+    %
+    %   sig = B.getSignalByLabel('label') returns the first Signal
+    %   with matching label, or empty if not found
+    
+    if isempty(this.Signals)
+      sig = bct.signal.Signal.empty();
+      return;
+    end
+    
+    labels = arrayfun(@(s) s.Label, this.Signals);
+    idx = find(labels == string(label), 1);
+    
+    if isempty(idx)
+      sig = bct.signal.Signal.empty();
+    else
+      sig = this.Signals(idx);
+    end
+  end
+  
+  function clearSignalsNew(this)
+    % Clear all Signal objects
+    %
+    %   B.clearSignalsNew() removes all signals from B.Signals
+    
+    this.Signals = bct.signal.Signal.empty();
+  end
+  
+  function validateSignalDimensions(this, signal_obj)
+    % Validate that signal dimensions match manifold
+    %
+    %   B.validateSignalDimensions(signal_obj)
+    %
+    %   Checks that signal.N matches B.Manifold.N and if signal is
+    %   dynamic, that signal.T matches B.Manifold.Time.T
+    
+    if isempty(this.Manifold)
+      error('bct:NoManifold', ...
+        'BCT object must have a Manifold before adding signals');
+    end
+    
+    % Check spatial dimensions
+    if signal_obj.N ~= this.Manifold.N
+      error('bct:SignalDimensionMismatch', ...
+        'Signal N (%d) does not match Manifold.N (%d)', ...
+        signal_obj.N, this.Manifold.N);
+    end
+    
+    % Check temporal dimensions if signal is dynamic
+    if signal_obj.IsDynamic
+      if isempty(this.Manifold.Time)
+        error('bct:NoManifoldTime', ...
+          'Dynamic signal requires Manifold.Time to be set');
+      end
+      if signal_obj.T ~= this.Manifold.Time.T
+        error('bct:SignalDimensionMismatch', ...
+          'Signal T (%d) does not match Manifold.Time.T (%d)', ...
+          signal_obj.T, this.Manifold.Time.T);
+      end
+    end
   end
 end
 

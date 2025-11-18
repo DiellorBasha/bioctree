@@ -80,4 +80,28 @@ if B2.Manifold.NumModes > 0
     fprintf('✓ Visualization complete\n');
 end
 
+%% Test 6: Test Time property
+fprintf('\n\nTest 6: Testing Time property...\n');
+% Time property should be empty by default
+if isempty(B2.Manifold.Time)
+    fprintf('✓ Time property is empty by default\n');
+else
+    fprintf('✗ Time property should be empty by default\n');
+end
+
+% Create a Manifold with Time information
+fprintf('Creating Manifold with Time property...\n');
+M = bct.manifold.Manifold(V, F);
+M.Time = bct.manifold.Time(1000, 250);  % 1000 time points at 250 Hz
+
+if ~isempty(M.Time)
+    fprintf('✓ Time property set successfully\n');
+    fprintf('  T: %d time points\n', M.Time.T);
+    fprintf('  fs: %.2f Hz\n', M.Time.fs);
+    fprintf('  Duration: %.4f seconds\n', M.Time.get_duration());
+    fprintf('  Nyquist: %.2f Hz\n', M.Time.get_nyquist_freq());
+else
+    fprintf('✗ Failed to set Time property\n');
+end
+
 fprintf('\n\nAll tests completed!\n');
