@@ -4,7 +4,7 @@
 
 The `Resolution` property provides convenient access to spatial resolution metrics computed from the manifold's **full maximum eigenvalue**. This represents the true Nyquist limit of the mesh geometry and tells you the finest spatial detail that the mesh can represent.
 
-Unlike the computed basis (e.g., 600 modes), which gives a partial view, the Resolution property uses the **full maximum eigenvalue** computed via power iteration on the complete Laplacian operator during `meshFourier()`.
+Unlike the computed basis (e.g., 600 modes), which gives a partial view, the Resolution property uses the **full maximum eigenvalue** computed via `eigs` on the complete Laplacian operator.
 
 ## Property Definition
 
@@ -14,18 +14,33 @@ properties (Dependent)
 end
 ```
 
-## Usage
+## Automatic Computation
 
-### Basic Access
+**Resolution is automatically computed when you create a mesh Manifold:**
 
 ```matlab
-% Compute eigenvalues (also computes full max lambda)
-B.Manifold.meshFourier(600);
-
-% Get resolution (uses FULL max eigenvalue, not basis max)
-R = B.Manifold.Resolution;
+% Resolution is populated immediately upon import
+B = bct.io.import.mesh('path/to/mesh.pial');
+R = B.Manifold.Resolution;  % Already available!
 
 fprintf('Minimum wavelength: %.2f mm\n', R.wavelength);
+```
+
+During construction, `meshFourier(0)` is called automatically to:
+- Compute Laplacian and MassMatrix
+- Compute full maximum eigenvalue (for Resolution)
+- Skip eigenmode computation (no k modes yet)
+
+### Computing Eigenmodes
+
+To perform frequency analysis, call `meshFourier(k)` with desired modes:
+
+```matlab
+% Compute 600 eigenmodes for spectral analysis
+B.Manifold.meshFourier(600);
+
+% Resolution remains the same (already computed during construction)
+R = B.Manifold.Resolution;
 ```
 
 ### Resolution Fields
@@ -57,6 +72,8 @@ Units depend on the coordinate system of `Manifold.V`:
 
 ### Computation
 
+The Resolution property getter checks for cached `lambda_max_full`:
+
 ```matlab
 function R = get.Resolution(obj)
     % Check if full max lambda is cached
@@ -65,7 +82,7 @@ function R = get.Resolution(obj)
         return;
     end
     
-    % Get FULL maximum eigenvalue (computed via power iteration)
+    % Get FULL maximum eigenvalue
     lambda_max = obj.Cache.lambda_max_full;
     
     % Convert to resolution metrics
@@ -77,29 +94,49 @@ function R = get.Resolution(obj)
 end
 ```
 
-The full maximum eigenvalue is computed during `meshFourier()` using power iteration on the normalized Laplacian:
+The full maximum eigenvalue is computed during `meshFourier()` using `eigs` on the normalized Laplacian:
+
 ```matlab
-lambda_max_full = powerIterLargestEig(Ls, 20);
+% In meshFourier():
+N = size(Ls, 1);
+lambda_max_opts = struct();
+lambda_max_opts.tol = 5e-3;
+lambda_max_opts.p = min(N, 10);  % Krylov subspace dimension
+lambda_max_opts.disp = 0;        % silent
+
+try
+    lambda_max_full = eigs(Ls, 1, 'largestabs', lambda_max_opts);
+    lambda_max_full = real(lambda_max_full) * 1.01;  % 1% safety margin
+catch
+    % Fallback to power iteration if eigs fails
+    lambda_max_full = powerIterLargestEig(Ls, 20);
+end
+obj.Cache.lambda_max_full = lambda_max_full;
+```
+```matlab
+end
 obj.Cache.lambda_max_full = lambda_max_full;
 ```
 
 ### Dependencies
 
 Uses:
-- `obj.Cache.lambda_max_full` - Full maximum eigenvalue computed via power iteration
-- Automatically computed during `meshFourier()` call
+- `obj.Cache.lambda_max_full` - Full maximum eigenvalue computed via `eigs`
+- Automatically computed during `meshFourier(0)` on Manifold construction
+- Reused when `meshFourier(k)` is called with k > 0
 
 ## Key Difference: Full vs Basis Resolution
 
-**Important**: The Resolution property now uses the **full maximum eigenvalue**, not the basis maximum:
+**Important**: The Resolution property uses the **full maximum eigenvalue**, not the basis maximum:
 
 ```matlab
-% If you compute 600 modes on a mesh with 163,842 vertices:
-B.Manifold.meshFourier(600);
+% Resolution computed automatically on construction
+B = bct.io.import.mesh('path/to/mesh.pial');
+full_max = B.Manifold.Resolution.lambda_max;  % True max (all modes)
 
-% These are DIFFERENT:
+% Later, compute 600 modes for frequency analysis
+B.Manifold.meshFourier(600);
 basis_max = max(B.Manifold.Eigenvalues);  % Eigenvalue of mode 600
-full_max = B.Manifold.Resolution.lambda_max;  % True max (mode 163,842)
 
 % full_max >> basis_max (much larger!)
 % Resolution.wavelength is the TRUE Nyquist limit of the mesh

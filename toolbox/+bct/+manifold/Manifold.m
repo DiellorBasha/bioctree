@@ -40,6 +40,8 @@ classdef Manifold < handle
                 obj.V = varargin{1}; 
                 obj.F = varargin{2}; 
                 obj.N = size(obj.V, 1);  % Number of vertices
+                % Initialize matrices and Resolution (no eigenmodes yet)
+                obj.meshFourier(0);
                 return
             end
             if nargin==1
@@ -289,9 +291,9 @@ classdef Manifold < handle
                 k = min(200, nVerts - 1);
             end
             
-            % Validate k
-            if k < 1 || k >= nVerts
-                error('Manifold:InvalidK', 'k must be between 1 and NumVertices-1 (got k=%d, N=%d)', k, nVerts);
+            % Validate k (allow k=0 for matrix-only computation)
+            if k < 0 || k >= nVerts
+                error('Manifold:InvalidK', 'k must be between 0 and NumVertices-1 (got k=%d, N=%d)', k, nVerts);
             end
             
             % Default options
@@ -321,7 +323,39 @@ classdef Manifold < handle
             Ls = (Sinv * K * Sinv);
             Ls = (Ls + Ls.') / 2;
             
-            % Eigen solve near zero with shift-invert
+            % Store matrices first
+            obj.MassMatrix = M;
+            obj.LaplacianType = "cotangent";
+            obj.Cache.K = K;
+            obj.Cache.M = M;
+            obj.Cache.L_cotangent = K;  % Store cotangent form explicitly
+            
+            % Compute full maximum eigenvalue for Resolution property
+            % Use eigs with improved options for better accuracy
+            nRows = size(Ls, 1);
+            lambda_max_opts = struct();
+            lambda_max_opts.tol = 5e-3;
+            lambda_max_opts.p = min(nRows, 10);  % Krylov subspace dimension
+            lambda_max_opts.disp = 0;        % silent
+            
+            try
+                lambda_max_full = eigs(Ls, 1, 'largestabs', lambda_max_opts);
+                lambda_max_full = real(lambda_max_full) * 1.01;  % 1% safety margin
+            catch
+                % Fallback to power iteration if eigs fails
+                lambda_max_full = powerIterLargestEig(Ls, 20);
+            end
+            obj.Cache.lambda_max_full = lambda_max_full;
+            
+            % If k=0, skip eigenmode computation
+            if k == 0
+                obj.Eigenvectors = [];
+                obj.Eigenvalues = [];
+                obj.NumModes = 0;
+                return;
+            end
+            
+            % Eigen solve near zero with shift-invert for k modes
             [U, D] = eigs(Ls, k, opts.sigma, opts);
             lam = real(diag(D));
             
@@ -335,22 +369,10 @@ classdef Manifold < handle
             U = U(:, mask);
             D = D(mask, mask);
             
-            % Store in object properties
+            % Store eigenmodes
             obj.Eigenvectors = U;
             obj.Eigenvalues = lam;
             obj.NumModes = length(lam);
-            obj.MassMatrix = M;
-            obj.LaplacianType = "cotangent";
-            
-            % Update cache with K matrix (cotangent Laplacian)
-            obj.Cache.K = K;
-            obj.Cache.M = M;
-            obj.Cache.L_cotangent = K;  % Store cotangent form explicitly
-            
-            % Compute and cache full maximum eigenvalue for Resolution property
-            % This is the true Nyquist limit of the mesh
-            lambda_max_full = powerIterLargestEig(Ls, 20);
-            obj.Cache.lambda_max_full = lambda_max_full;
         end
     end
 
