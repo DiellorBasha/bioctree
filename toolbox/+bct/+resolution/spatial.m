@@ -40,8 +40,12 @@ classdef spatial < handle
     end
     
     properties (SetAccess = private)
-        % Instrument-limited resolution
-        L_min_instrument double = []  % Minimum reliable wavelength [units]
+        % Instrument-limited resolution (same structure as mesh resolution)
+        InstrumentName string = ""           % Name of instrument (e.g., "MEG", "EEG")
+        lambda_max_instrument double = []    % Instrument max eigenvalue [1/units^2]
+        L_min_instrument double = []         % Instrument min wavelength [units]
+        f_max_instrument double = []         % Instrument max spatial frequency [cycles/units]
+        k_max_instrument double = []         % Instrument max wavenumber [rad/units]
         
         % Current spatial band
         lambda_band double = []  % [lambda_low, lambda_high]
@@ -53,9 +57,14 @@ classdef spatial < handle
     properties (Dependent)
         % Mesh theoretical resolution (from full eigenspectrum)
         lambda_max   % Maximum eigenvalue [1/units^2]
-        f_max        % Maximum spatial frequency [cycles/units]
-        L_min        % Minimum wavelength [units]
-        k_max        % Maximum angular wavenumber [rad/units]
+        Wavelength   % Minimum wavelength [units] (meaningful name for L_min)
+        Wavenumber   % Maximum angular wavenumber [rad/units] (meaningful name for k_max)
+        SpatialFrequency  % Maximum spatial frequency [cycles/units] (meaningful name for f_max)
+        
+        % Legacy aliases for compatibility
+        f_max        % Alias for SpatialFrequency
+        L_min        % Alias for Wavelength
+        k_max        % Alias for Wavenumber
         
         % Resolution as struct (compatible with Manifold.Resolution)
         resolution   % struct with wavelength, lambda_max, k, freq
@@ -101,6 +110,11 @@ classdef spatial < handle
         
         function val = get.f_max(obj)
             %GET.F_MAX Maximum spatial frequency [cycles/units]
+            val = obj.SpatialFrequency;
+        end
+        
+        function val = get.SpatialFrequency(obj)
+            %GET.SPATIALFREQUENCY Maximum spatial frequency [cycles/units]
             if ~isempty(obj.lambda_max)
                 val = sqrt(obj.lambda_max) / (2*pi);
             else
@@ -110,8 +124,13 @@ classdef spatial < handle
         
         function val = get.L_min(obj)
             %GET.L_MIN Minimum wavelength (Nyquist limit) [units]
-            if ~isempty(obj.f_max)
-                val = 1 / obj.f_max;
+            val = obj.Wavelength;
+        end
+        
+        function val = get.Wavelength(obj)
+            %GET.WAVELENGTH Minimum wavelength (Nyquist limit) [units]
+            if ~isempty(obj.SpatialFrequency)
+                val = 1 / obj.SpatialFrequency;
             else
                 val = [];
             end
@@ -119,6 +138,11 @@ classdef spatial < handle
         
         function val = get.k_max(obj)
             %GET.K_MAX Maximum angular wavenumber [rad/units]
+            val = obj.Wavenumber;
+        end
+        
+        function val = get.Wavenumber(obj)
+            %GET.WAVENUMBER Maximum angular wavenumber [rad/units]
             if ~isempty(obj.lambda_max)
                 val = sqrt(obj.lambda_max);
             else
@@ -133,14 +157,77 @@ classdef spatial < handle
                 return;
             end
             
-            wavelength_str = sprintf('%.4f %s', obj.L_min, obj.Units.toString());
+            wavelength_str = sprintf('%.4f %s', obj.Wavelength, obj.Units.toString());
             
             R = struct(...
                 'wavelength', wavelength_str, ...
                 'lambda_max', obj.lambda_max, ...
-                'k', obj.k_max, ...
-                'freq', obj.f_max ...
+                'k', obj.Wavenumber, ...
+                'freq', obj.SpatialFrequency ...
             );
+        end
+        
+        %% Instrument resolution methods
+        function setInstrumentResolution(obj, value, quantity, instrumentName)
+            %SETINSTRUMENTRESOLUTION Set instrument-limited resolution
+            %
+            %   res.setInstrumentResolution(value, quantity) sets the
+            %   instrument resolution using the specified quantity type.
+            %   Automatically calculates all other representations.
+            %
+            %   res.setInstrumentResolution(value, quantity, name) also
+            %   stores the instrument name (e.g., 'MEG', 'EEG')
+            %
+            %   Inputs:
+            %     value    - Resolution value
+            %     quantity - bct.resolution.Quantity enum
+            %     name     - Instrument name (optional, default: '')
+            %
+            %   Example:
+            %     res.setInstrumentResolution(25, bct.resolution.Quantity.wavelength, 'MEG');
+            %     res.setInstrumentResolution(0.5, bct.resolution.Quantity.lambda);
+            
+            if nargin < 3
+                quantity = bct.resolution.Quantity.wavelength;
+            end
+            
+            if nargin >= 4
+                obj.InstrumentName = string(instrumentName);
+            end
+            
+            % Convert to lambda
+            switch quantity
+                case bct.resolution.Quantity.lambda
+                    obj.lambda_max_instrument = value;
+                    
+                case bct.resolution.Quantity.wavelength
+                    % L = 2π/sqrt(λ) → λ = (2π/L)^2
+                    obj.lambda_max_instrument = (2*pi/value)^2;
+                    
+                case bct.resolution.Quantity.k
+                    % k = sqrt(λ) → λ = k^2
+                    obj.lambda_max_instrument = value^2;
+                    
+                case bct.resolution.Quantity.freq
+                    % f = sqrt(λ)/(2π) → λ = (2πf)^2
+                    obj.lambda_max_instrument = (2*pi*value)^2;
+            end
+            
+            % Compute other representations
+            if ~isempty(obj.lambda_max_instrument)
+                obj.k_max_instrument = sqrt(obj.lambda_max_instrument);
+                obj.f_max_instrument = obj.k_max_instrument / (2*pi);
+                obj.L_min_instrument = 1 / obj.f_max_instrument;
+            end
+        end
+        
+        function clearInstrumentResolution(obj)
+            %CLEARINSTRUMENTRESOLUTION Clear instrument resolution settings
+            obj.InstrumentName = "";
+            obj.lambda_max_instrument = [];
+            obj.L_min_instrument = [];
+            obj.f_max_instrument = [];
+            obj.k_max_instrument = [];
         end
         
         %% Band selection methods
@@ -295,16 +382,23 @@ classdef spatial < handle
             fprintf('    Units: %s\n', obj.Units.toString());
             
             if ~isempty(obj.lambda_max)
-                fprintf('\n  Mesh Theoretical Resolution:\n');
-                fprintf('    lambda_max: %.4e\n', obj.lambda_max);
-                fprintf('    f_max:      %.4f cycles/%s\n', obj.f_max, obj.Units.toString());
-                fprintf('    L_min:      %.4f %s\n', obj.L_min, obj.Units.toString());
-                fprintf('    k_max:      %.4f rad/%s\n', obj.k_max, obj.Units.toString());
+                fprintf('\n  Mesh Resolution:\n');
+                fprintf('    Wavelength:        %.4f %s\n', obj.Wavelength, obj.Units.toString());
+                fprintf('    Spatial Frequency: %.4f cycles/%s\n', obj.SpatialFrequency, obj.Units.toString());
+                fprintf('    Wavenumber:        %.4f rad/%s\n', obj.Wavenumber, obj.Units.toString());
+                fprintf('    lambda_max:        %.4e\n', obj.lambda_max);
             end
             
             if ~isempty(obj.L_min_instrument)
-                fprintf('\n  Instrument-Limited Resolution:\n');
-                fprintf('    L_min_instrument: %.2f %s\n', obj.L_min_instrument, obj.Units.toString());
+                fprintf('\n  Instrument Resolution');
+                if ~isempty(obj.InstrumentName) && strlength(obj.InstrumentName) > 0
+                    fprintf(' (%s)', obj.InstrumentName);
+                end
+                fprintf(':\n');
+                fprintf('    Wavelength:        %.4f %s\n', obj.L_min_instrument, obj.Units.toString());
+                fprintf('    Spatial Frequency: %.4f cycles/%s\n', obj.f_max_instrument, obj.Units.toString());
+                fprintf('    Wavenumber:        %.4f rad/%s\n', obj.k_max_instrument, obj.Units.toString());
+                fprintf('    lambda_max:        %.4e\n', obj.lambda_max_instrument);
             end
             
             if ~isempty(obj.lambda_band)
