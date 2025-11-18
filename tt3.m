@@ -2,6 +2,13 @@ clear B
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
 B = bct.io.import.mesh(path);
 B.Manifold
+
+% Compute eigenvalues
+B.Manifold.meshFourier(600);
+
+% Access resolution
+R = B.Manifold.Resolution;
+
 %%
 % Compute Fourier basis
 [U, lam] = B.Manifold.meshFourier(600);

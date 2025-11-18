@@ -206,22 +206,27 @@ classdef Manifold < handle
             %     .freq        - Spatial frequency [cycles/m or cycles/mm]
             %     .wavelength  - Minimum wavelength [m or mm]
             %
+            %   This uses the FULL maximum eigenvalue of the Laplacian operator,
+            %   computed via power iteration, not just the max from computed basis.
+            %   This represents the true Nyquist limit of the mesh.
+            %
             %   Units depend on the units of manifold.V vertices.
             %
             %   Example:
-            %     B.Manifold.meshFourier(600);
+            %     B.Manifold.meshFourier(600);  % Computes basis and full max lambda
             %     R = B.Manifold.Resolution;
             %     fprintf('Max resolution: %.3f mm wavelength\n', R.wavelength);
             %
             %   See also: bct.manifold.maxLambda, bct.manifold.resolution
             
-            if isempty(obj.Eigenvalues)
+            % Check if full max lambda is cached
+            if ~isfield(obj.Cache, 'lambda_max_full') || isempty(obj.Cache.lambda_max_full)
                 R = struct('lambda_max', [], 'k', [], 'freq', [], 'wavelength', []);
                 return;
             end
             
-            % Get maximum eigenvalue from cached basis
-            lambda_max = bct.manifold.maxLambda(obj, 'basis');
+            % Get full maximum eigenvalue (from power iteration on Laplacian)
+            lambda_max = obj.Cache.lambda_max_full;
             
             % Convert to resolution metrics
             k = sqrt(lambda_max);           % Angular wavenumber [rad/m]
@@ -341,6 +346,11 @@ classdef Manifold < handle
             obj.Cache.K = K;
             obj.Cache.M = M;
             obj.Cache.L_cotangent = K;  % Store cotangent form explicitly
+            
+            % Compute and cache full maximum eigenvalue for Resolution property
+            % This is the true Nyquist limit of the mesh
+            lambda_max_full = powerIterLargestEig(Ls, 20);
+            obj.Cache.lambda_max_full = lambda_max_full;
         end
     end
 
