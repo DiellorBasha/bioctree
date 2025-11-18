@@ -176,6 +176,7 @@ spec.bw_abs = 0.02;
 
 % No k needed - uses all 600 cached modes!
 B = bct.sim.synth_mesh_signal(B, spec);
+%% 
 
 
 % Setup temporal dimension
@@ -206,16 +207,7 @@ surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
 end
 
 %% 
-lambda_space = B.Manifold.Eigenvalues;   % [NumModes x 1]
-T = B.Manifold.Time.T;                   % number of time points
-fs = B.Manifold.Time.fs;                 % sampling rate
-f = (0:T-1)' * (fs/T);   % frequencies 0 → Nyquist
-omega_time = 2*pi*f;      % convert to angular frequency
-[Lambda_space, Omega_time] = ndgrid(lambda_space, omega_time);
-JointSpectrum = Lambda_space + Omega_time;   % [NumModes x T]
-Manifold.Joint.Index = @(k,l) lambda_space(k) + omega_time(l);
 
-%% 
 spec_space.type = 'narrowband';
 spec_space.f0   = 0.02;      % cycles/mm
 spec_space.bw   = 0.01;
@@ -230,20 +222,79 @@ packet.sigma_t = 0.1;
 packet.velocity = 0;         % standing packet
 
 [xrec,~,~,~] = bct.sim.synth_mesh_timesignal(B.Manifold, spec_space, spec_time, packet);
+sMesh = bct.manifold.toSurfaceMesh(B.Manifold);
+sMesh.VertexColors = x2rgb(xrec(:,1));  % Returns [N×1] single array
+
+viewer = viewer3d;
+viewer.BackgroundGradient="off"
+viewer.BackgroundColor = [ 0 0 0];
+sMesh.VertexColors = x2rgb(xrec(:,1));  % Returns [N×1] single array
+
+viewer.CameraPosition= [-183.6051 88.9012 36.8928];
+viewer.CameraTarget= [27.8792 31.2832 -15.8640];
+viewer.CameraUpVector=  [-0.4032 -0.0570 0.9134];
+viewer.CameraZoom= 1.3550;
+surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
+
+for k= 1:100
+viewer.Children.Color = x2rgb(xrec(:,k));
+drawnow
+end
+
+for k = 7:10
+sMesh.VertexColors = x2rgb(xrec(:,k));  % Returns [N×1] single array
+surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
+end
+
+viewer = viewer3d;
+viewer.BackgroundColor = [0 0 0];
+
+S = images.ui.graphics.Surface( ...
+        Parent = viewer, ...
+        Faces = F, ...
+        Vertices = V, ...
+        VertexColors = x2rgb(xrec(:,1)) );
 
 %%
-texH = 2048;    % height
-texW = 4096;    % width
+texH = 2048;    % texture height
+texW = 4096;    % texture width
 UV = B.Manifold.UV;
 uPix = round(UV(:,1) * (texW-1)) + 1;
-vPix = round((1 - UV(:,2)) * (texH-1)) + 1;   % flip v-axis for images
+vPix = round((1 - UV(:,2)) * (texH-1)) + 1;   % flip v-axis (image convention)
 
- tex = nan(texH, texW);
-    idx = sub2ind([texH texW], vPix, uPix);
-    tex(idx) = values;
-    
-    % Fill missing pixels by nearest neighbor
-    tex = fillmissing(tex, 'nearest');
+vals = xrec(:,1);   % first time point
+
+tex = nan(texH, texW);
+idx = sub2ind([texH texW], vPix, uPix);
+tex(idx) = vals;
+% 
+% % Fill holes caused by discrete UV sampling
+% tex = fillmissing(tex, 'nearest');
+Fg = scatteredInterpolant(UV(:,1), UV(:,2), values, 'linear', 'none');
+[Ug,Vg] = meshgrid(linspace(0,1,texW), linspace(0,1,texH));
+tex = Fg(Ug, Vg);
+% Optional: replace NaNs from 'none' with nearest values
+tex = fillmissing(tex,'nearest');
+%% 
+V = B.Manifold.V;   % Nx3, folded cortex
+F = B.Manifold.F;   % Mx3
+UV = B.Manifold.UV; % Nx2, normalized [0,1]
+
+fig = figure;
+ax = axes; hold(ax,'on');
+
+hSurf = surface(ax, ...
+    'XData', [], 'YData', [], 'ZData', [], ... % placeholders
+    'FaceColor', 'texturemap', ...
+    'EdgeColor', 'none', ...
+    'CData', tex, ...
+    'CDataMapping', 'scaled');
+
+hSurf.Vertices = V;     % Nx3
+hSurf.Faces = F;         % Mx3
+hSurf.VertexTextureCoords = UV;   % Nx2
+
+%% 
 
 sMeshDS.VertexColors = x2rgb(xrec(idx, 1));
 surfaceMeshShow(sMeshDS)

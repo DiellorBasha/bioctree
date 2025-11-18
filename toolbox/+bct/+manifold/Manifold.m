@@ -25,6 +25,11 @@ classdef Manifold < handle
         MassMatrix = []             % M: N×N sparse diagonal mass matrix
         LaplacianType string = ""   % Type of Laplacian used ("cotangent", "combinatorial", etc.)
     end
+    
+    properties (Dependent)
+        % Spatial resolution computed from maximum eigenvalue
+        Resolution  % struct with: lambda_max, k (wavenumber), freq, wavelength
+    end
 
     methods
         %% ---------- Constructors ----------
@@ -190,6 +195,46 @@ classdef Manifold < handle
                     warning('bct:Manifold:NoUV', msg);
                 end
             end
+        end
+        
+        function R = get.Resolution(obj)
+            %GET.RESOLUTION Compute spatial resolution from maximum eigenvalue
+            %
+            %   R = manifold.Resolution returns struct with:
+            %     .lambda_max  - Maximum eigenvalue [1/m^2 or 1/mm^2]
+            %     .k           - Angular wavenumber [rad/m or rad/mm]
+            %     .freq        - Spatial frequency [cycles/m or cycles/mm]
+            %     .wavelength  - Minimum wavelength [m or mm]
+            %
+            %   Units depend on the units of manifold.V vertices.
+            %
+            %   Example:
+            %     B.Manifold.meshFourier(600);
+            %     R = B.Manifold.Resolution;
+            %     fprintf('Max resolution: %.3f mm wavelength\n', R.wavelength);
+            %
+            %   See also: bct.manifold.maxLambda, bct.manifold.resolution
+            
+            if isempty(obj.Eigenvalues)
+                R = struct('lambda_max', [], 'k', [], 'freq', [], 'wavelength', []);
+                return;
+            end
+            
+            % Get maximum eigenvalue from cached basis
+            lambda_max = bct.manifold.maxLambda(obj, 'basis');
+            
+            % Convert to resolution metrics
+            k = sqrt(lambda_max);           % Angular wavenumber [rad/m]
+            freq = k / (2*pi);              % Spatial frequency [cycles/m]
+            wavelength = 1 / freq;          % Wavelength [m]
+            
+            % Return as struct
+            R = struct(...
+                'lambda_max', lambda_max, ...
+                'k', k, ...
+                'freq', freq, ...
+                'wavelength', wavelength ...
+            );
         end
         
         function [U, lam, K, M, D, Ls] = meshFourier(obj, k, opts)
