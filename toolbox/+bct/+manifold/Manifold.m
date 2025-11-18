@@ -14,7 +14,7 @@ classdef Manifold < handle
         Time bct.manifold.Time = bct.manifold.Time.empty()  % Time dimension properties
     end
 
-    properties (Access=private)
+    properties (Access=protected)
         Cache struct = struct()   % operators, spectral, etc.
     end
     
@@ -197,6 +197,23 @@ classdef Manifold < handle
                 else
                     warning('bct:Manifold:NoUV', msg);
                 end
+            end
+        end
+        
+        function lambda_max = getLambdaMaxFull(obj)
+            %GETLAMBDAMAXFULL Get cached full maximum eigenvalue
+            %
+            %   lambda_max = obj.getLambdaMaxFull() returns the cached
+            %   full maximum eigenvalue from the Laplacian, or empty if
+            %   not yet computed.
+            %
+            %   This is used by bct.resolution.spatial to access the
+            %   full maximum eigenvalue computed during meshFourier().
+            
+            if isfield(obj.Cache, 'lambda_max_full')
+                lambda_max = obj.Cache.lambda_max_full;
+            else
+                lambda_max = [];
             end
         end
         

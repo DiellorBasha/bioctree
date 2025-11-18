@@ -92,9 +92,8 @@ classdef spatial < handle
         %% Dependent properties
         function val = get.lambda_max(obj)
             %GET.LAMBDA_MAX Get maximum eigenvalue from manifold cache
-            if isfield(obj.Manifold.Cache, 'lambda_max_full') && ...
-                    ~isempty(obj.Manifold.Cache.lambda_max_full)
-                val = obj.Manifold.Cache.lambda_max_full;
+            if ~isempty(obj.Manifold)
+                val = obj.Manifold.getLambdaMaxFull();
             else
                 val = [];
             end
