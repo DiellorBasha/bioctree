@@ -25,11 +25,9 @@ classdef Manifold < handle
         NumModes (1,1) double {mustBeInteger,mustBeNonnegative} = 0  % k: number of computed modes
         MassMatrix = []             % M: N×N sparse diagonal mass matrix
         LaplacianType string = ""   % Type of Laplacian used ("cotangent", "combinatorial", etc.)
-    end
-    
-    properties (Dependent)
-        % Spatial resolution computed from maximum eigenvalue
-        Resolution  % struct with: lambda_max, k (wavenumber), freq, wavelength
+        
+        % Spatial resolution manager (for mesh manifolds)
+        Resolution bct.resolution.spatial = bct.resolution.spatial.empty()  % Spatial resolution object
     end
 
     methods
@@ -43,6 +41,8 @@ classdef Manifold < handle
                 obj.N = size(obj.V, 1);  % Number of vertices
                 % Initialize matrices and Resolution (no eigenmodes yet)
                 obj.meshFourier(0);
+                % Create spatial resolution object
+                obj.Resolution = bct.resolution.spatial(obj);
                 return
             end
             if nargin==1
@@ -198,54 +198,6 @@ classdef Manifold < handle
                     warning('bct:Manifold:NoUV', msg);
                 end
             end
-        end
-        
-        function R = get.Resolution(obj)
-            %GET.RESOLUTION Compute spatial resolution from maximum eigenvalue
-            %
-            %   R = manifold.Resolution returns struct with:
-            %     .wavelength  - Minimum wavelength with units (e.g., "0.0358 mm")
-            %     .lambda_max  - Maximum eigenvalue [1/units^2]
-            %     .k           - Angular wavenumber [rad/units]
-            %     .freq        - Spatial frequency [cycles/units]
-            %
-            %   This uses the FULL maximum eigenvalue of the Laplacian operator,
-            %   computed via eigs, not just the max from computed basis.
-            %   This represents the true Nyquist limit of the mesh.
-            %
-            %   Units from manifold.Units property (default: "mm").
-            %
-            %   Example:
-            %     B = bct.io.import.mesh('path/to/mesh.pial');
-            %     R = B.Manifold.Resolution;
-            %     disp(R.wavelength);  % "0.0358 mm"
-            %
-            %   See also: bct.manifold.maxLambda, bct.manifold.resolution
-            
-            % Check if full max lambda is cached
-            if ~isfield(obj.Cache, 'lambda_max_full') || isempty(obj.Cache.lambda_max_full)
-                R = struct('wavelength', "", 'lambda_max', [], 'k', [], 'freq', []);
-                return;
-            end
-            
-            % Get full maximum eigenvalue
-            lambda_max = obj.Cache.lambda_max_full;
-            
-            % Convert to resolution metrics
-            k = sqrt(lambda_max);           % Angular wavenumber [rad/units]
-            freq = k / (2*pi);              % Spatial frequency [cycles/units]
-            wavelength_val = 1 / freq;      % Wavelength [units]
-            
-            % Format wavelength with units
-            wavelength_str = sprintf('%.4f %s', wavelength_val, obj.Units);
-            
-            % Return as struct with wavelength first
-            R = struct(...
-                'wavelength', wavelength_str, ...
-                'lambda_max', lambda_max, ...
-                'k', k, ...
-                'freq', freq ...
-            );
         end
         
         function [U, lam, K, M, D, Ls] = meshFourier(obj, k, opts)

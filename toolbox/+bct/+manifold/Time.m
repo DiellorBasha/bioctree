@@ -23,6 +23,17 @@ classdef Time
         fs  % Sampling frequency (Hz)
     end
     
+    properties (SetAccess = private)
+        % Temporal resolution manager
+        Resolution bct.resolution.temporal = bct.resolution.temporal.empty()  % Temporal resolution object
+    end
+    
+    properties (Dependent)
+        dt  % Sampling interval (s)
+        t   % Time vector (s)
+        SamplingFrequency  % Alias for fs
+    end
+    
     methods
         function obj = Time(T, fs)
             %TIME Construct a Time object
@@ -49,7 +60,26 @@ classdef Time
                     error('Time:InvalidFs', 'fs must be a positive scalar');
                 end
                 obj.fs = fs;
+                
+                % Create temporal resolution object
+                obj.Resolution = bct.resolution.temporal(obj);
             end
+        end
+        
+        %% Dependent property getters
+        function val = get.dt(obj)
+            %GET.DT Sampling interval in seconds
+            val = 1 / obj.fs;
+        end
+        
+        function val = get.t(obj)
+            %GET.T Time vector in seconds
+            val = (0:obj.T-1)' / obj.fs;
+        end
+        
+        function val = get.SamplingFrequency(obj)
+            %GET.SAMPLINGFREQUENCY Alias for fs
+            val = obj.fs;
         end
         
         function duration = get_duration(obj)
