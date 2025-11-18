@@ -127,7 +127,11 @@ classdef temporal < handle
         function val = get.T_min(obj)
             %GET.T_MIN Minimum resolvable period [units]
             if ~isempty(obj.f_nyquist)
-                val = 1 / obj.f_nyquist;
+                % Use spectral function with lambda from Nyquist frequency
+                % f_nyquist = sqrt(lambda)/(2π) → lambda = (2π*f_nyquist)^2
+                lambda_nyquist = (2*pi*obj.f_nyquist)^2;
+                res = bct.resolution.spectral(lambda_nyquist);
+                val = res.L_min;  % Period in time units
             else
                 val = [];
             end
@@ -136,7 +140,9 @@ classdef temporal < handle
         function val = get.omega_max(obj)
             %GET.OMEGA_MAX Maximum angular frequency [rad/s]
             if ~isempty(obj.f_nyquist)
-                val = 2 * pi * obj.f_nyquist;
+                lambda_nyquist = (2*pi*obj.f_nyquist)^2;
+                res = bct.resolution.spectral(lambda_nyquist);
+                val = res.k_max;  % Angular frequency
             else
                 val = [];
             end

@@ -116,7 +116,8 @@ classdef spatial < handle
         function val = get.SpatialFrequency(obj)
             %GET.SPATIALFREQUENCY Maximum spatial frequency [cycles/units]
             if ~isempty(obj.lambda_max)
-                val = sqrt(obj.lambda_max) / (2*pi);
+                res = bct.resolution.spectral(obj.lambda_max);
+                val = res.f_max;
             else
                 val = [];
             end
@@ -129,8 +130,9 @@ classdef spatial < handle
         
         function val = get.Wavelength(obj)
             %GET.WAVELENGTH Minimum wavelength (Nyquist limit) [units]
-            if ~isempty(obj.SpatialFrequency)
-                val = 1 / obj.SpatialFrequency;
+            if ~isempty(obj.lambda_max)
+                res = bct.resolution.spectral(obj.lambda_max);
+                val = res.L_min;
             else
                 val = [];
             end
@@ -144,7 +146,8 @@ classdef spatial < handle
         function val = get.Wavenumber(obj)
             %GET.WAVENUMBER Maximum angular wavenumber [rad/units]
             if ~isempty(obj.lambda_max)
-                val = sqrt(obj.lambda_max);
+                res = bct.resolution.spectral(obj.lambda_max);
+                val = res.k_max;
             else
                 val = [];
             end
@@ -213,11 +216,12 @@ classdef spatial < handle
                     obj.lambda_max_instrument = (2*pi*value)^2;
             end
             
-            % Compute other representations
+            % Compute other representations using spectral function
             if ~isempty(obj.lambda_max_instrument)
-                obj.k_max_instrument = sqrt(obj.lambda_max_instrument);
-                obj.f_max_instrument = obj.k_max_instrument / (2*pi);
-                obj.L_min_instrument = 1 / obj.f_max_instrument;
+                res = bct.resolution.spectral(obj.lambda_max_instrument);
+                obj.k_max_instrument = res.k_max;
+                obj.f_max_instrument = res.f_max;
+                obj.L_min_instrument = res.L_min;
             end
         end
         
