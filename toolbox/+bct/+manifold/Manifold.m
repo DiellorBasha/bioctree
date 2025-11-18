@@ -5,6 +5,7 @@ classdef Manifold < handle
         V double = []     % N×3
         F double = []     % T×3
         UV double = []    % N×2 UV parametrization (from spherical registration)
+        Units (1,1) string = "mm"  % Spatial units for V coordinates (default: mm)
         % --- Graph data ---
         Edges table = table(zeros(0,2), zeros(0,1), ...
                             'VariableNames',{'EndNodes','Weight'})
@@ -203,44 +204,47 @@ classdef Manifold < handle
             %GET.RESOLUTION Compute spatial resolution from maximum eigenvalue
             %
             %   R = manifold.Resolution returns struct with:
-            %     .lambda_max  - Maximum eigenvalue [1/m^2 or 1/mm^2]
-            %     .k           - Angular wavenumber [rad/m or rad/mm]
-            %     .freq        - Spatial frequency [cycles/m or cycles/mm]
-            %     .wavelength  - Minimum wavelength [m or mm]
+            %     .wavelength  - Minimum wavelength with units (e.g., "0.0358 mm")
+            %     .lambda_max  - Maximum eigenvalue [1/units^2]
+            %     .k           - Angular wavenumber [rad/units]
+            %     .freq        - Spatial frequency [cycles/units]
             %
             %   This uses the FULL maximum eigenvalue of the Laplacian operator,
-            %   computed via power iteration, not just the max from computed basis.
+            %   computed via eigs, not just the max from computed basis.
             %   This represents the true Nyquist limit of the mesh.
             %
-            %   Units depend on the units of manifold.V vertices.
+            %   Units from manifold.Units property (default: "mm").
             %
             %   Example:
-            %     B.Manifold.meshFourier(600);  % Computes basis and full max lambda
+            %     B = bct.io.import.mesh('path/to/mesh.pial');
             %     R = B.Manifold.Resolution;
-            %     fprintf('Max resolution: %.3f mm wavelength\n', R.wavelength);
+            %     disp(R.wavelength);  % "0.0358 mm"
             %
             %   See also: bct.manifold.maxLambda, bct.manifold.resolution
             
             % Check if full max lambda is cached
             if ~isfield(obj.Cache, 'lambda_max_full') || isempty(obj.Cache.lambda_max_full)
-                R = struct('lambda_max', [], 'k', [], 'freq', [], 'wavelength', []);
+                R = struct('wavelength', "", 'lambda_max', [], 'k', [], 'freq', []);
                 return;
             end
             
-            % Get full maximum eigenvalue (from power iteration on Laplacian)
+            % Get full maximum eigenvalue
             lambda_max = obj.Cache.lambda_max_full;
             
             % Convert to resolution metrics
-            k = sqrt(lambda_max);           % Angular wavenumber [rad/m]
-            freq = k / (2*pi);              % Spatial frequency [cycles/m]
-            wavelength = 1 / freq;          % Wavelength [m]
+            k = sqrt(lambda_max);           % Angular wavenumber [rad/units]
+            freq = k / (2*pi);              % Spatial frequency [cycles/units]
+            wavelength_val = 1 / freq;      % Wavelength [units]
             
-            % Return as struct
+            % Format wavelength with units
+            wavelength_str = sprintf('%.4f %s', wavelength_val, obj.Units);
+            
+            % Return as struct with wavelength first
             R = struct(...
+                'wavelength', wavelength_str, ...
                 'lambda_max', lambda_max, ...
                 'k', k, ...
-                'freq', freq, ...
-                'wavelength', wavelength ...
+                'freq', freq ...
             );
         end
         
