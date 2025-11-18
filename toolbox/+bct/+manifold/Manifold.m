@@ -4,6 +4,7 @@ classdef Manifold < handle
         % --- Mesh data ---
         V double = []     % N×3
         F double = []     % T×3
+        UV double = []    % N×2 UV parametrization (from spherical registration)
         % --- Graph data ---
         Edges table = table(zeros(0,2), zeros(0,1), ...
                             'VariableNames',{'EndNodes','Weight'})
@@ -158,6 +159,37 @@ classdef Manifold < handle
 
         function clearCache(obj)
             obj.Cache = struct();
+        end
+        
+        function hasUV = checkUV(obj, throw_error)
+            %CHECKUV Check if UV parametrization is available
+            %
+            %   hasUV = obj.checkUV() returns true if UV parametrization exists
+            %   hasUV = obj.checkUV(true) throws error if UV is missing
+            %
+            %   UV parametrization is optional and typically comes from FreeSurfer
+            %   spherical registration (.sphere.reg files). If not available, this
+            %   method can warn or error depending on usage context.
+            %
+            %   See also: bct.io.import.mesh, bct.io.import.computeUVFromSphere
+            
+            if nargin < 2
+                throw_error = false;
+            end
+            
+            hasUV = ~isempty(obj.UV);
+            
+            if ~hasUV
+                msg = ['UV parametrization not available for this Manifold. ', ...
+                       'UV coordinates are typically loaded from FreeSurfer .sphere.reg files. ', ...
+                       'To use UV-based functions, import a FreeSurfer surface with spherical registration.'];
+                
+                if throw_error
+                    error('bct:Manifold:NoUV', msg);
+                else
+                    warning('bct:Manifold:NoUV', msg);
+                end
+            end
         end
         
         function [U, lam, K, M, D, Ls] = meshFourier(obj, k, opts)

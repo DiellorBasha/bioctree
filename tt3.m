@@ -1,6 +1,8 @@
 clear B
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B2 = bct.io.import.mesh(path);
+B = bct.io.import.mesh(path);
+B.Manifold
+%%
 % Compute Fourier basis
 [U, lam] = B.Manifold.meshFourier(600);
 
@@ -197,8 +199,60 @@ sMesh.VertexColors = x2rgb(B.Signals(1).Data);  % Returns [N×1] single array
 viewer = viewer3d;
 viewer.BackgroundGradient="off"
 viewer.BackgroundColor = [ 0 0 0]
-for k = 1:B.Manifold.Time.T
+for k = 1:10
 sMesh.VertexColors = x2rgb(B.Signals(3).Data(:,k));  % Returns [N×1] single array
 
 surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
 end
+
+%% 
+lambda_space = B.Manifold.Eigenvalues;   % [NumModes x 1]
+T = B.Manifold.Time.T;                   % number of time points
+fs = B.Manifold.Time.fs;                 % sampling rate
+f = (0:T-1)' * (fs/T);   % frequencies 0 → Nyquist
+omega_time = 2*pi*f;      % convert to angular frequency
+[Lambda_space, Omega_time] = ndgrid(lambda_space, omega_time);
+JointSpectrum = Lambda_space + Omega_time;   % [NumModes x T]
+Manifold.Joint.Index = @(k,l) lambda_space(k) + omega_time(l);
+
+%% 
+spec_space.type = 'narrowband';
+spec_space.f0   = 0.02;      % cycles/mm
+spec_space.bw   = 0.01;
+
+spec_time.type = 'narrowband';
+spec_time.f0   = 10;         % Hz
+spec_time.bw   = 2;
+
+packet.type    = 'gaussian';
+packet.t0      = 0.5;
+packet.sigma_t = 0.1;
+packet.velocity = 0;         % standing packet
+
+[xrec,~,~,~] = bct.sim.synth_mesh_timesignal(B.Manifold, spec_space, spec_time, packet);
+
+%%
+texH = 2048;    % height
+texW = 4096;    % width
+UV = B.Manifold.UV;
+uPix = round(UV(:,1) * (texW-1)) + 1;
+vPix = round((1 - UV(:,2)) * (texH-1)) + 1;   % flip v-axis for images
+
+ tex = nan(texH, texW);
+    idx = sub2ind([texH texW], vPix, uPix);
+    tex(idx) = values;
+    
+    % Fill missing pixels by nearest neighbor
+    tex = fillmissing(tex, 'nearest');
+
+sMeshDS.VertexColors = x2rgb(xrec(idx, 1));
+surfaceMeshShow(sMeshDS)
+
+% sMesh = bct.manifold.toSurfaceMesh(B.Manifold);
+% sMesh.VertexColors=x2rgb(xrec(:, 1));
+% surfaceMeshShow(sMesh)
+F=sMesh.Faces; V=sMesh.Vertices; 
+hMesh = patch('Faces',F,'Vertices',V,...
+              'FaceVertexCData',C,...
+              'FaceColor','interp',...
+              'EdgeColor','none');
