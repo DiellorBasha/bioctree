@@ -1,7 +1,8 @@
 clear B
 path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B = bct.io.import.mesh(path);
-B.Manifold
+B2 = bct.io.import.mesh(path);
+B2.Manifold
+B2.Manifold.Resolution
 
 % Compute eigenvalues
 B.Manifold.meshFourier(600);
