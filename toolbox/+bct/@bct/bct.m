@@ -802,9 +802,7 @@ methods
     end
     
     % Build time vector
-    T_val = this.Time.T;
-    fs_val = this.Time.fs;
-    t = (0:T_val-1)' / fs_val;  % Column vector [T × 1]
+    t = this.Time.get_time_vector();  % Use Time class method for consistency
     
     % Build joint spectral grid using ndgrid
     % ndgrid creates grids where rows vary along first dimension (lambda)

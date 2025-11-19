@@ -118,6 +118,32 @@ classdef Time
             nyquist = obj.fs / 2;
         end
         
+        function f = get_frequency_axis(obj)
+            %GET_FREQUENCY_AXIS Generate full DFT frequency axis
+            %
+            %   f = obj.get_frequency_axis() returns the full discrete
+            %   Fourier transform frequency axis in Hz, ranging from 0 to
+            %   fs*(T-1)/T.
+            %
+            %   The frequency axis is computed as:
+            %       f = (0:T-1)' * (fs/T)
+            %
+            %   This represents the frequencies corresponding to the FFT
+            %   bins for a signal of length T sampled at fs Hz.
+            %
+            %   Returns:
+            %       f - [T×1] frequency vector in Hz
+            %
+            %   Example:
+            %       time = bct.manifold.Time(100, 100);
+            %       f = time.get_frequency_axis();
+            %       % f ranges from 0 to 99 Hz in 1 Hz steps
+            %
+            %   See also: get_time_vector, fftshift
+            
+            f = (0:obj.T-1)' * (obj.fs / obj.T);
+        end
+        
         function disp(obj)
             %DISP Display Time object information
             
