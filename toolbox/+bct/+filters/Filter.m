@@ -27,10 +27,10 @@ classdef Filter < handle
     %     filt.plotResponse();
     %     modes = filt.getModeIndices();
     %     
-    %     % Apply to signal (use bct.transform)
-    %     y = bct.transform.filter(x, filt);
+    %     % Apply to signal (use bct.signal.transform)
+    %     y = bct.signal.transform.filter(x, filt);
     %
-    %   See also: bct.transform, bct.resolution.spatial, bct.manifold.Manifold
+    %   See also: bct.signal.transform, bct.resolution.spatial, bct.manifold.Manifold
     
     properties
         Manifold bct.manifold.Manifold      % Associated manifold

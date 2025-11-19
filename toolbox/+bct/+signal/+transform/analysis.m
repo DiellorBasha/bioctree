@@ -1,7 +1,7 @@
 function x_hat = analysis(x, manifold)
     %ANALYSIS Forward transform: project signal onto eigenmodes
     %
-    %   x_hat = bct.transform.analysis(x, manifold) projects signal x
+    %   x_hat = bct.signal.transform.analysis(x, manifold) projects signal x
     %   onto the manifold's eigenmode basis.
     %
     %   Computes: x_hat(λ_k) = U' * x
@@ -18,9 +18,9 @@ function x_hat = analysis(x, manifold)
     %
     %   Example:
     %     B.Manifold.meshFourier(600);
-    %     x_hat = bct.transform.analysis(x, B.Manifold);
+    %     x_hat = bct.signal.transform.analysis(x, B.Manifold);
     %
-    %   See also: bct.transform.synthesis, bct.transform.filter
+    %   See also: bct.signal.transform.synthesis, bct.signal.transform.filter
     
     % Validate manifold
     if ~isa(manifold, 'bct.manifold.Manifold')

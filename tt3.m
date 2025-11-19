@@ -3,17 +3,61 @@ path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
 B2 = bct.io.import.mesh(path);
 B2.Manifold
 B2.Manifold.Resolution
+B2.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
+G=bct.manifold.toGspGraph(B2.Manifold);
+G=gsp_jtv_graph(G, B2.Time.T, B2.Time.fs);
+
+filter_params = gsp_jtv_filterbank('heat', [1, 2, 4], G);
+
+[F, filterType] = gsp_jtv_design_diffusion(G);
+[Fw, filterTypeW] = gsp_jtv_design_wave(G, 0.01);
+[Fd, filtertype] = gsp_jtv_design_damped_wave(G, 0.01);
+
 
 % Compute eigenvalues
-B.Manifold.meshFourier(600);
+B2.Manifold.meshFourier(600);
 
 % Access resolution
 R = B.Manifold.Resolution;
 
+%% --- Eigen decomposition (first 200 modes) ---
+k = 200;
+[U, D] = eigs(B2.Manifold.Laplacian, k, 'smallestabs');
+lambda = diag(D);
+
+%% --- Temporal axis ---
+T  = 1000;
+fs = 1000;
+t = (0:T-1)/fs;
+
+%% --- Define DGW components ---
+sx = 5; st = 20; omega0 = 2*pi*10;
+
+psi_graph = @(lambda) lambda .* exp(-lambda/sx);
+phi_time  = @(t) exp(-(t.^2)/st^2) .* cos(omega0*t);
+K         = @(lambda, t) exp(-t .* lambda);
+[Wf,filtertype] = gsp_jtv_design_dgw(G,K,psi_graph,phi_time);
+%% --- Evaluate kernels over joint spectrum ---
+[lamk, Tgrid] = ndgrid(lambda, t);
+Psi_graph = psi_graph(lambda);        % k×1
+Psi_time  = psi_time(t);              % 1×T
+K_eval    = K(lamk, Tgrid);              % k×T
+
+%% --- Build spectral filter ---
+H = (Psi_graph .* K_eval) .* Psi_time;
+
+%% --- Create synthetic spectral excitation ---
+X_hat = randn(k, T);
+
+%% --- Apply DGW filter ---
+Y_hat = H .* X_hat;
+
+%% --- Return to manifold ---
+Y = U * Y_hat;      % Y is N × T MEG-like wave packet
+
 %%
 % Compute Fourier basis
 [U, lam] = B.Manifold.meshFourier(600);
-
 
 % Narrowband signal
 spec.type = 'narrowband';
@@ -263,44 +307,6 @@ S = images.ui.graphics.Surface( ...
         Vertices = V, ...
         VertexColors = x2rgb(xrec(:,1)) );
 
-%%
-texH = 2048;    % texture height
-texW = 4096;    % texture width
-UV = B.Manifold.UV;
-uPix = round(UV(:,1) * (texW-1)) + 1;
-vPix = round((1 - UV(:,2)) * (texH-1)) + 1;   % flip v-axis (image convention)
-
-vals = xrec(:,1);   % first time point
-
-tex = nan(texH, texW);
-idx = sub2ind([texH texW], vPix, uPix);
-tex(idx) = vals;
-% 
-% % Fill holes caused by discrete UV sampling
-% tex = fillmissing(tex, 'nearest');
-Fg = scatteredInterpolant(UV(:,1), UV(:,2), values, 'linear', 'none');
-[Ug,Vg] = meshgrid(linspace(0,1,texW), linspace(0,1,texH));
-tex = Fg(Ug, Vg);
-% Optional: replace NaNs from 'none' with nearest values
-tex = fillmissing(tex,'nearest');
-%% 
-V = B.Manifold.V;   % Nx3, folded cortex
-F = B.Manifold.F;   % Mx3
-UV = B.Manifold.UV; % Nx2, normalized [0,1]
-
-fig = figure;
-ax = axes; hold(ax,'on');
-
-hSurf = surface(ax, ...
-    'XData', [], 'YData', [], 'ZData', [], ... % placeholders
-    'FaceColor', 'texturemap', ...
-    'EdgeColor', 'none', ...
-    'CData', tex, ...
-    'CDataMapping', 'scaled');
-
-hSurf.Vertices = V;     % Nx3
-hSurf.Faces = F;         % Mx3
-hSurf.VertexTextureCoords = UV;   % Nx2
 
 %% 
 
@@ -315,3 +321,59 @@ hMesh = patch('Faces',F,'Vertices',V,...
               'FaceVertexCData',C,...
               'FaceColor','interp',...
               'EdgeColor','none');
+%% 
+% Import the mesh
+path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
+B = bct.io.import.mesh(path);
+
+% Precompute eigenbasis for efficiency (optional but recommended)
+B.Manifold.meshFourier(300);  % Compute 300 eigenmodes
+
+% Example 1: Basic smooth heat signal (large tau = strong smoothing)
+B = bct.sim.heat(B, 2.0, 'label', 'smooth_heat');
+
+% Example 2: Rough heat signal (small tau = preserve high frequencies)
+B = bct.sim.heat(B, 0.05, 'label', 'rough_heat');
+
+% Example 3: Medium smoothness
+B = bct.sim.heat(B, 0.5, 'label', 'medium_heat');
+
+% Example 4: Band-limited heat signal (only 20-60 mm wavelengths)
+B = bct.sim.heat(B, 1.0, 'band', [20, 60], 'label', 'bandlimited_heat');
+
+% Example 5: Generate multiple signals with different smoothness
+for tau_val = [0.1, 0.5, 1.0, 2.0, 5.0]
+    label = sprintf('heat_tau%.1f', tau_val);
+    B = bct.sim.heat(B, tau_val, 'label', label);
+end
+
+% Example 6: Get raw output without adding to bct object
+[~, x, a] = bct.sim.heat(B, 1.0, 'return_raw', true);
+% x = vertex signal, a = spectral coefficients
+
+% Visualize the signals
+B.Signal(1).plot();  % Plot first signal
+title('Smooth Heat Signal (tau=2.0)');
+
+%% 
+k=2
+xrec=B.Signals(k).Data;
+viewer = viewer3d;
+viewer.BackgroundGradient="off"
+viewer.BackgroundColor = [ 0 0 0];
+sMesh.VertexColors = x2rgb(xrec(:,1));  % Returns [N×1] single array
+
+viewer.CameraPosition= [-183.6051 88.9012 36.8928];
+viewer.CameraTarget= [27.8792 31.2832 -15.8640];
+viewer.CameraUpVector=  [-0.4032 -0.0570 0.9134];
+viewer.CameraZoom= 1.3550;
+surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
+
+
+B = bct.sim.heat(B, 0.1, 'band', [10, 20], 'label', 'bandlimited_heat');
+[~, x, a] = bct.sim.heat(B, 0.01, 'return_raw', true);
+viewer.Children.Color = x2rgb(x);
+drawnow
+%%
+
+G=bct.manifold.toGspGraph (B2.Manifold);

@@ -1,7 +1,7 @@
 function y = filter(x, filt)
     %FILTER Apply spectral filter to signal
     %
-    %   y = bct.transform.filter(x, filt) filters signal x using the
+    %   y = bct.signal.transform.filter(x, filt) filters signal x using the
     %   spectral filter filt.
     %
     %   Workflow:
@@ -23,9 +23,9 @@ function y = filter(x, filt)
     %     filt.design('band', 'taper', 'hann');
     %     
     %     % Filter signal
-    %     y = bct.transform.filter(x, filt);
+    %     y = bct.signal.transform.filter(x, filt);
     %
-    %   See also: bct.filters.Filter, bct.transform.analysis, bct.transform.synthesis
+    %   See also: bct.filters.Filter, bct.signal.transform.analysis, bct.signal.transform.synthesis
     
     % Validate inputs
     if ~isa(filt, 'bct.filters.Filter')
@@ -55,11 +55,11 @@ function y = filter(x, filt)
     end
     
     % Analysis: Project signal onto eigenmodes
-    x_hat = bct.transform.analysis(x, filt.Manifold);
+    x_hat = bct.signal.transform.analysis(x, filt.Manifold);
     
     % Apply filter in spectral domain
     y_hat = bsxfun(@times, g, x_hat);
     
     % Synthesis: Reconstruct filtered signal
-    y = bct.transform.synthesis(y_hat, filt.Manifold);
+    y = bct.signal.transform.synthesis(y_hat, filt.Manifold);
 end

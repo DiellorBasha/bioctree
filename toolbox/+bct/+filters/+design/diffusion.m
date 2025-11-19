@@ -129,6 +129,6 @@ end
 fprintf('\nNext steps:\n');
 fprintf('  1. filt.synthesize()  - Build spectral grid and evaluate filter\n');
 fprintf('  2. filt.plotJoint()   - Visualize joint filter W(λ,t)\n');
-fprintf('  3. Apply to signal using bct.transform\n');
+fprintf('  3. Apply to signal using bct.signal.transform\n');
 
 end

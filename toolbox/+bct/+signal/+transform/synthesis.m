@@ -1,7 +1,7 @@
 function x = synthesis(x_hat, manifold)
     %SYNTHESIS Inverse transform: reconstruct signal from spectral coefficients
     %
-    %   x = bct.transform.synthesis(x_hat, manifold) reconstructs signal
+    %   x = bct.signal.transform.synthesis(x_hat, manifold) reconstructs signal
     %   from spectral coefficients using the manifold's eigenmode basis.
     %
     %   Computes: x = U * x_hat
@@ -17,15 +17,15 @@ function x = synthesis(x_hat, manifold)
     %
     %   Example:
     %     % Forward transform
-    %     x_hat = bct.transform.analysis(x, B.Manifold);
+    %     x_hat = bct.signal.transform.analysis(x, B.Manifold);
     %     
     %     % Modify spectral coefficients
     %     x_hat_filtered = x_hat .* filter_kernel;
     %     
     %     % Inverse transform
-    %     x_reconstructed = bct.transform.synthesis(x_hat_filtered, B.Manifold);
+    %     x_reconstructed = bct.signal.transform.synthesis(x_hat_filtered, B.Manifold);
     %
-    %   See also: bct.transform.analysis, bct.transform.filter
+    %   See also: bct.signal.transform.analysis, bct.signal.transform.filter
     
     % Validate manifold
     if ~isa(manifold, 'bct.manifold.Manifold')

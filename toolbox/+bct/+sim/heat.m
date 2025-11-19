@@ -68,7 +68,7 @@ function [B_out, xrec, a] = heat(B, tau, varargin)
 %       % Legacy mode (returns raw data)
 %       x = bct.sim.heat(B, 1.0, 'return_raw', true);
 %
-%   See also: bct.filters.Filter, bct.sim.synth_mesh_signal, bct.transform.filter
+%   See also: bct.filters.Filter, bct.sim.synth_mesh_signal, bct.signal.transform.filter
 
     % Validate inputs
     if ~isa(B, 'bct.bct')
