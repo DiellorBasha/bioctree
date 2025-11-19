@@ -817,7 +817,7 @@ methods
     
     % Display info
     fprintf('[bct] Built spectral grid: %d modes × %d time points\n', ...
-      length(lambda_vec), T_val);
+      length(lambda_vec), length(t));
     fprintf('[bct] Eigenvalue range: [%.4f, %.4f]\n', ...
       min(lambda_vec), max(lambda_vec));
     fprintf('[bct] Time range: [%.4f, %.4f] s\n', t(1), t(end));
