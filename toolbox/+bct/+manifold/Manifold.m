@@ -24,6 +24,8 @@ classdef Manifold < handle
         Eigenvalues double = []     % lam: k×1 vector of eigenvalues (spatial frequencies)
         NumModes (1,1) double {mustBeInteger,mustBeNonnegative} = 0  % k: number of computed modes
         MassMatrix = []             % M: N×N sparse diagonal mass matrix
+        Laplacian = []              % L: N×N sparse Laplacian matrix (cotangent for mesh, combinatorial for graph)
+        CotangentMatrix = []        % K: N×N sparse cotangent stiffness matrix (for mesh only, K = M*L)
         LaplacianType string = ""   % Type of Laplacian used ("cotangent", "combinatorial", etc.)
         
         % Spatial resolution manager (for mesh manifolds)
@@ -39,8 +41,35 @@ classdef Manifold < handle
                 obj.V = varargin{1}; 
                 obj.F = varargin{2}; 
                 obj.N = size(obj.V, 1);  % Number of vertices
-                % Initialize matrices and Resolution (no eigenmodes yet)
-                obj.meshFourier(0);
+                % Initialize Laplacian, MassMatrix, and CotangentMatrix using bct.manifold.laplacian
+                [obj.Laplacian, obj.MassMatrix, obj.CotangentMatrix] = bct.manifold.laplacian(obj.V, obj.F, "cotangent");
+                obj.LaplacianType = "cotangent";
+                % Cache matrices for backward compatibility
+                obj.Cache.K = obj.CotangentMatrix;
+                obj.Cache.M = obj.MassMatrix;
+                obj.Cache.L_cotangent = obj.Laplacian;
+                
+                % Compute lambda_max_full for Resolution property
+                % Build normalized Laplacian for spectral analysis
+                d = full(diag(obj.MassMatrix));
+                Sinv = spdiags(1./sqrt(d), 0, length(d), length(d));
+                Ls = Sinv * obj.CotangentMatrix * Sinv;
+                Ls = (Ls + Ls.') / 2;
+                
+                % Compute maximum eigenvalue
+                try
+                    lambda_max_opts = struct();
+                    lambda_max_opts.tol = 5e-3;
+                    lambda_max_opts.p = min(size(Ls,1), 10);
+                    lambda_max_opts.disp = 0;
+                    lambda_max_full = eigs(Ls, 1, 'largestabs', lambda_max_opts);
+                    lambda_max_full = real(lambda_max_full) * 1.01;  % 1% safety margin
+                catch
+                    % Fallback to power iteration if eigs fails
+                    lambda_max_full = powerIterLargestEig(Ls, 20);
+                end
+                obj.Cache.lambda_max_full = lambda_max_full;
+                
                 % Create spatial resolution object
                 obj.Resolution = bct.resolution.spatial(obj);
                 return
@@ -78,6 +107,36 @@ classdef Manifold < handle
                 [K,~] = obj.stiffnessMass();  % K ≈ D-W (up to sign)
                 A = i_cache(obj,"A_mesh",@() spdiags(-diag(K),0,size(K,1),size(K,2)) + K);
             end
+        end
+        
+        function W = weightedAdjacency(obj)
+            %WEIGHTEDADJACENCY Compute weighted adjacency matrix from cotangent matrix
+            %
+            %   W = obj.weightedAdjacency() returns the weighted adjacency matrix
+            %   for mesh manifolds, derived from the cotangent stiffness matrix K.
+            %
+            %   The weighted adjacency matrix W is computed as:
+            %       W = -K with diagonal entries set to zero
+            %
+            %   For mesh manifolds, the cotangent weights represent geometric
+            %   relationships between adjacent vertices. The negative of K gives
+            %   positive edge weights.
+            %
+            %   Returns:
+            %       W - N×N sparse weighted adjacency matrix with positive weights
+            %
+            %   See also: adjacency, CotangentMatrix
+            
+            if obj.Type ~= "mesh"
+                error('Manifold:InvalidType', 'weightedAdjacency only works for mesh manifolds');
+            end
+            
+            if isempty(obj.CotangentMatrix)
+                error('Manifold:NoCotangentMatrix', 'CotangentMatrix not computed. Call meshFourier first.');
+            end
+            
+            % Compute weighted adjacency from cotangent matrix
+            W = i_cache(obj, "W_mesh", @() computeWeightedAdjacency(obj.CotangentMatrix));
         end
 
         function L = laplacian(obj, form)
@@ -217,41 +276,53 @@ classdef Manifold < handle
             end
         end
         
-        function [U, lam, K, M, D, Ls] = meshFourier(obj, k, opts)
+        function [U, lam] = meshFourier(obj, numModes, opts)
             % meshFourier - Compute and cache Fourier basis of the mesh manifold
             %
-            % Computes the eigendecomposition of the normalized cotangent Laplacian
-            % and stores the eigenvectors, eigenvalues, and mass matrix as properties.
+            % Computes the eigendecomposition of the mesh Laplacian using the
+            % appropriate eigensolver based on the LaplacianType property.
             %
             % Syntax:
-            %   [U, lam] = obj.meshFourier()
-            %   [U, lam] = obj.meshFourier(k)
-            %   [U, lam] = obj.meshFourier(k, opts)
-            %   [U, lam, K, M, D, Ls] = obj.meshFourier(...)
+            %   obj.meshFourier()              % Compute default modes, results in properties
+            %   obj.meshFourier(numModes)      % Compute numModes modes
+            %   [U, lam] = obj.meshFourier(numModes, opts)  % Also return eigenpairs
             %
             % Inputs:
-            %   k    - (optional) Number of modes to compute
-            %          Default: min(600, NumVertices-1)
-            %   opts - (optional) Structure with fields:
-            %          .tol     - Convergence tolerance (default: 1e-10)
-            %          .maxit   - Maximum iterations (default: 5000)
-            %          .sigma   - Eigenvalue shift (default: 1e-6)
+            %   numModes - (optional) Number of modes to compute
+            %              Default: min(200, NumVertices-1)
+            %   opts     - (optional) Structure with fields:
+            %              .tol         - Convergence tolerance (default: 1e-10)
+            %              .maxit       - Maximum iterations (default: 5000)
+            %              .sigma       - Eigenvalue target/shift (default: 1e-6)
+            %                             For mode='smallestabs', finds numModes eigenvalues
+            %                             closest to sigma
+            %              .mode        - Eigensolver mode (default: 'smallestreal')
+            %                             'smallestreal' - numModes smallest eigenvalues
+            %                             'smallestabs'  - numModes eigenvalues closest to sigma
+            %              .lambda_low  - (optional) Lower bound for band filtering
+            %              .lambda_high - (optional) Upper bound for band filtering
+            %                             If both specified, only eigenvalues in
+            %                             [lambda_low, lambda_high] are returned
             %
-            % Outputs:
-            %   U   - [N×k] eigenvectors (also stored in obj.Eigenvectors)
-            %   lam - [k×1] eigenvalues (also stored in obj.Eigenvalues)
-            %   K   - [N×N] sparse cotangent Laplacian (stiffness)
-            %   M   - [N×N] sparse mass matrix (also stored in obj.MassMatrix)
-            %   D   - [k×k] diagonal eigenvalue matrix
-            %   Ls  - [N×N] normalized Laplacian
+            % Outputs (optional):
+            %   U   - [N×numModes] eigenvectors (same as obj.Eigenvectors)
+            %   lam - [numModes×1] eigenvalues (same as obj.Eigenvalues)
+            %
+            % Note: All matrices (K, M, L) are available as properties:
+            %   obj.CotangentMatrix - K
+            %   obj.MassMatrix - M
+            %   obj.Laplacian - L
+            %
+            % Eigensolver Selection:
+            %   - If LaplacianType is "cotangent": Uses generalized eigenproblem
+            %     eigs(K, M, k, sigma) which is optimal for FEM meshes
+            %   - If LaplacianType contains "normalized": Uses standard eigenproblem
+            %     eigs(L, k, sigma) on the normalized Laplacian
             %
             % Side Effects:
             %   - Sets obj.Eigenvectors, obj.Eigenvalues, obj.NumModes
-            %   - Sets obj.MassMatrix
-            %   - Sets obj.LaplacianType to "cotangent"
-            %   - Updates obj.Cache with K matrix
             %
-            % See also: bct.manifold.Manifold.eigenpairs
+            % See also: bct.manifold.Manifold.eigenpairs, bct.manifold.laplacian
             
             if obj.Type ~= "mesh"
                 error('Manifold:InvalidType', 'meshFourier only works for mesh manifolds');
@@ -260,89 +331,106 @@ classdef Manifold < handle
             nVerts = size(obj.V, 1);
             
             % Default number of modes
-            if nargin < 2 || isempty(k)
-                k = min(200, nVerts - 1);
+            if nargin < 2 || isempty(numModes)
+                numModes = min(200, nVerts - 1);
             end
             
-            % Validate k (allow k=0 for matrix-only computation)
-            if k < 0 || k >= nVerts
-                error('Manifold:InvalidK', 'k must be between 0 and NumVertices-1 (got k=%d, N=%d)', k, nVerts);
+            % Validate numModes
+            if numModes < 0 || numModes >= nVerts
+                error('Manifold:InvalidNumModes', 'numModes must be between 0 and NumVertices-1 (got numModes=%d, N=%d)', numModes, nVerts);
             end
             
             % Default options
             if nargin < 3 || isempty(opts)
                 opts = struct();
             end
-            if ~isfield(opts, 'tol'),     opts.tol = 1e-10; end
-            if ~isfield(opts, 'maxit'),   opts.maxit = 5000; end
-            if ~isfield(opts, 'sigma'),   opts.sigma = 1e-6; end
-            if ~isfield(opts, 'isreal'),  opts.isreal = true; end
+            if ~isfield(opts, 'tol'),         opts.tol = 1e-10; end
+            if ~isfield(opts, 'maxit'),       opts.maxit = 5000; end
+            if ~isfield(opts, 'sigma'),       opts.sigma = 1e-6; end
+            if ~isfield(opts, 'mode'),        opts.mode = 'smallestreal'; end
+            if ~isfield(opts, 'lambda_low'),  opts.lambda_low = []; end
+            if ~isfield(opts, 'lambda_high'), opts.lambda_high = []; end
+            if ~isfield(opts, 'isreal'),      opts.isreal = true; end
+            if ~isfield(opts, 'issym'),       opts.issym = true; end
             
-            % Check for gptoolbox
-            if ~hasGptoolbox()
-                error('Manifold:MissingDependency', ...
-                    'meshFourier requires gptoolbox (cotmatrix, massmatrix functions)');
+            % Get matrices from properties (already computed in constructor)
+            if isempty(obj.MassMatrix) || isempty(obj.CotangentMatrix)
+                error('Manifold:NoMatrices', ...
+                    'MassMatrix and CotangentMatrix must be computed first (should happen in constructor)');
             end
             
-            % Compute cotangent Laplacian and mass matrix
-            K = -cotmatrix(obj.V, obj.F);                      % PSD stiffness
-            M = massmatrix(obj.V, obj.F, 'barycentric');       % diagonal mass
-            K = (K + K.') / 2;                                 % enforce symmetry
-            d = full(diag(M));
-            M = spdiags(d, 0, length(d), length(d));
+            M = obj.MassMatrix;
+            K = obj.CotangentMatrix;
             
-            % Normalized Laplacian
-            Sinv = spdiags(1./sqrt(d), 0, length(d), length(d));
-            Ls = (Sinv * K * Sinv);
-            Ls = (Ls + Ls.') / 2;
-            
-            % Store matrices first
-            obj.MassMatrix = M;
-            obj.LaplacianType = "cotangent";
-            obj.Cache.K = K;
-            obj.Cache.M = M;
-            obj.Cache.L_cotangent = K;  % Store cotangent form explicitly
-            
-            % Compute full maximum eigenvalue for Resolution property
-            % Use eigs with improved options for better accuracy
-            nRows = size(Ls, 1);
-            lambda_max_opts = struct();
-            lambda_max_opts.tol = 5e-3;
-            lambda_max_opts.p = min(nRows, 10);  % Krylov subspace dimension
-            lambda_max_opts.disp = 0;        % silent
-            
-            try
-                lambda_max_full = eigs(Ls, 1, 'largestabs', lambda_max_opts);
-                lambda_max_full = real(lambda_max_full) * 1.01;  % 1% safety margin
-            catch
-                % Fallback to power iteration if eigs fails
-                lambda_max_full = powerIterLargestEig(Ls, 20);
-            end
-            obj.Cache.lambda_max_full = lambda_max_full;
-            
-            % If k=0, skip eigenmode computation
-            if k == 0
+            % If numModes=0, skip eigenmode computation (matrix-only mode)
+            if numModes == 0
                 obj.Eigenvectors = [];
                 obj.Eigenvalues = [];
                 obj.NumModes = 0;
+                U = [];
+                lam = [];
                 return;
             end
             
-            % Eigen solve near zero with shift-invert for k modes
-            [U, D] = eigs(Ls, k, opts.sigma, opts);
-            lam = real(diag(D));
+            % Select eigensolver based on LaplacianType
+            if obj.LaplacianType == "cotangent"
+                % Generalized eigenproblem: K*U = M*U*D
+                % This is the optimal form for FEM meshes
+                % Eigenvalues are with respect to the cotangent Laplacian
+                [U, D] = eigs(K, M, numModes, opts.sigma, opts);
+                lam = real(diag(D));
+                
+                % Sort by eigenvalue (eigs with 'smallestabs' may not return sorted)
+                if strcmp(opts.mode, 'smallestabs')
+                    [lam, idx] = sort(lam, 'ascend');
+                    U = U(:, idx);
+                    D = D(idx, idx);
+                end
+                
+            elseif contains(obj.LaplacianType, "normalized")
+                % Standard eigenproblem on normalized Laplacian: L*U = U*D
+                % L = M^{-1/2} * K * M^{-1/2} (symmetric normalized form)
+                if isempty(obj.Laplacian)
+                    error('Manifold:NoLaplacian', ...
+                        'Laplacian matrix not available for normalized type');
+                end
+                
+                [U, D] = eigs(obj.Laplacian, numModes, opts.sigma, opts);
+                lam = real(diag(D));
+                
+                % Sort by eigenvalue (eigs with 'smallestabs' may not return sorted)
+                if strcmp(opts.mode, 'smallestabs')
+                    [lam, idx] = sort(lam, 'ascend');
+                    U = U(:, idx);
+                    D = D(idx, idx);
+                end
+                
+            else
+                error('Manifold:UnknownLaplacianType', ...
+                    'Unknown LaplacianType: %s. Expected "cotangent" or type containing "normalized"', ...
+                    obj.LaplacianType);
+            end
             
             % Clean numerical fuzz
             tol = 1e-10 * max(1, max(abs(lam)));
             lam(lam < 0 & lam > -tol) = 0;
             
-            % Drop DC and any negatives beyond tolerance
-            mask = lam > tol;
+            % Remove only negative eigenvalues (keep λ=0 and all positive modes)
+            % This preserves the constant eigenfunction (λ₀=0) and low-frequency modes
+            % needed for global waves and diffusion wavelet kernels
+            mask = lam >= -tol;
+            
+            % Apply band filtering if lambda_low and lambda_high are specified
+            if ~isempty(opts.lambda_low) && ~isempty(opts.lambda_high)
+                band_mask = (lam >= opts.lambda_low) & (lam <= opts.lambda_high);
+                mask = mask & band_mask;
+            end
+            
             lam = lam(mask);
             U = U(:, mask);
             D = D(mask, mask);
             
-            % Store eigenmodes
+            % Store eigenmodes in object properties
             obj.Eigenvectors = U;
             obj.Eigenvalues = lam;
             obj.NumModes = length(lam);
@@ -502,4 +590,11 @@ for t=1:iters
     x = y/ny;
 end
 lam = (x'*(L*x))/(x'*x);  % Rayleigh quotient
+end
+
+function W = computeWeightedAdjacency(K)
+% Compute weighted adjacency matrix from cotangent stiffness matrix
+% W = -K with diagonal entries zeroed out
+W = -K;                           % off-diagonals become positive weights
+W(1:size(W,1)+1:end) = 0;        % remove diagonal entries
 end

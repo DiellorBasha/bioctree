@@ -169,18 +169,18 @@ function [B_out, a, f] = synth_mesh_signal(B, spec, varargin)
             end
             U = B.Manifold.Eigenvectors(:, 1:k);
             lam = B.Manifold.Eigenvalues(1:k);
-            M = B.Manifold.MassMatrix;
         else
             % Need to compute or recompute eigenvectors
             if verbose
                 fprintf('[bct.sim.synth_mesh_signal] Computing eigenvectors using meshFourier (k=%d)...\n', k);
             end
-            [U, lam, ~, M] = B.Manifold.meshFourier(k);
+            [U, lam] = B.Manifold.meshFourier(k);
             k = size(U, 2);  % Update k to actual computed modes (may be less due to DC filtering)
             if verbose
                 fprintf('[bct.sim.synth_mesh_signal] ✓ Eigendecomposition complete (k=%d modes stored in B.Manifold)\n', k);
             end
         end
+        M = B.Manifold.MassMatrix;
         d = full(diag(M));  % Mass diagonals
         lam = lam(:);       % Ensure column vector
     else
