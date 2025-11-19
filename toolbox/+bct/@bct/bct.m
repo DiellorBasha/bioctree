@@ -61,10 +61,22 @@ properties
     % Access as: B.Manifold.V, B.Manifold.F, B.Manifold.meshFourier(), etc.
     Manifold               % bct.manifold.Manifold object
     
+    % Time object encapsulates temporal properties for time-varying signals
+    % Stores sampling rate, duration, and temporal resolution information
+    % Access as: B.Time.fs, B.Time.T, B.Time.Resolution, etc.
+    Time bct.manifold.Time = bct.manifold.Time.empty()  % Time dimension properties
+    
     % Signals defined on the Manifold
     % Can be a single bct.signal.Signal object or an array of Signal objects
     % All signals must have dimensions matching B.Manifold (N and optionally T)
     Signals bct.signal.Signal = bct.signal.Signal.empty()
+end
+
+properties (SetAccess=private)
+    % Joint mesh-time spectral grid
+    % Built from eigenvalues of Manifold.meshFourier and Time vector
+    % Access as: B.SpectralGrid.lambda_grid, B.SpectralGrid.t_grid
+    SpectralGrid struct = struct('lambda_grid', [], 't_grid', [], 'lambda_band', [], 't', [])
 end
 
 
@@ -720,6 +732,114 @@ methods
           signal_obj.T, this.Manifold.Time.T);
       end
     end
+  end
+  
+  function buildSpectralGrid(this, lambda_band, opts)
+    % buildSpectralGrid - Construct joint mesh-time spectral grid
+    %
+    % Builds a 2D spectral grid combining spatial eigenvalues (from
+    % Manifold.meshFourier) with temporal axis (from Time object) for
+    % joint mesh-time spectral analysis.
+    %
+    % Syntax:
+    %   B.buildSpectralGrid(lambda_band)
+    %   B.buildSpectralGrid(lambda_band, opts)
+    %
+    % Inputs:
+    %   lambda_band - [lambda_min lambda_max] frequency band for eigenvalues
+    %                 or vector of specific eigenvalues to use
+    %   opts        - (optional) Structure with fields:
+    %                 .numModes - Number of modes to compute (if lambda_band is range)
+    %                             Default: min(200, NumVertices-1)
+    %
+    % The spectral grid is stored in B.SpectralGrid with fields:
+    %   lambda_grid - [numModes × T] grid of eigenvalues
+    %   t_grid      - [numModes × T] grid of time points
+    %   lambda_band - [numModes × 1] vector of eigenvalues used
+    %   t           - [T × 1] time vector (0:T-1)/fs
+    %
+    % Example:
+    %   % Build grid for eigenvalue band [0.1, 10] Hz
+    %   B.buildSpectralGrid([0.1, 10]);
+    %   
+    %   % Access the grid
+    %   lambda_grid = B.SpectralGrid.lambda_grid;
+    %   t_grid = B.SpectralGrid.t_grid;
+    %
+    % See also: bct.manifold.Manifold.meshFourier, bct.manifold.Time
+    
+    % Validate prerequisites
+    if isempty(this.Manifold)
+      error('bct:NoManifold', 'Manifold must be set before building spectral grid');
+    end
+    if this.Manifold.Type ~= "mesh"
+      error('bct:InvalidManifoldType', 'SpectralGrid requires mesh manifold');
+    end
+    if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
+      error('bct:NoTime', 'Time object must be set with T and fs before building spectral grid');
+    end
+    
+    % Parse inputs
+    if nargin < 3, opts = struct(); end
+    if ~isfield(opts, 'numModes')
+      opts.numModes = min(200, this.Manifold.N - 1);
+    end
+    
+    % Get eigenvalues from Manifold
+    if numel(lambda_band) == 2
+      % Band specified as [lambda_min, lambda_max]
+      % Use meshFourier with band filtering
+      meshOpts = struct();
+      meshOpts.lambda_low = lambda_band(1);
+      meshOpts.lambda_high = lambda_band(2);
+      meshOpts.sigma = mean(lambda_band);
+      meshOpts.mode = 'smallestabs';
+      
+      [~, lambda_vec] = this.Manifold.meshFourier(opts.numModes, meshOpts);
+    else
+      % Specific eigenvalues provided
+      lambda_vec = lambda_band(:);
+    end
+    
+    % Build time vector
+    T_val = this.Time.T;
+    fs_val = this.Time.fs;
+    t = (0:T_val-1)' / fs_val;  % Column vector [T × 1]
+    
+    % Build joint spectral grid using ndgrid
+    % ndgrid creates grids where rows vary along first dimension (lambda)
+    % and columns vary along second dimension (time)
+    [lambda_grid, t_grid] = ndgrid(lambda_vec, t);
+    
+    % Store in SpectralGrid property
+    this.SpectralGrid.lambda_grid = lambda_grid;  % [numModes × T]
+    this.SpectralGrid.t_grid = t_grid;            % [numModes × T]
+    this.SpectralGrid.lambda_band = lambda_vec;   % [numModes × 1]
+    this.SpectralGrid.t = t;                      % [T × 1]
+    
+    % Display info
+    fprintf('[bct] Built spectral grid: %d modes × %d time points\n', ...
+      length(lambda_vec), T_val);
+    fprintf('[bct] Eigenvalue range: [%.4f, %.4f]\n', ...
+      min(lambda_vec), max(lambda_vec));
+    fprintf('[bct] Time range: [%.4f, %.4f] s\n', t(1), t(end));
+  end
+  
+  function clearSpectralGrid(this)
+    % clearSpectralGrid - Clear the spectral grid
+    %
+    %   B.clearSpectralGrid() removes the stored spectral grid
+    
+    this.SpectralGrid = struct('lambda_grid', [], 't_grid', [], 'lambda_band', [], 't', []);
+  end
+  
+  function tf = hasSpectralGrid(this)
+    % hasSpectralGrid - Check if spectral grid has been built
+    %
+    %   tf = B.hasSpectralGrid() returns true if spectral grid exists
+    
+    tf = ~isempty(this.SpectralGrid.lambda_grid) && ...
+         ~isempty(this.SpectralGrid.t_grid);
   end
 end
 
