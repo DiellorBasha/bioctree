@@ -73,10 +73,28 @@ properties
 end
 
 properties (SetAccess=private)
+    % Fundamental Axis objects (used internally by filters and transforms)
+    % Filters are always defined on Lambda (manifold) and Omega (temporal)
+    AxisTime bct.resolution.Axis = bct.resolution.Axis.empty()      % Time axis (seconds)
+    AxisOmega bct.resolution.Axis = bct.resolution.Axis.empty()     % Angular frequency (rad/s) - fundamental for filters
+    AxisVertices bct.resolution.Axis = bct.resolution.Axis.empty()  % Vertex indices (1:N)
+    AxisLambda bct.resolution.Axis = bct.resolution.Axis.empty()    % Eigenvalue axis - fundamental for filters
+    
+    % Derived scale axes (for human-readable interactions and visualization)
+    AxisFrequency bct.resolution.Axis = bct.resolution.Axis.empty()      % Frequency (Hz) - derived from Omega
+    AxisTemporalScale bct.resolution.Axis = bct.resolution.Axis.empty()  % Temporal scale (seconds) - derived from Omega
+    AxisWavelength bct.resolution.Axis = bct.resolution.Axis.empty()     % Spatial wavelength (mm) - derived from Lambda
+    AxisSpatialScale bct.resolution.Axis = bct.resolution.Axis.empty()   % Spatial scale (mm) - derived from Lambda
+    
     % Joint mesh-time spectral grid
-    % Built from eigenvalues of Manifold.meshFourier and Time vector
-    % Access as: B.SpectralGrid.lambda_grid, B.SpectralGrid.t_grid
-    SpectralGrid struct = struct('lambda_grid', [], 't_grid', [], 'lambda_band', [], 't', [])
+    % Built from Lambda and Omega axes using meshgrid(lambda, omega)
+    % Access as: B.SpectralGrid.lambda_grid, B.SpectralGrid.omega_grid
+    SpectralGrid struct = struct('lambda_grid', [], 'omega_grid', [], 'lambda_band', [], 'omega', [])
+    
+    % Filterbank - collection of designed filters
+    % Array of bct.filters.Filter or bct.filters.JointFilter objects
+    % Access as: B.Filterbank(i) or B.getFilter(label)
+    Filterbank = []
 end
 
 
@@ -722,24 +740,67 @@ methods
     
     % Check temporal dimensions if signal is dynamic
     if signal_obj.IsDynamic
-      if isempty(this.Manifold.Time)
-        error('bct:NoManifoldTime', ...
-          'Dynamic signal requires Manifold.Time to be set');
+      if isempty(this.Time)
+        error('bct:NoTime', ...
+          'Dynamic signal requires Time to be set');
       end
-      if signal_obj.T ~= this.Manifold.Time.T
+      if signal_obj.T ~= this.Time.T
         error('bct:SignalDimensionMismatch', ...
-          'Signal T (%d) does not match Manifold.Time.T (%d)', ...
-          signal_obj.T, this.Manifold.Time.T);
+          'Signal T (%d) does not match Time.T (%d)', ...
+          signal_obj.T, this.Time.T);
       end
     end
+  end
+  
+  function initializeAxes(this)
+    % initializeAxes - Create fundamental and derived Axis objects
+    %
+    % Creates all Axis objects needed for Bct workflows:
+    %   Fundamental: Time, Omega, Vertices, Lambda
+    %   Derived: Frequency, TemporalScale, Wavelength, SpatialScale
+    %
+    % Syntax:
+    %   B.initializeAxes()
+    %
+    % Note: Requires Manifold and Time to be set with Resolution
+    
+    % Validate prerequisites
+    if isempty(this.Manifold)
+      error('bct:NoManifold', 'Manifold must be set before initializing axes');
+    end
+    if isempty(this.Time)
+      error('bct:NoTime', 'Time must be set before initializing axes');
+    end
+    
+    % Fundamental axes
+    this.AxisTime = bct.resolution.Axis.time(this.Time);
+    this.AxisVertices = bct.resolution.Axis.vertex(this.Manifold);
+    
+    % Spectral axes require Resolution
+    if ~isempty(this.Manifold.Resolution)
+      this.AxisLambda = bct.resolution.Axis.lambda(this.Manifold.Resolution);
+      this.AxisWavelength = bct.resolution.Axis.wavelength(this.Manifold.Resolution);
+      this.AxisSpatialScale = bct.resolution.Axis.scale(this.Manifold.Resolution);
+    end
+    
+    if ~isempty(this.Time.Resolution)
+      this.AxisOmega = bct.resolution.Axis.omega(this.Time);
+      this.AxisFrequency = bct.resolution.Axis.frequency(this.Time);
+      % Temporal scale: s = 1/omega (approximately)
+      omega_vals = this.AxisOmega.Values;
+      temporal_scale = 1 ./ (omega_vals + eps);  % Avoid division by zero
+      this.AxisTemporalScale = bct.resolution.Axis('TemporalScale', temporal_scale, 'Temporal Scale', 's');
+    end
+    
+    fprintf('[bct] Initialized Axis objects\n');
   end
   
   function buildSpectralGrid(this, lambda_band, opts)
     % buildSpectralGrid - Construct joint mesh-time spectral grid
     %
-    % Builds a 2D spectral grid combining spatial eigenvalues (from
-    % Manifold.meshFourier) with temporal axis (from Time object) for
-    % joint mesh-time spectral analysis.
+    % Builds a 2D spectral grid combining Lambda and Omega axes using
+    % meshgrid(lambda, omega). This is the fundamental grid for joint
+    % spectral-temporal analysis.
     %
     % Syntax:
     %   B.buildSpectralGrid(lambda_band)
@@ -753,20 +814,20 @@ methods
     %                             Default: min(200, NumVertices-1)
     %
     % The spectral grid is stored in B.SpectralGrid with fields:
-    %   lambda_grid - [numModes × T] grid of eigenvalues
-    %   t_grid      - [numModes × T] grid of time points
-    %   lambda_band - [numModes × 1] vector of eigenvalues used
-    %   t           - [T × 1] time vector (0:T-1)/fs
+    %   lambda_grid - [T × K] grid of eigenvalues (from meshgrid)
+    %   omega_grid  - [T × K] grid of angular frequencies (from meshgrid)
+    %   lambda_band - [K × 1] vector of eigenvalues used
+    %   omega       - [T × 1] angular frequency vector (rad/s)
     %
     % Example:
-    %   % Build grid for eigenvalue band [0.1, 10] Hz
+    %   % Build grid for eigenvalue band [0.1, 10]
     %   B.buildSpectralGrid([0.1, 10]);
     %   
     %   % Access the grid
     %   lambda_grid = B.SpectralGrid.lambda_grid;
-    %   t_grid = B.SpectralGrid.t_grid;
+    %   omega_grid = B.SpectralGrid.omega_grid;
     %
-    % See also: bct.manifold.Manifold.meshFourier, bct.manifold.Time
+    % See also: bct.manifold.Manifold.meshFourier, initializeAxes
     
     % Validate prerequisites
     if isempty(this.Manifold)
@@ -777,6 +838,11 @@ methods
     end
     if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
       error('bct:NoTime', 'Time object must be set with T and fs before building spectral grid');
+    end
+    
+    % Initialize axes if not already done
+    if isempty(this.AxisLambda) || isempty(this.AxisOmega)
+      this.initializeAxes();
     end
     
     % Parse inputs
@@ -801,26 +867,27 @@ methods
       lambda_vec = lambda_band(:);
     end
     
-    % Build time vector
-    t = this.Time.get_time_vector();  % Use Time class method for consistency
+    % Get omega vector from Time Resolution
+    omega_vec = this.AxisOmega.Values;  % Angular frequency (rad/s)
     
-    % Build joint spectral grid using ndgrid
-    % ndgrid creates grids where rows vary along first dimension (lambda)
-    % and columns vary along second dimension (time)
-    [lambda_grid, t_grid] = ndgrid(lambda_vec, t);
+    % Build joint spectral grid using meshgrid(lambda, omega)
+    % meshgrid creates grids where:
+    %   - rows correspond to different omega values (temporal)
+    %   - columns correspond to different lambda values (spatial)
+    [lambda_grid, omega_grid] = meshgrid(lambda_vec, omega_vec);
     
     % Store in SpectralGrid property
-    this.SpectralGrid.lambda_grid = lambda_grid;  % [numModes × T]
-    this.SpectralGrid.t_grid = t_grid;            % [numModes × T]
-    this.SpectralGrid.lambda_band = lambda_vec;   % [numModes × 1]
-    this.SpectralGrid.t = t;                      % [T × 1]
+    this.SpectralGrid.lambda_grid = lambda_grid;  % [T × K]
+    this.SpectralGrid.omega_grid = omega_grid;    % [T × K]
+    this.SpectralGrid.lambda_band = lambda_vec;   % [K × 1]
+    this.SpectralGrid.omega = omega_vec;          % [T × 1]
     
     % Display info
-    fprintf('[bct] Built spectral grid: %d modes × %d time points\n', ...
-      length(lambda_vec), length(t));
-    fprintf('[bct] Eigenvalue range: [%.4f, %.4f]\n', ...
+    fprintf('[bct] Built spectral grid: %d omega × %d lambda points\n', ...
+      length(omega_vec), length(lambda_vec));
+    fprintf('[bct] Lambda range: [%.4f, %.4f]\n', ...
       min(lambda_vec), max(lambda_vec));
-    fprintf('[bct] Time range: [%.4f, %.4f] s\n', t(1), t(end));
+    fprintf('[bct] Omega range: [%.4f, %.4f] rad/s\n', omega_vec(1), omega_vec(end));
   end
   
   function clearSpectralGrid(this)
@@ -828,7 +895,7 @@ methods
     %
     %   B.clearSpectralGrid() removes the stored spectral grid
     
-    this.SpectralGrid = struct('lambda_grid', [], 't_grid', [], 'lambda_band', [], 't', []);
+    this.SpectralGrid = struct('lambda_grid', [], 'omega_grid', [], 'lambda_band', [], 'omega', []);
   end
   
   function tf = hasSpectralGrid(this)
@@ -837,11 +904,793 @@ methods
     %   tf = B.hasSpectralGrid() returns true if spectral grid exists
     
     tf = ~isempty(this.SpectralGrid.lambda_grid) && ...
-         ~isempty(this.SpectralGrid.t_grid);
+         ~isempty(this.SpectralGrid.omega_grid);
+  end
+  
+  %% Filter design and management methods
+  
+  function filt = designFilter(this, range, quantity, kernelType, varargin)
+    % designFilter - Design a spatial filter using spectral quantity
+    %
+    % Syntax:
+    %   filt = B.designFilter(range, quantity, kernelType)
+    %   filt = B.designFilter(range, quantity, kernelType, 'param', value, ...)
+    %
+    % Inputs:
+    %   range      - [low, high] spectral range
+    %   quantity   - Spectral quantity type:
+    %                'lambda'      - Eigenvalue λ
+    %                'wavelength'  - Spatial wavelength L (mm)
+    %                'wavenumber'  - Wavenumber k (rad/mm)
+    %                'freq'        - Spatial frequency f (cycles/mm)
+    %   kernelType - Filter kernel: 'ideal', 'band', 'heat', 'mexican_hat'
+    %
+    % Parameters:
+    %   'label'  - String label for filter (optional)
+    %   'add'    - Add to Filterbank (default: true)
+    %   Additional kernel-specific parameters (see bct.filters.Filter.design)
+    %
+    % Returns:
+    %   filt - bct.filters.Filter object
+    %
+    % Example:
+    %   % Design bandpass for 5-50mm wavelengths
+    %   filt = B.designFilter([5, 50], 'wavelength', 'band', 'taper', 'hann');
+    %   
+    %   % Design heat diffusion filter
+    %   filt = B.designFilter([0.01, 1], 'lambda', 'heat', 'time', 0.5);
+    %   
+    %   % Design using wavenumber
+    %   filt = B.designFilter([0.1, 2], 'wavenumber', 'band');
+    %
+    % See also: designJointFilter, bct.filters.Filter, bct.resolution.Quantity
+    
+    % Validate manifold
+    if isempty(this.Manifold)
+      error('bct:NoManifold', 'Manifold must be set before designing filters');
+    end
+    
+    % Parse optional parameters
+    p = inputParser;
+    p.KeepUnmatched = true;
+    addParameter(p, 'label', '', @(x) ischar(x) || isstring(x));
+    addParameter(p, 'add', true, @islogical);
+    parse(p, varargin{:});
+    
+    filter_label = string(p.Results.label);
+    add_to_bank = p.Results.add;
+    
+    % Convert quantity string to enum
+    quantity_enum = this.convertQuantityString(quantity);
+    
+    % Create filter
+    filt = bct.filters.Filter(this.Manifold);
+    
+    % Set band using quantity
+    filt.setBand(range, quantity_enum);
+    
+    % Design kernel with remaining parameters
+    kernel_params = [fieldnames(p.Unmatched), struct2cell(p.Unmatched)]';
+    filt.design(kernelType, kernel_params{:});
+    
+    % Add label if provided
+    if ~isempty(filter_label)
+      filt.KernelParams.label = filter_label;
+    end
+    
+    % Add to filterbank if requested
+    if add_to_bank
+      this.addFilter(filt, filter_label);
+    end
+  end
+  
+  function filt = designJointFilter(this, spatial_range, spatial_quantity, temporal_range, temporal_quantity, varargin)
+    % designJointFilter - Design a joint mesh-time filter
+    %
+    % Syntax:
+    %   filt = B.designJointFilter(spatial_range, spatial_quantity, temporal_range, temporal_quantity)
+    %   filt = B.designJointFilter(..., 'param', value, ...)
+    %
+    % Inputs:
+    %   spatial_range    - [low, high] spatial spectral range
+    %   spatial_quantity - 'lambda', 'wavelength', 'wavenumber', 'freq'
+    %   temporal_range   - [low, high] temporal spectral range
+    %   temporal_quantity - 'frequency', 'period'
+    %
+    % Parameters:
+    %   'type'   - Joint filter type: 'diffusion', 'wave', 'separable'
+    %            Default: 'diffusion'
+    %   'label'  - String label for filter
+    %   'add'    - Add to Filterbank (default: true)
+    %   Additional design-specific parameters
+    %
+    % Returns:
+    %   filt - bct.filters.JointFilter object
+    %
+    % Example:
+    %   % Diffusion filter: 10-50mm wavelength, 8-12 Hz
+    %   filt = B.designJointFilter([10, 50], 'wavelength', [8, 12], 'frequency', ...
+    %       'type', 'diffusion', 'label', 'alpha_band');
+    %   
+    %   % Wave filter using wavenumber
+    %   filt = B.designJointFilter([0.1, 1], 'wavenumber', [5, 15], 'frequency', ...
+    %       'type', 'wave', 'velocity', 5);
+    %
+    % See also: designFilter, bct.filters.design.diffusion, bct.filters.design.wave
+    
+    % Validate manifold and time
+    if isempty(this.Manifold)
+      error('bct:NoManifold', 'Manifold must be set before designing joint filters');
+    end
+    if isempty(this.Time)
+      error('bct:NoTime', 'Time must be set before designing joint filters');
+    end
+    
+    % Parse parameters
+    p = inputParser;
+    p.KeepUnmatched = true;
+    addParameter(p, 'type', 'diffusion', @(x) ischar(x) || isstring(x));
+    addParameter(p, 'label', '', @(x) ischar(x) || isstring(x));
+    addParameter(p, 'add', true, @islogical);
+    parse(p, varargin{:});
+    
+    filter_type = string(p.Results.type);
+    filter_label = string(p.Results.label);
+    add_to_bank = p.Results.add;
+    
+    % Convert spatial range to lambda
+    spatial_quantity_enum = this.convertQuantityString(spatial_quantity);
+    lambda_range = this.convertToLambda(spatial_range, spatial_quantity_enum);
+    
+    % Convert temporal range to frequency (Hz)
+    temporal_quantity_enum = this.convertQuantityString(temporal_quantity);
+    freq_range = this.convertToFrequency(temporal_range, temporal_quantity_enum);
+    
+    % Call appropriate design function
+    design_params = [fieldnames(p.Unmatched), struct2cell(p.Unmatched)]';
+    
+    switch lower(filter_type)
+      case 'diffusion'
+        filt = bct.filters.design.diffusion(this, ...
+          'lambda_band', lambda_range, ...
+          'freq_band', freq_range, ...
+          design_params{:});
+          
+      case 'wave'
+        filt = bct.filters.design.wave(this, ...
+          'lambda_band', lambda_range, ...
+          'freq_band', freq_range, ...
+          design_params{:});
+          
+      case 'separable'
+        filt = bct.filters.design.separable(this, ...
+          'lambda_band', lambda_range, ...
+          'freq_band', freq_range, ...
+          design_params{:});
+          
+      otherwise
+        error('bct:UnknownFilterType', 'Unknown joint filter type: %s', filter_type);
+    end
+    
+    % Add label if provided
+    if ~isempty(filter_label) && isfield(filt, 'KernelParams')
+      filt.KernelParams.label = filter_label;
+    end
+    
+    % Add to filterbank if requested
+    if add_to_bank
+      this.addFilter(filt, filter_label);
+    end
+  end
+  
+  function addFilter(this, filt, label)
+    % addFilter - Add filter to filterbank
+    %
+    %   B.addFilter(filt) adds filter to filterbank
+    %   B.addFilter(filt, label) adds with a label
+    %
+    % Inputs:
+    %   filt  - bct.filters.Filter or bct.filters.JointFilter object
+    %   label - Optional string label
+    
+    if nargin < 3, label = ''; end
+    label = string(label);
+    
+    % Add label to filter params if provided
+    if ~isempty(label) && isfield(filt, 'KernelParams')
+      filt.KernelParams.label = label;
+    end
+    
+    % Initialize filterbank if empty
+    if isempty(this.Filterbank)
+      this.Filterbank = filt;
+    else
+      this.Filterbank(end+1) = filt;
+    end
+    
+    fprintf('[bct] Added filter to filterbank (index: %d', length(this.Filterbank));
+    if ~isempty(label)
+      fprintf(', label: "%s"', label);
+    end
+    fprintf(')\n');
+  end
+  
+  function filt = getFilter(this, identifier)
+    % getFilter - Retrieve filter from filterbank
+    %
+    %   filt = B.getFilter(index) gets filter by index
+    %   filt = B.getFilter(label) gets filter by label
+    %
+    % Inputs:
+    %   identifier - Integer index or string label
+    %
+    % Returns:
+    %   filt - bct.filters.Filter or bct.filters.JointFilter object
+    
+    if isempty(this.Filterbank)
+      error('bct:EmptyFilterbank', 'Filterbank is empty');
+    end
+    
+    if isnumeric(identifier)
+      % Get by index
+      idx = round(identifier);
+      if idx < 1 || idx > length(this.Filterbank)
+        error('bct:FilterIndexOutOfRange', ...
+          'Filter index %d out of range [1, %d]', idx, length(this.Filterbank));
+      end
+      filt = this.Filterbank(idx);
+    else
+      % Get by label
+      label = string(identifier);
+      found = false;
+      for i = 1:length(this.Filterbank)
+        if isfield(this.Filterbank(i).KernelParams, 'label') && ...
+           this.Filterbank(i).KernelParams.label == label
+          filt = this.Filterbank(i);
+          found = true;
+          break;
+        end
+      end
+      if ~found
+        error('bct:FilterNotFound', 'No filter with label "%s" found', label);
+      end
+    end
+  end
+  
+  function removeFilter(this, identifier)
+    % removeFilter - Remove filter from filterbank
+    %
+    %   B.removeFilter(index) removes filter by index
+    %   B.removeFilter(label) removes filter by label
+    %
+    % Inputs:
+    %   identifier - Integer index or string label
+    
+    if isempty(this.Filterbank)
+      warning('bct:EmptyFilterbank', 'Filterbank is already empty');
+      return;
+    end
+    
+    if isnumeric(identifier)
+      % Remove by index
+      idx = round(identifier);
+      if idx < 1 || idx > length(this.Filterbank)
+        error('bct:FilterIndexOutOfRange', ...
+          'Filter index %d out of range [1, %d]', idx, length(this.Filterbank));
+      end
+      this.Filterbank(idx) = [];
+    else
+      % Remove by label
+      label = string(identifier);
+      found = false;
+      for i = 1:length(this.Filterbank)
+        if isfield(this.Filterbank(i).KernelParams, 'label') && ...
+           this.Filterbank(i).KernelParams.label == label
+          this.Filterbank(i) = [];
+          found = true;
+          break;
+        end
+      end
+      if ~found
+        error('bct:FilterNotFound', 'No filter with label "%s" found', label);
+      end
+    end
+    
+    fprintf('[bct] Removed filter from filterbank\n');
+  end
+  
+  function clearFilterbank(this)
+    % clearFilterbank - Remove all filters from filterbank
+    %
+    %   B.clearFilterbank() removes all filters
+    
+    this.Filterbank = [];
+    fprintf('[bct] Filterbank cleared\n');
+  end
+  
+  function listFilters(this)
+    % listFilters - Display all filters in filterbank
+    %
+    %   B.listFilters() prints a summary of all filters
+    
+    if isempty(this.Filterbank)
+      fprintf('Filterbank is empty\n');
+      return;
+    end
+    
+    fprintf('\nFilterbank contains %d filter(s):\n', length(this.Filterbank));
+    fprintf('%-5s %-15s %-20s %-30s\n', 'Index', 'Label', 'Type', 'Band');
+    fprintf('%s\n', repmat('-', 1, 70));
+    
+    for i = 1:length(this.Filterbank)
+      filt = this.Filterbank(i);
+      
+      % Get label
+      if isfield(filt.KernelParams, 'label')
+        label_str = char(filt.KernelParams.label);
+      else
+        label_str = '-';
+      end
+      
+      % Get type
+      if isprop(filt, 'KernelType') && ~isempty(filt.KernelType)
+        type_str = char(filt.KernelType);
+      else
+        type_str = class(filt);
+      end
+      
+      % Get band
+      if isprop(filt, 'lambda_band') && ~isempty(filt.lambda_band)
+        band_str = sprintf('[%.4f, %.4f]', filt.lambda_band(1), filt.lambda_band(2));
+      else
+        band_str = '-';
+      end
+      
+      fprintf('%-5d %-15s %-20s %-30s\n', i, label_str, type_str, band_str);
+    end
+    fprintf('\n');
+  end
+  
+  %% Signal synthesis methods
+  
+  function Synthesize(this, filter_identifier, varargin)
+    % Synthesize - Generate spectral coefficients based on filter specifications
+    %
+    % Syntax:
+    %   B.Synthesize(filter_identifier)
+    %   B.Synthesize(filter_identifier, 'param', value, ...)
+    %
+    % Inputs:
+    %   filter_identifier - Filter index or label from Filterbank
+    %
+    % Parameters:
+    %   'numModes'    - Number of spatial modes (default: auto from filter band)
+    %   'envelope'    - Temporal envelope type: 'none', 'gaussian' (default: 'none')
+    %   't0'          - Center time for envelope in seconds (default: mid-point)
+    %   'sigma_t'     - Temporal spread for Gaussian envelope (default: T/6)
+    %   'velocity'    - Traveling wave velocity in mm/s (default: 0 = standing)
+    %   'direction'   - Wave direction [x y z] (default: [1 0 0])
+    %
+    % Description:
+    %   Generates joint spectral coefficients A_kl [K × T] in the SpectralGrid
+    %   based on the filter's spectral band. The coefficients are created with
+    %   random phases and power distributed according to the filter kernel.
+    %   
+    %   For spatial filters: Uses filter.lambda_band to determine spatial modes
+    %   For joint filters: Uses both spatial and temporal bands
+    %
+    % Example:
+    %   % Design filter and synthesize
+    %   B.designFilter([10, 50], 'wavelength', 'band', 'label', 'alpha');
+    %   B.Synthesize('alpha', 'envelope', 'gaussian', 't0', 0.5);
+    %   
+    %   % Synthesize with traveling wave
+    %   B.Synthesize(1, 'velocity', 5, 'direction', [1 0 0]);
+    %
+    % See also: Generate, designFilter, buildSpectralGrid
+    
+    % Validate prerequisites
+    if isempty(this.Manifold)
+      error('bct:NoManifold', 'Manifold must be set before synthesis');
+    end
+    if isempty(this.Filterbank)
+      error('bct:NoFilters', 'Filterbank is empty. Design a filter first.');
+    end
+    
+    % Get filter
+    filt = this.getFilter(filter_identifier);
+    
+    % Detect if this is a spatial-only filter or joint filter
+    is_joint_filter = isa(filt, 'bct.filters.JointFilter');
+    has_temporal_band = isprop(filt, 'freq_band') && ~isempty(filt.freq_band);
+    is_spatial_only = ~is_joint_filter && ~has_temporal_band;
+    
+    % Validate Time only if needed for temporal filters
+    if ~is_spatial_only
+      if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
+        error('bct:NoTime', 'Time must be set for joint or temporal filters');
+      end
+    end
+    
+    % Parse parameters
+    p = inputParser;
+    addParameter(p, 'numModes', [], @isnumeric);
+    addParameter(p, 'envelope', 'none', @(x) ischar(x) || isstring(x));
+    addParameter(p, 't0', [], @isnumeric);
+    addParameter(p, 'sigma_t', [], @isnumeric);
+    addParameter(p, 'velocity', 0, @isnumeric);
+    addParameter(p, 'direction', [1 0 0], @isnumeric);
+    parse(p, varargin{:});
+    
+    % Extract parameters
+    envelope_type = string(p.Results.envelope);
+    velocity = p.Results.velocity;
+    direction = p.Results.direction(:)' / norm(p.Results.direction);
+    
+    % Get dimensions based on filter type
+    if is_spatial_only
+      T = 1;  % Spatial-only: single "time" point
+      fs = 1; % Dummy sampling rate
+    else
+      T = this.Time.T;
+      fs = this.Time.fs;
+    end
+    
+    % Determine spatial modes from filter
+    if isprop(filt, 'lambda_band') && ~isempty(filt.lambda_band)
+      lambda_band = filt.lambda_band;
+    else
+      error('bct:NoLambdaBand', 'Filter must have lambda_band property');
+    end
+    
+    % Determine number of modes
+    if isempty(p.Results.numModes)
+      % Auto-select modes within the filter band
+      all_lambda = this.Manifold.Eigenvalues;
+      mode_mask = all_lambda >= lambda_band(1) & all_lambda <= lambda_band(2);
+      numModes = sum(mode_mask);
+      if numModes == 0
+        numModes = min(50, length(all_lambda));
+        warning('bct:NoModesInBand', ...
+          'No modes in filter band [%.4f, %.4f]. Using %d modes.', ...
+          lambda_band(1), lambda_band(2), numModes);
+      end
+    else
+      numModes = p.Results.numModes;
+    end
+    
+    % Build spectral grid with filter's lambda band
+    this.buildSpectralGrid(lambda_band, struct('numModes', numModes));
+    
+    % Get eigendecomposition
+    U = this.Manifold.Eigenvectors;
+    lambda_vec = this.SpectralGrid.lambda_band;  % [K × 1]
+    K = length(lambda_vec);
+    
+    % Compute spatial frequency (cycles/mm)
+    f_space = sqrt(lambda_vec) / (2*pi);
+    
+    % Compute temporal frequencies (Hz)
+    f_time = (0:T-1)' * (fs/T);
+    
+    % Get filter power in spatial domain using filter's response
+    if isa(filt, 'bct.filters.Filter')
+      % Spatial filter: evaluate g(λ) at actual eigenvalues returned
+      g_vals = filt.getResponse(lambda_vec);  % [K × 1]
+      P_space = abs(g_vals).^2;  % Power from filter response
+      
+      % Check if filter response is too weak (most values near zero)
+      if sum(P_space > max(P_space)*0.01) < max(5, K*0.1)
+        warning('bct:WeakFilterResponse', ...
+          'Filter response is weak at actual eigenvalues. Only %d/%d modes have significant power.\n%s', ...
+          sum(P_space > max(P_space)*0.01), K, ...
+          'Consider: (1) Wider lambda band, or (2) Using "ideal" kernel instead of "band" taper.');
+      end
+    elseif isa(filt, 'bct.filters.JointFilter')
+      % Joint filter: evaluate spatial kernel
+      if ~isempty(filt.psi_mesh)
+        psi_vals = filt.psi_mesh(lambda_vec);
+        P_space = abs(psi_vals).^2;
+      else
+        P_space = ones(K, 1);
+      end
+    else
+      % Fallback: uniform power
+      P_space = ones(K, 1);
+    end
+    
+    % Normalize spatial power to sum to 1
+    P_space = P_space(:) / sum(P_space);
+    
+    if is_spatial_only
+      % Spatial-only: use random signs (±1) for real signals
+      % This creates a real-valued signal with proper spatial structure
+      sgn = sign(randn(K, T));  % Random ±1
+      A_kl = sgn .* sqrt(P_space);  % [K × 1] real coefficients
+    else
+      % Joint/temporal filters: create spatiotemporal spectrum
+      
+      % Temporal power
+      if isa(filt, 'bct.filters.JointFilter') && ~isempty(filt.phi_time)
+        % Evaluate temporal kernel
+        t_vec = (0:T-1)' / fs;
+        phi_vals = filt.phi_time(t_vec);
+        P_time = abs(phi_vals).^2;
+      elseif isprop(filt, 'freq_band') && ~isempty(filt.freq_band)
+        % Bandpass in temporal frequency
+        freq_band = filt.freq_band;
+        P_time = double(f_time >= freq_band(1) & f_time <= freq_band(2));
+      else
+        % Uniform temporal power
+        P_time = ones(T, 1);
+      end
+      
+      % Normalize temporal power
+      P_time = P_time(:) / sum(P_time);
+      
+      % Joint power spectrum: outer product [K × T]
+      P_joint = P_space(:) * P_time(:)';
+      
+      % Random phases for complex coefficients
+      phase_kl = rand(K, T) * 2*pi;
+      A_kl = sqrt(P_joint) .* exp(1i * phase_kl);
+    end
+    
+    % Apply temporal envelope
+    t = (0:T-1)/fs;
+    if strcmpi(envelope_type, 'gaussian')
+      t0 = p.Results.t0;
+      if isempty(t0), t0 = t(end)/2; end
+      
+      sigma_t = p.Results.sigma_t;
+      if isempty(sigma_t), sigma_t = t(end)/6; end
+      
+      env_t = exp(-0.5 * ((t - t0) ./ sigma_t).^2);
+      A_kl = A_kl .* env_t;
+    end
+    
+    % Apply traveling wave phase shift
+    if velocity ~= 0
+      % Project vertices onto direction
+      V = this.Manifold.V;
+      xcoords = V * direction';  % [N × 1]
+      
+      % Get mode indices used in SpectralGrid
+      [~, mode_idx] = ismember(lambda_vec, this.Manifold.Eigenvalues);
+      U_modes = U(:, mode_idx);  % [N × K]
+      
+      % Spatial phase per mode (approximate)
+      U_phase = U_modes' * xcoords;  % [K × 1]
+      
+      % Apply phase shift: exp(i k·x - i ω t)
+      for l = 1:T
+        A_kl(:, l) = A_kl(:, l) .* exp(1i * U_phase(:) * (2*pi*f_time(l)/velocity));
+      end
+    end
+    
+    % Store coefficients in SpectralGrid
+    this.SpectralGrid.coeffs = A_kl;  % [K × T]
+    
+    % Store metadata
+    this.SpectralGrid.filter_used = filter_identifier;
+    this.SpectralGrid.synthesis_params = p.Results;
+    
+    fprintf('[bct] Synthesized spectral coefficients: %d modes × %d time points\n', K, T);
+    fprintf('[bct] Spatial band: [%.4f, %.4f] eigenvalues\n', lambda_band(1), lambda_band(2));
+    if isprop(filt, 'freq_band') && ~isempty(filt.freq_band)
+      fprintf('[bct] Temporal band: [%.2f, %.2f] Hz\n', filt.freq_band(1), filt.freq_band(2));
+    end
+  end
+  
+  function sig = Generate(this, varargin)
+    % Generate - Reconstruct signal from spectral coefficients
+    %
+    % Syntax:
+    %   sig = B.Generate()
+    %   sig = B.Generate('param', value, ...)
+    %
+    % Parameters:
+    %   'label'      - Label for the generated Signal object (default: auto)
+    %   'add'        - Add to Signals array (default: true)
+    %   'symmetric'  - Use symmetric IFFT for real output (default: true)
+    %
+    % Returns:
+    %   sig - bct.signal.Signal object with reconstructed data [N × T]
+    %
+    % Description:
+    %   Reconstructs spatial-temporal signal from spectral coefficients in
+    %   SpectralGrid using inverse graph Fourier transform and inverse FFT.
+    %   
+    %   Process:
+    %   1. Inverse temporal FFT: A_kl [K × T] → A_time [K × T]
+    %   2. Graph synthesis: x_wt = U * A_time [N × T]
+    %   3. Mass normalization: xrec = M^(1/2) * x_wt
+    %
+    % Example:
+    %   % Complete workflow
+    %   B.designFilter([10, 50], 'wavelength', 'band', 'label', 'alpha');
+    %   B.Synthesize('alpha', 'envelope', 'gaussian');
+    %   sig = B.Generate('label', 'alpha_wave');
+    %
+    % See also: Synthesize, bct.signal.Signal
+    
+    % Validate prerequisites
+    if ~this.hasSpectralGrid()
+      error('bct:NoSpectralGrid', 'SpectralGrid not built. Call Synthesize first.');
+    end
+    if ~isfield(this.SpectralGrid, 'coeffs') || isempty(this.SpectralGrid.coeffs)
+      error('bct:NoCoefficients', 'No spectral coefficients. Call Synthesize first.');
+    end
+    
+    % Parse parameters
+    p = inputParser;
+    addParameter(p, 'label', '', @(x) ischar(x) || isstring(x));
+    addParameter(p, 'add', true, @islogical);
+    addParameter(p, 'symmetric', true, @islogical);
+    addParameter(p, 'normalize', true, @islogical);  % Unit RMS normalization
+    parse(p, varargin{:});
+    
+    % Extract spectral coefficients
+    A_kl = this.SpectralGrid.coeffs;  % [K × T]
+    [K, T] = size(A_kl);
+    
+    % Get eigendecomposition
+    lambda_vec = this.SpectralGrid.lambda_band;  % [K × 1]
+    [~, mode_idx] = ismember(lambda_vec, this.Manifold.Eigenvalues);
+    U = this.Manifold.Eigenvectors(:, mode_idx);  % [N × K]
+    
+    % Get mass matrix diagonal
+    d = diag(this.Manifold.MassMatrix);  % [N × 1]
+    N = length(d);
+    
+    % Reconstruction depends on whether spatial-only or spatiotemporal
+    if T == 1
+      % Spatial-only: direct reconstruction (no temporal FFT needed)
+      % A_kl is already real with random signs from Synthesize
+      a = A_kl(:);  % [K × 1] real coefficients
+      
+      % Reconstruct: xw = U * a
+      x_wt = U * a;  % [N × 1]
+      
+    else
+      % Spatiotemporal: inverse temporal FFT then graph synthesis
+      
+      % Step 1: Inverse temporal FFT on each spatial mode
+      if p.Results.symmetric
+        A_time = ifft(A_kl, [], 2, 'symmetric');  % [K × T] - real output
+      else
+        A_time = ifft(A_kl, [], 2);  % [K × T] - complex output
+      end
+      
+      % Step 2: Reconstruct into vertex domain (inverse graph Fourier)
+      x_wt = U * A_time;  % [N × T]
+    end
+    
+    % Step 3: Apply M^(+1/2) mass normalization
+    S = spdiags(sqrt(d), 0, N, N);
+    xrec = S * x_wt;  % [N × T] or [N × 1]
+    
+    % Step 4: Normalize to unit RMS in M-inner product (optional)
+    if p.Results.normalize
+      M_diag = spdiags(d, 0, N, N);
+      if T == 1
+        % Spatial-only: Ex = x' * M * x
+        Ex = xrec' * (M_diag * xrec);
+      else
+        % Spatiotemporal: Ex = sum over time of x(:,t)' * M * x(:,t)
+        Ex = sum(sum((M_diag * xrec) .* xrec, 1));
+      end
+      if Ex > 0
+        xrec = xrec / sqrt(Ex);
+      end
+    end
+    
+    % For spatial-only filters (T=1), squeeze to [N×1]
+    if T == 1
+      xrec = xrec(:);  % [N×1] spatial-only signal
+    end
+    
+    % Generate label
+    if isempty(p.Results.label)
+      if isfield(this.SpectralGrid, 'filter_used')
+        label_str = sprintf('generated_%s', string(this.SpectralGrid.filter_used));
+      else
+        label_str = sprintf('generated_%s', datestr(now, 'HHMMss'));
+      end
+    else
+      label_str = string(p.Results.label);
+    end
+    
+    % Create Signal object (pass Time only for dynamic signals)
+    if T == 1
+      sig = bct.signal.Signal(this.Manifold, xrec, label_str);  % Spatial-only
+    else
+      sig = bct.signal.Signal(this.Manifold, xrec, label_str, this.Time);  % Dynamic
+    end
+    
+    % Add to Signals array if requested
+    if p.Results.add
+      this.addSignal(sig);
+    end
+    
+    if T == 1
+      fprintf('[bct] Generated spatial signal "%s": %d vertices\n', label_str, N);
+    else
+      fprintf('[bct] Generated signal "%s": %d vertices × %d time points\n', label_str, N, T);
+    end
+    fprintf('[bct] Signal range: [%.4f, %.4f]\n', min(xrec(:)), max(xrec(:)));
   end
 end
 
 methods (Access=private)
+  % Helper functions for filter design
+  
+  function quantity_enum = convertQuantityString(~, quantity_str)
+    % Convert string to bct.resolution.Quantity enum
+    quantity_str = lower(string(quantity_str));
+    
+    switch quantity_str
+      case {'lambda', 'eigenvalue'}
+        quantity_enum = bct.resolution.Quantity.lambda;
+      case {'wavelength', 'l'}
+        quantity_enum = bct.resolution.Quantity.wavelength;
+      case {'wavenumber', 'k'}
+        quantity_enum = bct.resolution.Quantity.k;
+      case {'freq', 'frequency', 'f'}
+        quantity_enum = bct.resolution.Quantity.freq;
+      case 'period'
+        quantity_enum = bct.resolution.Quantity.period;
+      otherwise
+        error('bct:UnknownQuantity', 'Unknown quantity: %s', quantity_str);
+    end
+  end
+  
+  function lambda_range = convertToLambda(this, range, quantity_enum)
+    % Convert spectral range to lambda (eigenvalue)
+    % Uses Manifold.Resolution if available
+    
+    % If already lambda, return as-is
+    if quantity_enum == bct.resolution.Quantity.lambda
+      lambda_range = range;
+      return;
+    end
+    
+    % Get Resolution object if available
+    if ~isempty(this.Manifold) && isprop(this.Manifold, 'Resolution')
+      res = this.Manifold.Resolution;
+      
+      % Convert using Resolution methods
+      switch quantity_enum
+        case bct.resolution.Quantity.wavelength
+          lambda_range = res.wavelength2lambda(range);
+        case bct.resolution.Quantity.k
+          lambda_range = res.k2lambda(range);
+        case bct.resolution.Quantity.freq
+          lambda_range = res.freq2lambda(range);
+        otherwise
+          error('bct:UnsupportedConversion', ...
+            'Cannot convert %s to lambda', string(quantity_enum));
+      end
+    else
+      error('bct:NoResolution', 'Manifold.Resolution not available for conversion');
+    end
+  end
+  
+  function freq_range = convertToFrequency(~, range, quantity_enum)
+    % Convert temporal range to frequency (Hz)
+    
+    switch quantity_enum
+      case bct.resolution.Quantity.freq
+        freq_range = range;
+      case bct.resolution.Quantity.period
+        % Period to frequency: f = 1/T
+        freq_range = 1 ./ fliplr(range);  % Flip to maintain [low, high]
+      otherwise
+        error('bct:UnsupportedConversion', ...
+          'Cannot convert %s to frequency', string(quantity_enum));
+    end
+  end
+  
   function A = i_need_A(this)
     if isfield(this.cache,'A'), A = this.cache.A; return; end
 

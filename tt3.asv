@@ -4,8 +4,8 @@ B2 = bct.io.import.mesh(path);
 B2.Manifold
 B2.Manifold.Resolution
 B2.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
-G=bct.manifold.toGspGraph(B2.Manifold)
-g =  gsp_design_mexican_hat(G, 6);
+
+
 
 
 % Access resolution

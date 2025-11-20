@@ -6,27 +6,19 @@ function B = mesh(source, varargin)
 %
 %   Supported Formats:
 %     'FreeSurfer'   - FreeSurfer surface files (.pial, .white, etc.)
-%                      Automatically loads .sphere.reg for UV parametrization
 %     'Brainstorm'   - Brainstorm anatomy files (tess_*.mat)
 %     'auto'         - Auto-detect format (default)
 %
 %   FreeSurfer Import:
-%     When importing FreeSurfer surfaces, the function automatically:
-%     1. Loads the surface geometry (vertices and faces)
-%     2. Searches for corresponding .sphere.reg file in same directory
-%     3. If found: Computes UV parametrization from spherical coordinates
-%        and stores in B.Manifold.UV [N×2]
-%     4. If not found: B.Manifold.UV remains empty (no error)
+%     UV parametrization is NOT computed by default to speed up import.
+%     To compute UV parametrization after import, use:
+%       B.Manifold.computeUV()  % Requires .sphere.reg file
+%     Or enable during import:
+%       B = bct.io.import.mesh(path, 'ComputeUV', true)
 %
-%     UV parametrization is OPTIONAL. Functions requiring UV will warn
-%     via B.Manifold.checkUV() if UV is not available.
-%
-%     UV Computation (when .sphere.reg exists):
-%       Given sphere coordinates (x, y, z):
-%         theta = atan2(y, x)      % Azimuthal angle [-π, π]
-%         phi   = acos(z)          % Polar angle [0, π]
-%         u = (theta + π) / (2π)   % Normalize to [0, 1]
-%         v = phi / π              % Normalize to [0, 1]
+%   Common Options:
+%     'ComputeUV'    - Compute UV parametrization from .sphere.reg (default: false)
+%                      Only applies to FreeSurfer format
 %
 %   Brainstorm Options:
 %     'Subject'     - Subject name (default: first subject in anat/)
@@ -38,9 +30,16 @@ function B = mesh(source, varargin)
 %     B - bct object with mesh-type Manifold
 %
 %   Examples:
-%     % Import FreeSurfer surface (with automatic UV loading)
+%     % Import FreeSurfer surface (UV NOT computed by default - faster)
 %     B = bct.io.import.mesh('test-data/freesurfer/fsaverage/surf/lh.pial');
-%     UV = B.Manifold.UV;  % [N×2] UV coordinates (if .sphere.reg exists)
+%
+%     % Compute UV later when needed
+%     B.Manifold.computeUV('test-data/freesurfer/fsaverage/surf/lh.pial');
+%     UV = B.Manifold.UV;  % [N×2] UV coordinates
+%
+%     % Or enable UV during import (slower)
+%     B = bct.io.import.mesh('test-data/freesurfer/fsaverage/surf/lh.pial', ...
+%         'ComputeUV', true);
 %
 %     % Import Brainstorm surface
 %     B = bct.io.import.mesh('Z:\protocols\Study\anat\sub-001');
@@ -50,11 +49,13 @@ function B = mesh(source, varargin)
 %         'Format', 'Brainstorm', 'Subject', 'sub-002', 'Resolution', 'high');
 %
 %   See also: bct.io.import.graph, bct.io.import.findSphereReg, 
-%             bct.io.import.computeUVFromSphere
+%             bct.io.import.computeUVFromSphere, bct.io.import.populateUV,
+%             bct.manifold.Manifold.computeUV
 
     p = inputParser;
     addRequired(p, 'source');
     addParameter(p, 'Format', 'auto', @ischar);
+    addParameter(p, 'ComputeUV', false, @islogical);  % UV computation opt-in
     addParameter(p, 'Subject', '', @ischar);
     addParameter(p, 'Structure', 'cortex', @ischar);
     addParameter(p, 'Surface', 'pial', @ischar);
@@ -82,21 +83,14 @@ function B = mesh(source, varargin)
             snap = bct.io.convert.freeSurferRawToSnapshot(raw);
             B = bct.io.construct.mesh(snap.V, snap.F);
             
-            % Try to load corresponding .sphere.reg file for UV parametrization
-            sphere_reg_path = bct.io.import.findSphereReg(source);
-            if ~isempty(sphere_reg_path)
+            % Optionally compute UV parametrization (if requested)
+            if p.Results.ComputeUV
                 try
-                    sphere_raw = bct.io.in.readFreeSurferSurf(sphere_reg_path);
-                    UV = bct.io.import.computeUVFromSphere(sphere_raw.V);
-                    B.Manifold.UV = UV;
-                    fprintf('  ✓ UV parametrization loaded from: %s\n', sphere_reg_path);
+                    bct.io.import.populateUV(B.Manifold, source);
                 catch ME
-                    warning('bct:io:import:SphereRegFailed', ...
-                        'Failed to load sphere.reg: %s. UV parametrization not available.', ME.message);
+                    warning('bct:io:import:UVComputeFailed', ...
+                        'Failed to compute UV parametrization: %s', ME.message);
                 end
-            else
-                % UV parametrization is optional - no warning needed for missing sphere.reg
-                % Functions that require UV will warn when checkUV() is called
             end
             
         case 'brainstorm'

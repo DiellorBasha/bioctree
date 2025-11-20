@@ -346,6 +346,39 @@ classdef spatial < handle
         end
         
         %% Conversion methods
+        function lambda_range = wavelength2lambda(~, wavelength_range)
+            %WAVELENGTH2LAMBDA Convert wavelength range to lambda (eigenvalue)
+            %
+            %   lambda = res.wavelength2lambda([L_min, L_max])
+            %
+            %   Note: Shorter wavelength → larger lambda, so order is reversed
+            %   [L_min, L_max] → [lambda_max, lambda_min]
+            
+            % λ = (2π/L)²
+            % Shorter wavelength → larger lambda, so flip order
+            lambda_low = (2*pi / wavelength_range(2))^2;   % From longer wavelength
+            lambda_high = (2*pi / wavelength_range(1))^2;  % From shorter wavelength
+            lambda_range = [lambda_low, lambda_high];
+        end
+        
+        function lambda_range = k2lambda(~, k_range)
+            %K2LAMBDA Convert wavenumber range to lambda (eigenvalue)
+            %
+            %   lambda = res.k2lambda([k_min, k_max])
+            
+            % λ = k²
+            lambda_range = k_range.^2;
+        end
+        
+        function lambda_range = freq2lambda(~, freq_range)
+            %FREQ2LAMBDA Convert spatial frequency range to lambda (eigenvalue)
+            %
+            %   lambda = res.freq2lambda([f_min, f_max])
+            
+            % λ = (2π*f)²
+            lambda_range = (2*pi * freq_range).^2;
+        end
+        
         function val = convert(~, value, fromQuantity, toQuantity)
             %CONVERT Convert between quantity representations
             %

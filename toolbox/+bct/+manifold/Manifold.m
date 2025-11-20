@@ -238,7 +238,7 @@ classdef Manifold < handle
             %   spherical registration (.sphere.reg files). If not available, this
             %   method can warn or error depending on usage context.
             %
-            %   See also: bct.io.import.mesh, bct.io.import.computeUVFromSphere
+            %   See also: computeUV, bct.io.import.mesh, bct.io.import.populateUV
             
             if nargin < 2
                 throw_error = false;
@@ -249,7 +249,8 @@ classdef Manifold < handle
             if ~hasUV
                 msg = ['UV parametrization not available for this Manifold. ', ...
                        'UV coordinates are typically loaded from FreeSurfer .sphere.reg files. ', ...
-                       'To use UV-based functions, import a FreeSurfer surface with spherical registration.'];
+                       'To compute UV, call: obj.computeUV(source_path) where source_path ', ...
+                       'is the path to the surface file used for import.'];
                 
                 if throw_error
                     error('bct:Manifold:NoUV', msg);
@@ -257,6 +258,35 @@ classdef Manifold < handle
                     warning('bct:Manifold:NoUV', msg);
                 end
             end
+        end
+        
+        function computeUV(obj, source_path)
+            %COMPUTEUV Compute UV parametrization from FreeSurfer sphere.reg file
+            %
+            %   obj.computeUV(source_path) computes and populates UV parametrization
+            %
+            %   This method loads the corresponding .sphere.reg file and computes
+            %   UV coordinates for texture mapping and visualization. UV computation
+            %   can be slow for large meshes, so it's only done when explicitly called.
+            %
+            %   Parameters:
+            %     source_path - Path to the surface file (e.g., 'lh.pial')
+            %                   Used to locate the .sphere.reg file in same directory
+            %
+            %   Example:
+            %     B = bct.io.import.mesh('test-data/freesurfer/fsaverage/surf/lh.pial');
+            %     B.Manifold.computeUV('test-data/freesurfer/fsaverage/surf/lh.pial');
+            %     UV = B.Manifold.UV;  % Now populated with [N×2] UV coordinates
+            %
+            %   See also: checkUV, bct.io.import.populateUV, bct.io.import.mesh
+            
+            if obj.Type ~= "mesh"
+                error('bct:Manifold:InvalidType', ...
+                    'UV parametrization only available for mesh-type Manifolds');
+            end
+            
+            % Call the populateUV function from bct.io.import package
+            bct.io.import.populateUV(obj, source_path);
         end
         
         function lambda_max = getLambdaMaxFull(obj)

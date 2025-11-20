@@ -8,12 +8,13 @@ classdef Signal < handle
     %   Properties:
     %       Data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
     %       Manifold - Reference to bct.manifold.Manifold object
+    %       Time     - Reference to bct.manifold.Time object (optional)
     %       Label    - String label/name for the signal
     %       IsVector - Logical flag indicating if signal is vector-valued (3-component)
     %
     %   Dimensions:
     %       N - Number of spatial points (must match Manifold.N)
-    %       T - Number of time points (must match Manifold.Time.T if Time exists)
+    %       T - Number of time points (must match Time.T if Time exists)
     %
     %   Signal Types:
     %       Scalar static:    [N×1]   - One value per vertex
@@ -22,15 +23,15 @@ classdef Signal < handle
     %       Vector dynamic:   [N×T×3] - Time-varying 3D vector at each vertex
     %
     %   Example:
-    %       % Create manifold
+    %       % Create manifold and time
     %       M = bct.manifold.Manifold(V, F);
-    %       M.Time = bct.manifold.Time(1000, 250);
+    %       T = bct.manifold.Time(1000, 250);
     %
     %       % Scalar static signal
     %       s1 = bct.signal.Signal(M, rand(M.N, 1), 'random_activation');
     %
     %       % Scalar dynamic signal
-    %       s2 = bct.signal.Signal(M, rand(M.N, M.Time.T), 'timeseries');
+    %       s2 = bct.signal.Signal(M, rand(M.N, T.T), 'timeseries', T);
     %
     %       % Vector static signal (e.g., tangent vectors)
     %       s3 = bct.signal.Signal(M, rand(M.N, 3), 'gradient_field');
@@ -40,6 +41,7 @@ classdef Signal < handle
     properties
         Data           % Signal values: [N×1], [N×T], [N×3], or [N×T×3]
         Manifold       % bct.manifold.Manifold object
+        Time           % bct.manifold.Time object (optional, can also be in Manifold.Time)
         Label string = ""  % Signal name/label
     end
     
@@ -52,16 +54,18 @@ classdef Signal < handle
     end
     
     methods
-        function obj = Signal(manifold, data, label)
+        function obj = Signal(manifold, data, label, time_obj)
             %SIGNAL Construct a Signal object
             %
             %   obj = Signal(manifold, data) creates a Signal with given data
             %   obj = Signal(manifold, data, label) also sets a label
+            %   obj = Signal(manifold, data, label, time_obj) also sets Time object
             %
             %   Inputs:
             %       manifold - bct.manifold.Manifold object
             %       data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
             %       label    - Optional string label
+            %       time_obj - Optional bct.manifold.Time object
             %
             %   The data dimensions are validated against the manifold dimensions.
             
@@ -72,6 +76,11 @@ classdef Signal < handle
                         'First argument must be a bct.manifold.Manifold object');
                 end
                 obj.Manifold = manifold;
+                
+                % Set Time object if provided
+                if nargin >= 4 && ~isempty(time_obj)
+                    obj.Time = time_obj;
+                end
                 
                 % Validate and set data
                 obj.validateAndSetData(data);
@@ -95,11 +104,12 @@ classdef Signal < handle
                 error('Signal:InvalidManifold', 'Manifold.N must be > 0');
             end
             
-            % Get expected time dimension
-            has_time = ~isempty(obj.Manifold.Time);
-            if has_time
-                T_expected = obj.Manifold.Time.T;
+            % Get expected time dimension from obj.Time
+            if ~isempty(obj.Time)
+                has_time = true;
+                T_expected = obj.Time.T;
             else
+                has_time = false;
                 T_expected = 0;
             end
             
