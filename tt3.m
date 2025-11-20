@@ -1,6 +1,30 @@
 clear B
-path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B2 = bct.io.import.mesh(path);
+path = 'test-data\freesurfer\fsaverage\surf\rh.pial';
+B = bct.io.import.mesh(path);
+B.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
+
+B.Manifold.Resolution;
+B.Time
+
+B.showMesh();
+% In a UI panel
+fig = uifigure;
+panel = uipanel(fig);
+B.showMesh('Parent', panel);
+path = 'toolbox\data\fsaverage_rh_pial.mat';
+BR= bct.io.import.mesh(path);
+fig = uifigure;
+p = uipanel(fig, 'Position', [10 10 500 400]);
+
+% Create a viewer INSIDE the panel
+viewer = viewer3d('Parent', p);
+
+% Display your surface mesh
+surfaceMeshShowInParent(B, 'Parent', viewer, 'Title', 'My Mesh');
+
+% Display default gray mesh
+BR.showMesh();
+
 B2.Manifold
 B2.Manifold.Resolution
 B2.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
@@ -149,27 +173,67 @@ G=bct.manifold.toGspGraph (B2.Manifold);
 %% 
 
 % Setup your Bct object
-clear 
-path = 'test-data\freesurfer\fsaverage\surf\lh.pial';
-B2 = bct.io.import.mesh(path);
-B2.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
+clear
+% Example 1: Pre-compute modes (faster for multiple filters)
+B = bct.io.import.mesh('test-data\freesurfer\fsaverage\surf\lh.pial');
+B.Manifold.meshFourier(600);  % Pre-compute 200 modes
+B.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
 
-% Design a spatial bandpass filter for lambda between 200 and 400
-filt = B2.designFilter([200, 400], 'lambda', 'band', 'label', 'bandpass_200_400');
+%% 
+B.reset
+% The temporal class now has f_pos property
+% Create separable spatial-temporal filter
+filt = bct.filters.Filter('Separable');
+filt.Manifold = B.Manifold;
+filt.Time = B.Time;
 
-% Synthesize (system will find modes in this range)
-B2.Synthesize('bandpass_200_400', 'numModes', 200);
+% Design Gaussian spatial kernel (wavenumber-based)
+k0 = 8;          % Center wavenumber (rad/mm)
+sigma_k = 3.5;   % Spatial bandwidth (rad/mm)
+[g_spatial, params_spatial] = bct.filters.design.manifold.gaussian(B.Manifold, 'k0', k0, 'sigma_k', sigma_k);
 
-% Generate signal
-sig = B2.Generate();
+% Design Gabor temporal kernel
+omega0 = 2*pi*10;      % 10 Hz center frequency
+sigma_t = 0.05;        % Temporal bandwidth (s)
+g_temporal = bct.filters.design.time.gabor('omega0', omega0, 'sigma_t', sigma_t);
+
+% Create separable filter: H(λ,ω) = H_λ(λ) * H_ω(ω)
+filt.g = @(lambda, omega) g_spatial(lambda) .* g_temporal(omega);
+filt.lambda_band = params_spatial.lambda_band;
+filt.KernelType = "gaussian_gabor";
+
+% Add to Bct object and generate signal
+B.addFilter(filt);
+B.Synthesize(1);
+sig = B.Generate('label', 'spatiotemporal_signal');
+
+%%
+B.reset
+% Highly localized quantum wave
+k_min = 0.1;   % Very low wavenumber
+k_max = 1.0;   % Narrow band
+lambda_band = [k_min^2, k_max^2];
+mass = 20.0;   
+hbar = 0.2;    
+
+filt.g = bct.filters.design.joint.dynamic.schrodinger(B.Manifold, ...
+    'hbar', hbar, 'mass', mass);
+filt.lambda_band = lambda_band;
+
+B.addFilter(filt);
+B.Synthesize(1);
+sig = B.Generate('label', 'wave');
+
 
 
 %% 
-sMesh=bct.manifold.toSurfaceMesh(B2.Manifold)
+
+sMesh=bct.manifold.toSurfaceMesh(B.Manifold);
+
 viewer = viewer3d;
 viewer.BackgroundGradient="off"
 viewer.BackgroundColor = [ 0 0 0];
-sMesh.VertexColors = x2rgb(B2.Signals.Data);  % Returns [N×1] single array
+sMesh.VertexColors = x2rgb(real(sig.Data(:,1)));  % Returns [N×1] single array
 viewer.CameraPosition= [-183.6051 88.9012 36.8928];
 viewer.CameraTarget= [27.8792 31.2832 -15.8640];
 viewer.CameraUpVector=  [-0.4032 -0.0570 0.9134];
@@ -178,107 +242,83 @@ surfaceMeshShow(sMesh,Parent=viewer,Title="Surface Mesh With Viewer")
 %% 
 
 for k= 1:100
-viewer.Children.Color = x2rgb(xrec(:,k));
+viewer.Children.Color = x2rgb(sig.Data(:,k));
 drawnow
 end
-%% 
 
 
-% Joint filter - Time required
-B2.Time = bct.manifold.Time(100, 100);
-filt2 = B2.designJointFilter([10000, 30000], 'lambda', [8, 12], 'frequency', 'label', 'joint');
-B2.Synthesize('joint', 'numModes', 100);
-sig2 = B2.Generate();  % Returns [N×100] spatiotemporal signal
+%%
+B.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
+% The temporal class now has f_pos property
+% Test your separable filter code:
 
-%% 
+% Create separable spatial-temporal filter
+filt = bct.filters.Filter('Separable');
+filt.Manifold = B.Manifold;
+filt.Time = B.Time;
 
-% Option 3: Using spatial frequency (cycles/mm)
-% f = sqrt(lambda)/(2π)
-%   - lambda 10000 → f = 15.92 cycles/mm
-%   - lambda 30000 → f = 27.57 cycles/mm
-filt = B2.designFilter([15.9, 27.6], 'freq', 'band', 'label', 'test_spatial');
+% Design Gaussian spatial kernel (wavenumber-based)
+k0 = 8;          % Center wavenumber (rad/mm)
+sigma_k = 3.5;   % Spatial bandwidth (rad/mm)
+[g_spatial, params_spatial] = bct.filters.design.manifold.gaussian(B.Manifold, 'k0', k0, 'sigma_k', sigma_k);
 
-%% 
+% Design Gabor temporal kernel
+omega0 = 2*pi*10;      % 10 Hz center frequency
+sigma_t = 0.05;        % Temporal bandwidth (s)
+g_temporal = bct.filters.design.time.gabor('omega0', omega0, 'sigma_t', sigma_t);
 
-% Step 3: Generate the signal
-sig_alpha = B2.Generate('label', 'alpha_wave');
+% Create separable filter: H(λ,ω) = H_λ(λ) * H_ω(ω)
+filt.g = @(lambda, omega) g_spatial(lambda) .* g_temporal(omega);
+filt.lambda_band = params_spatial.lambda_band;
+filt.KernelType = "gaussian_gabor";
 
-fprintf('\nGenerated signal: %s\n', sig_alpha.Label);
-fprintf('Size: %d vertices × %d time points\n', sig_alpha.N, sig_alpha.T);
-fprintf('Value range: [%.4f, %.4f]\n', min(sig_alpha.Data(:)), max(sig_alpha.Data(:)));
+% Add to Bct object and generate signal
+B.addFilter(filt);
+B.Synthesize(2);
+sig = B.Generate('label', 'spatiotemporal_signal', 'rms', 1.0);
 
-%% Example 2: Traveling Wave Packet
-% Design filter for narrower band
-filt_beta = B2.designFilter([20, 30], 'wavelength', 'band', ...
-    'label', 'beta_spatial');
+%%
+B.reset
+% 2. Create Schrödinger filter
+filt = bct.filters.Filter('Dynamic');
+filt.Manifold = B.Manifold;
+filt.Time = B.Time;
 
-% Synthesize with Gaussian envelope and traveling wave
-B2.Synthesize('beta_spatial', ...
-    'envelope', 'gaussian', ...
-    't0', 0.5, ...              % Center at 0.5 seconds
-    'sigma_t', 0.15, ...        % 150ms spread
-    'velocity', 10, ...         % 10 mm/s traveling wave
-    'direction', [1 0 0]);      % Direction in X
+% Design propagator: K(λ,t) = exp(-i*(ħλ/(2m))*t)
+filt.g = bct.filters.design.joint.dynamic.schrodinger(B.Manifold, 'hbar', 1.0, 'mass', 2.0);
+filt.lambda_band = [4, 100];  % Eigenvalue band
+filt.KernelType = "schrodinger";
 
-% Generate signal
-sig_beta = B2.Generate('label', 'beta_traveling_wave');
+% 3. Synthesize and Generate
+B.addFilter(filt);
+B.Synthesize(1);
+sig = B.Generate('label', 'quantum_wave');
+%%
+% Load mesh and setup
+B.reset
 
-fprintf('\nGenerated traveling wave: %s\n', sig_beta.Label);
+% Create dispersing blob
+filt = bct.filters.Filter('Dynamic');
+filt.Manifold = B.Manifold;
+filt.Time = B.Time;
+filt.g = bct.filters.design.joint.dynamic.heat(B.Manifold, 'D', 0.01);
+filt.lambda_band = [1, 25];  % Medium spatial scales
+filt.KernelType = "heat";
 
-%% Example 3: Using Eigenvalue (Lambda) Directly
-% Design heat diffusion filter
-filt_heat = B2.designFilter([0.001, 0.1], 'lambda', 'heat', ...
-    'label', 'diffusion', ...
-    'time', 0.5);
+B.addFilter(filt);
+B.Synthesize(1);
+sig = B.Generate('label', 'dispersing_blob', 'output', 'real');
 
-% Synthesize standing pattern
-B2.Synthesize('diffusion', 'numModes', 100);
+%%
+B.reset
+% Create traveling wave
+filt = bct.filters.Filter('Dynamic');
+filt.Manifold = B.Manifold;
+filt.Time = B.Time;
+filt.g = bct.filters.design.joint.dynamic.wave(B.Manifold, 'c', 2.0);
+filt.lambda_band = [4, 100];  % Medium-high frequencies
+filt.KernelType = "wave";
 
-% Generate signal
-sig_heat = B2.Generate('label', 'heat_diffusion');
-
-fprintf('\nGenerated heat diffusion: %s\n', sig_heat.Label);
-
-%% Example 4: Using Wavenumber
-% Design using wavenumber (rad/mm)
-filt_k = B2.designFilter([0.1, 0.5], 'wavenumber', 'band', ...
-    'label', 'gamma_k');
-
-B2.Synthesize('gamma_k');
-sig_k = B2.Generate('label', 'gamma_wave');
-
-fprintf('\nGenerated from wavenumber: %s\n', sig_k.Label);
-
-%% View all generated signals
-fprintf('\n=== All Signals in B2 ===\n');
-for i = 1:length(B2.Signals)
-    sig = B2.Signals(i);
-    fprintf('[%d] %s - [%d × %d]\n', i, sig.Label, sig.N, sig.T);
-end
-
-%% Visualize a signal (optional)
-% Plot time series at a random vertex
-vertex_idx = randi(sig_alpha.N);
-figure('Name', 'Signal Example');
-
-subplot(2,1,1);
-plot((0:sig_alpha.T-1)/B2.Time.fs, sig_alpha.Data(vertex_idx, :));
-xlabel('Time (s)'); ylabel('Amplitude');
-title(sprintf('%s - Time Series at Vertex %d', sig_alpha.Label, vertex_idx));
-grid on;
-
-% Plot spatial snapshot at mid-time
-subplot(2,1,2);
-t_mid = round(sig_alpha.T/2);
-if isfield(B2.Manifold, 'V') && ~isempty(B2.Manifold.V)
-    scatter3(B2.Manifold.V(:,1), B2.Manifold.V(:,2), B2.Manifold.V(:,3), ...
-        10, sig_alpha.Data(:, t_mid), 'filled');
-    colorbar;
-    axis equal tight;
-    title(sprintf('%s - Spatial Pattern at t=%.2fs', sig_alpha.Label, (t_mid-1)/B2.Time.fs));
-    xlabel('X'); ylabel('Y'); zlabel('Z');
-end
-
-%% List all filters
-fprintf('\n=== Filterbank ===\n');
-B2.listFilters();
+B.addFilter(filt);
+B.Synthesize(1);
+sig = B.Generate('label', 'traveling_wave', 'output', 'real');

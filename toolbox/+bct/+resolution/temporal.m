@@ -61,6 +61,10 @@ classdef temporal < handle
         dt           % Sampling interval [units]
         T_total      % Total duration [units]
         
+        % Frequency axis
+        f_pos        % Positive frequencies [Hz] for FFT
+        omega_pos    % Positive angular frequencies [rad/s]
+        
         % Resolution as struct
         resolution   % struct with period, f_nyquist, omega_max
     end
@@ -143,6 +147,37 @@ classdef temporal < handle
                 lambda_nyquist = (2*pi*obj.f_nyquist)^2;
                 res = bct.resolution.spectral(lambda_nyquist);
                 val = res.k_max;  % Angular frequency
+            else
+                val = [];
+            end
+        end
+        
+        function val = get.f_pos(obj)
+            %GET.F_POS Positive frequencies [Hz]
+            %   Returns positive frequency bins from FFT
+            if ~isempty(obj.Time)
+                T = obj.Time.T;  % Number of time points
+                fs = obj.fs;     % Sampling frequency
+                if ~isempty(T) && ~isempty(fs)
+                    % Positive frequencies: 0 to Nyquist
+                    % For even T: 0, df, 2df, ..., fs/2
+                    % For odd T: 0, df, 2df, ..., (fs/2 - df/2)
+                    df = fs / T;
+                    n_pos = floor(T/2) + 1;  % Number of positive frequencies
+                    val = (0:n_pos-1)' * df;
+                else
+                    val = [];
+                end
+            else
+                val = [];
+            end
+        end
+        
+        function val = get.omega_pos(obj)
+            %GET.OMEGA_POS Positive angular frequencies [rad/s]
+            %   Returns omega = 2*pi*f for positive frequencies
+            if ~isempty(obj.f_pos)
+                val = 2 * pi * obj.f_pos;
             else
                 val = [];
             end

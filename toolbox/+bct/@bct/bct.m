@@ -70,6 +70,11 @@ properties
     % Can be a single bct.signal.Signal object or an array of Signal objects
     % All signals must have dimensions matching B.Manifold (N and optionally T)
     Signals bct.signal.Signal = bct.signal.Signal.empty()
+    
+    % Viewer handle for 3D visualization
+    % Stores viewer3d handle created by showMesh method
+    % Access as: B.Viewer to interact with the visualization
+    Viewer = []  % viewer3d handle for visualization
 end
 
 properties (SetAccess=private)
@@ -752,6 +757,112 @@ methods
     end
   end
   
+  function showMesh(this, varargin)
+    % showMesh - Display the mesh with light gray vertex colors
+    %
+    % Syntax:
+    %   B.showMesh()
+    %   B.showMesh('Parent', parentContainer)
+    %   B.showMesh('ColorMap', 'gray')
+    %   B.showMesh('WireFrame', true)
+    %
+    % Creates a viewer3d window and displays the mesh from B.Manifold
+    % with light gray default coloring. The viewer handle is stored in
+    % B.Viewer for later use with showSignal or showAnimation.
+    %
+    % Name-Value Parameters:
+    %   'Parent'    - Parent container for the viewer (e.g., uipanel)
+    %   'ColorMap'  - Colormap to use (default: 'gray')
+    %   'WireFrame' - Show wireframe (true/false)
+    %   'Center'    - Center mesh at origin (true/false), default: true
+    %   'Title'     - Figure title
+    %
+    % Example:
+    %   B.showMesh();
+    %   B.showMesh('Parent', myPanel);
+    %   B.showMesh('WireFrame', true);
+    %
+    % See also: showSignal, showAnimation
+    
+    % Pass all arguments to bct.show.mesh
+    this.Viewer = bct.show.mesh(this, varargin{:});
+  end
+  
+  function showSignal(this, varargin)
+    % showSignal - Display a static signal on the mesh
+    %
+    % Syntax:
+    %   B.showSignal()                    % Shows first signal
+    %   B.showSignal(idx)                 % Shows signal at index idx
+    %   B.showSignal(idx, 'Parent', p)    % Shows in parent container
+    %   B.showSignal(idx, 'TimePoint', t) % Shows time point t
+    %
+    % Displays a signal from B.Signals as vertex colors on the mesh.
+    % For time-varying signals, displays only the specified time point.
+    % Use showAnimation for time-varying visualization.
+    %
+    % Name-Value Parameters:
+    %   'Parent'     - Parent container for the viewer
+    %   'ColorMap'   - Colormap to use (default: 'parula')
+    %   'TimePoint'  - Time point to display (default: 1)
+    %
+    % Example:
+    %   B.showSignal();
+    %   B.showSignal(1);
+    %   B.showSignal(1, 'TimePoint', 50);
+    %   B.showSignal(1, 'Parent', myPanel);
+    %
+    % See also: showMesh, showAnimation
+    
+    % Pass all arguments to bct.show.signal
+    this.Viewer = bct.show.signal(this, varargin{:});
+  end
+  
+  function showAnimation(this, signalIndex)
+    % showAnimation - Animate a time-varying signal on the mesh
+    %
+    % Syntax:
+    %   B.showAnimation()       % Animates first signal
+    %   B.showAnimation(idx)    % Animates signal at index idx
+    %
+    % Animates a signal from B.Signals over time using the time vector
+    % from B.Time. Updates vertex colors for each time point.
+    %
+    % Requires B.Time to have a time vector (time-varying signal).
+    % For static signals, use showSignal instead.
+    %
+    % Example:
+    %   B.showMesh();
+    %   B.showAnimation(1);
+    %
+    % See also: showMesh, showSignal
+    
+    % Default to first signal
+    if nargin < 2
+      signalIndex = 1;
+    end
+    
+    % Validate prerequisites
+    if isempty(this.Signals) || signalIndex > length(this.Signals)
+      error('bct:InvalidSignalIndex', ...
+        'Signal index %d out of range (1-%d)', signalIndex, length(this.Signals));
+    end
+    
+    if isempty(this.Time) || isempty(this.Time.t_vec)
+      error('bct:NoTimeVector', ...
+        'B.Time must have a time vector for animation. Use showSignal for static display.');
+    end
+    
+    % Create viewer if needed
+    if isempty(this.Viewer)
+      this.Viewer = bct.show.mesh(this);
+    end
+    
+    % Animate the signal
+    sig = this.Signals(signalIndex);
+    bct.show.animate(this, this.Viewer, sig);
+  end
+  
   function initializeAxes(this)
     % initializeAxes - Create fundamental and derived Axis objects
     %
@@ -895,16 +1006,32 @@ methods
     %
     %   B.clearSpectralGrid() removes the stored spectral grid
     
-    this.SpectralGrid = struct('lambda_grid', [], 'omega_grid', [], 'lambda_band', [], 'omega', []);
+    this.SpectralGrid = struct('lambda_grid', [], 'omega_grid', [], 't_grid', [], ...
+                               'lambda_band', [], 'omega', [], 'coeffs', [], ...
+                               'filter_type', '', 'filter_used', '', 'synthesis_params', struct());
   end
   
   function tf = hasSpectralGrid(this)
     % hasSpectralGrid - Check if spectral grid has been built
     %
     %   tf = B.hasSpectralGrid() returns true if spectral grid exists
+    %
+    %   For different filter types:
+    %   - Manifold: Requires lambda_band
+    %   - Time: Requires omega (or AxisOmega)
+    %   - Separable/Spectral/Dynamic: Requires lambda_grid and omega_grid (or t_grid)
     
-    tf = ~isempty(this.SpectralGrid.lambda_grid) && ...
-         ~isempty(this.SpectralGrid.omega_grid);
+    % Check if SpectralGrid exists and has coefficients
+    if ~isstruct(this.SpectralGrid) || ~isfield(this.SpectralGrid, 'coeffs')
+      tf = false;
+      return;
+    end
+    
+    % Check based on what's stored
+    has_lambda_band = isfield(this.SpectralGrid, 'lambda_band') && ~isempty(this.SpectralGrid.lambda_band);
+    has_grids = isfield(this.SpectralGrid, 'lambda_grid') && ~isempty(this.SpectralGrid.lambda_grid);
+    
+    tf = has_lambda_band || has_grids;
   end
   
   %% Filter design and management methods
@@ -1208,6 +1335,27 @@ methods
     fprintf('[bct] Filterbank cleared\n');
   end
   
+  function reset(this)
+    % reset - Clear filterbank and spectral grid (start fresh)
+    %
+    %   B.reset() removes all filters and clears spectral grids
+    %
+    %   This is useful when you want to start fresh with new filters
+    %   without losing the Manifold, Time, or Signals data.
+    %
+    % Example:
+    %   B.reset();  % Clear filters and grids
+    %   % Now add new filters...
+    %
+    % See also: clearFilterbank, clearSpectralGrid
+    
+    this.Filterbank = [];
+    this.SpectralGrid = struct('lambda_grid', [], 'omega_grid', [], 't_grid', [], ...
+                               'lambda_band', [], 'omega', [], 'coeffs', [], ...
+                               'filter_type', '', 'filter_used', '', 'synthesis_params', struct());
+    fprintf('[bct] Reset complete: filterbank and spectral grid cleared\n');
+  end
+  
   function listFilters(this)
     % listFilters - Display all filters in filterbank
     %
@@ -1254,7 +1402,7 @@ methods
   %% Signal synthesis methods
   
   function Synthesize(this, filter_identifier, varargin)
-    % Synthesize - Generate spectral coefficients based on filter specifications
+    % Synthesize - Generate spectral coefficients using axis-based filter architecture
     %
     % Syntax:
     %   B.Synthesize(filter_identifier)
@@ -1268,26 +1416,48 @@ methods
     %   'envelope'    - Temporal envelope type: 'none', 'gaussian' (default: 'none')
     %   't0'          - Center time for envelope in seconds (default: mid-point)
     %   'sigma_t'     - Temporal spread for Gaussian envelope (default: T/6)
-    %   'velocity'    - Traveling wave velocity in mm/s (default: 0 = standing)
-    %   'direction'   - Wave direction [x y z] (default: [1 0 0])
     %
     % Description:
-    %   Generates joint spectral coefficients A_kl [K × T] in the SpectralGrid
-    %   based on the filter's spectral band. The coefficients are created with
-    %   random phases and power distributed according to the filter kernel.
+    %   Generates spectral coefficients based on filter type:
+    %
+    %   Filter Types and Grid Generation:
     %   
-    %   For spatial filters: Uses filter.lambda_band to determine spatial modes
-    %   For joint filters: Uses both spatial and temporal bands
+    %   1. Manifold (H(λ)):
+    %      - Creates lambda axis from filter.lambda_band
+    %      - Evaluates H(lambda_vec) to get spatial power spectrum
+    %      - Generates A_k [K × 1] with random phases
+    %
+    %   2. Time (H(ω)):
+    %      - Creates omega axis from AxisOmega
+    %      - Evaluates H(omega_vec) to get temporal power spectrum
+    %      - Generates A_l [T × 1] with random phases
+    %
+    %   3. Separable (H(λ,ω) = Hλ(λ)·Hω(ω)):
+    %      - Creates meshgrid(lambda, omega) → [T × K]
+    %      - Evaluates Hλ and Hω separately, forms outer product
+    %      - Generates A_kl [K × T] with random phases
+    %
+    %   4. Spectral (H(λ,ω) non-separable):
+    %      - Creates meshgrid(lambda, omega) → [T × K]
+    %      - Evaluates H(lambda_grid, omega_grid) at all grid points
+    %      - Generates A_kl [K × T] with random phases
+    %
+    %   5. Dynamic (K(λ,t)):
+    %      - Creates ndgrid(lambda, t) → [K × T]
+    %      - Evaluates K(lambda_grid, t_grid) to get propagator
+    %      - Generates initial conditions, applies K to get A_kt [K × T]
     %
     % Example:
-    %   % Design filter and synthesize
-    %   B.designFilter([10, 50], 'wavelength', 'band', 'label', 'alpha');
-    %   B.Synthesize('alpha', 'envelope', 'gaussian', 't0', 0.5);
-    %   
-    %   % Synthesize with traveling wave
-    %   B.Synthesize(1, 'velocity', 5, 'direction', [1 0 0]);
+    %   % Manifold filter
+    %   filt = bct.filters.Filter('Manifold');
+    %   filt.g = bct.filters.design.manifold.heat(B.Manifold, 'tau', 0.1);
+    %   B.Synthesize(filt);
     %
-    % See also: Generate, designFilter, buildSpectralGrid
+    %   % Separable filter
+    %   filt = bct.filters.Filter('Separable');
+    %   B.Synthesize(filt, 'envelope', 'gaussian');
+    %
+    % See also: Generate, designFilter, buildSpectralGrid, bct.resolution.Axis
     
     % Validate prerequisites
     if isempty(this.Manifold)
@@ -1300,43 +1470,33 @@ methods
     % Get filter
     filt = this.getFilter(filter_identifier);
     
-    % Detect if this is a spatial-only filter or joint filter
-    is_joint_filter = isa(filt, 'bct.filters.JointFilter');
-    has_temporal_band = isprop(filt, 'freq_band') && ~isempty(filt.freq_band);
-    is_spatial_only = ~is_joint_filter && ~has_temporal_band;
-    
-    % Validate Time only if needed for temporal filters
-    if ~is_spatial_only
-      if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
-        error('bct:NoTime', 'Time must be set for joint or temporal filters');
-      end
-    end
-    
     % Parse parameters
     p = inputParser;
     addParameter(p, 'numModes', [], @isnumeric);
     addParameter(p, 'envelope', 'none', @(x) ischar(x) || isstring(x));
     addParameter(p, 't0', [], @isnumeric);
     addParameter(p, 'sigma_t', [], @isnumeric);
-    addParameter(p, 'velocity', 0, @isnumeric);
-    addParameter(p, 'direction', [1 0 0], @isnumeric);
     parse(p, varargin{:});
     
     % Extract parameters
     envelope_type = string(p.Results.envelope);
-    velocity = p.Results.velocity;
-    direction = p.Results.direction(:)' / norm(p.Results.direction);
     
-    % Get dimensions based on filter type
-    if is_spatial_only
-      T = 1;  % Spatial-only: single "time" point
-      fs = 1; % Dummy sampling rate
-    else
-      T = this.Time.T;
-      fs = this.Time.fs;
+    % Determine filter type and validate requirements
+    filter_type = string(filt.Type);
+    
+    % Validate Time requirement for temporal filters
+    requires_time = ismember(filter_type, ["Time", "Separable", "Spectral", "Dynamic"]);
+    if requires_time
+      if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
+        error('bct:NoTime', 'Time must be set for %s filters', filter_type);
+      end
+      % Initialize axes if not done yet
+      if isempty(this.AxisOmega)
+        this.initializeAxes();
+      end
     end
     
-    % Determine spatial modes from filter
+    % Determine spatial modes from filter lambda_band
     if isprop(filt, 'lambda_band') && ~isempty(filt.lambda_band)
       lambda_band = filt.lambda_band;
     else
@@ -1359,86 +1519,209 @@ methods
       numModes = p.Results.numModes;
     end
     
-    % Build spectral grid with filter's lambda band
-    this.buildSpectralGrid(lambda_band, struct('numModes', numModes));
+    % Get eigenvalues in filter band
+    % Check if we can use pre-computed eigenmodes from Manifold
+    if numel(lambda_band) == 2
+      % Band specified as [lambda_min, lambda_max]
+      
+      % Check if Manifold has pre-computed eigenvalues in this band
+      if ~isempty(this.Manifold.Eigenvalues) && this.Manifold.NumModes > 0
+        % Try to use pre-computed eigenmodes
+        all_lambda = this.Manifold.Eigenvalues;
+        in_band = all_lambda >= lambda_band(1) & all_lambda <= lambda_band(2);
+        
+        if sum(in_band) >= numModes
+          % We have enough pre-computed modes in the band
+          lambda_vec = all_lambda(in_band);
+          
+          % Limit to numModes if we have more than needed
+          if length(lambda_vec) > numModes
+            lambda_vec = lambda_vec(1:numModes);
+          end
+          
+          fprintf('[bct] Using %d pre-computed eigenmodes in band [%.4f, %.4f]\n', ...
+            length(lambda_vec), lambda_band(1), lambda_band(2));
+        else
+          % Not enough pre-computed modes, need to compute more
+          fprintf('[bct] Pre-computed modes insufficient (%d < %d), computing eigenmodes...\n', ...
+            sum(in_band), numModes);
+          meshOpts = struct();
+          meshOpts.lambda_low = lambda_band(1);
+          meshOpts.lambda_high = lambda_band(2);
+          meshOpts.sigma = mean(lambda_band);
+          meshOpts.mode = 'smallestabs';
+          
+          [~, lambda_vec] = this.Manifold.meshFourier(numModes, meshOpts);
+        end
+      else
+        % No pre-computed modes, compute them now
+        fprintf('[bct] Computing %d eigenmodes in band [%.4f, %.4f]...\n', ...
+          numModes, lambda_band(1), lambda_band(2));
+        meshOpts = struct();
+        meshOpts.lambda_low = lambda_band(1);
+        meshOpts.lambda_high = lambda_band(2);
+        meshOpts.sigma = mean(lambda_band);
+        meshOpts.mode = 'smallestabs';
+        
+        [~, lambda_vec] = this.Manifold.meshFourier(numModes, meshOpts);
+      end
+    else
+      % Specific eigenvalues provided
+      lambda_vec = lambda_band(:);
+    end
     
-    % Get eigendecomposition
-    U = this.Manifold.Eigenvectors;
-    lambda_vec = this.SpectralGrid.lambda_band;  % [K × 1]
     K = length(lambda_vec);
     
-    % Compute spatial frequency (cycles/mm)
-    f_space = sqrt(lambda_vec) / (2*pi);
-    
-    % Compute temporal frequencies (Hz)
-    f_time = (0:T-1)' * (fs/T);
-    
-    % Get filter power in spatial domain using filter's response
-    if isa(filt, 'bct.filters.Filter')
-      % Spatial filter: evaluate g(λ) at actual eigenvalues returned
-      g_vals = filt.getResponse(lambda_vec);  % [K × 1]
-      P_space = abs(g_vals).^2;  % Power from filter response
+    % Generate spectral coefficients based on filter type
+    switch filter_type
       
-      % Check if filter response is too weak (most values near zero)
-      if sum(P_space > max(P_space)*0.01) < max(5, K*0.1)
-        warning('bct:WeakFilterResponse', ...
-          'Filter response is weak at actual eigenvalues. Only %d/%d modes have significant power.\n%s', ...
-          sum(P_space > max(P_space)*0.01), K, ...
-          'Consider: (1) Wider lambda band, or (2) Using "ideal" kernel instead of "band" taper.');
-      end
-    elseif isa(filt, 'bct.filters.JointFilter')
-      % Joint filter: evaluate spatial kernel
-      if ~isempty(filt.psi_mesh)
-        psi_vals = filt.psi_mesh(lambda_vec);
-        P_space = abs(psi_vals).^2;
-      else
-        P_space = ones(K, 1);
-      end
-    else
-      % Fallback: uniform power
-      P_space = ones(K, 1);
+      case 'Manifold'
+        % H(λ): Spatial spectral filter
+        % Grid: lambda_vec [K × 1]
+        % Output: A_k [K × 1]
+        
+        % Evaluate filter at lambda values
+        H_lambda = filt.getResponse(lambda_vec);  % [K × 1]
+        P_space = abs(H_lambda).^2;
+        P_space = P_space / sum(P_space);  % Normalize
+        
+        % Generate real coefficients for real-valued signals
+        % Use Gaussian random values weighted by filter power
+        A_kl = randn(K, 1) .* sqrt(P_space);  % [K × 1] real
+        
+        T = 1;  % Single "time" point for spatial-only
+        
+        fprintf('[bct] Synthesized Manifold filter: %d modes\n', K);
+        fprintf('[bct] Lambda range: [%.4f, %.4f]\n', min(lambda_vec), max(lambda_vec));
+        
+      case 'Time'
+        % H(ω): Temporal filter
+        % Grid: omega_vec [T × 1]
+        % Output: A_l [T × 1]
+        
+        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        T = length(omega_vec);
+        
+        % Evaluate filter at omega values
+        H_omega = filt.getResponse(omega_vec);  % [T × 1]
+        P_time = abs(H_omega).^2;
+        P_time = P_time / sum(P_time);  % Normalize
+        
+        % Generate temporal coefficients
+        phase_l = rand(T, 1) * 2*pi;
+        A_l = sqrt(P_time) .* exp(1i * phase_l);  % [T × 1]
+        
+        % Store as [1 × T] for consistency (will be broadcast in Generate)
+        A_kl = A_l';  % [1 × T]
+        K = 1;
+        
+        fprintf('[bct] Synthesized Time filter: %d time points\n', T);
+        fprintf('[bct] Omega range: [%.4f, %.4f] rad/s\n', omega_vec(1), omega_vec(end));
+        
+      case 'Separable'
+        % H(λ,ω) = Hλ(λ) · Hω(ω)
+        % Grid: meshgrid(lambda, omega) → [T × K]
+        % Output: A_kl [K × T]
+        
+        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        T = length(omega_vec);
+        
+        % Create meshgrid
+        [lambda_grid, omega_grid] = meshgrid(lambda_vec, omega_vec);  % [T × K]
+        
+        % Evaluate separable filter
+        % For separable filters, g(lambda, omega) should accept both arguments
+        if nargin(filt.g) == 2
+          % Two-argument filter function: g(lambda, omega)
+          H_joint = filt.g(lambda_grid, omega_grid);  % [T × K]
+          P_joint = abs(H_joint').^2;  % [K × T]
+          P_joint = P_joint / sum(P_joint(:));
+        else
+          % Single-argument: assume returns {Hlambda, Homega}
+          response = filt.g(lambda_grid(:));
+          if iscell(response) && numel(response) == 2
+            H_lambda = response{1}(:);  % [K × 1]
+            H_omega = response{2}(:);   % [T × 1]
+            P_space = abs(H_lambda).^2 / sum(abs(H_lambda).^2);
+            P_time = abs(H_omega).^2 / sum(abs(H_omega).^2);
+            P_joint = P_space * P_time';  % [K × T] outer product
+          else
+            error('bct:Synthesize:InvalidSeparable', ...
+              'Separable filter g must accept 2 args or return {Hlambda, Homega}');
+          end
+        end
+        
+        % Generate coefficients with random phases
+        phase_kl = rand(K, T) * 2*pi;
+        A_kl = sqrt(P_joint) .* exp(1i * phase_kl);  % [K × T]
+        
+        % Store grid in SpectralGrid
+        this.SpectralGrid.lambda_grid = lambda_grid;
+        this.SpectralGrid.omega_grid = omega_grid;
+        
+        fprintf('[bct] Synthesized Separable filter: %d modes × %d time points\n', K, T);
+        
+      case 'Spectral'
+        % H(λ,ω): Non-separable joint spectral filter
+        % Grid: meshgrid(lambda, omega) → [T × K]
+        % Output: A_kl [K × T]
+        
+        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        T = length(omega_vec);
+        
+        % Create meshgrid
+        [lambda_grid, omega_grid] = meshgrid(lambda_vec, omega_vec);  % [T × K]
+        
+        % Evaluate non-separable filter at all grid points
+        H_joint = filt.g(lambda_grid, omega_grid);  % [T × K]
+        P_joint = abs(H_joint').^2;  % [K × T]
+        P_joint = P_joint / sum(P_joint(:));
+        
+        % Generate coefficients with random phases
+        phase_kl = rand(K, T) * 2*pi;
+        A_kl = sqrt(P_joint) .* exp(1i * phase_kl);  % [K × T]
+        
+        % Store grid
+        this.SpectralGrid.lambda_grid = lambda_grid;
+        this.SpectralGrid.omega_grid = omega_grid;
+        
+        fprintf('[bct] Synthesized Spectral filter: %d modes × %d time points\n', K, T);
+        
+      case 'Dynamic'
+        % K(λ,t): Time-domain propagator
+        % Grid: ndgrid(lambda, t) → [K × T]
+        % Output: A_kt [K × T] from propagating initial conditions
+        
+        t_vec = this.AxisTime.Values;  % [T × 1]
+        T = length(t_vec);
+        
+        % Create ndgrid for dynamic propagators
+        [lambda_grid, t_grid] = ndgrid(lambda_vec, t_vec);  % [K × T]
+        
+        % Evaluate propagator K(λ,t)
+        % Dynamic filters g should accept two arguments: g(lambda, t)
+        K_propagator = filt.g(lambda_grid, t_grid);  % [K × T]
+        
+        % Generate random initial conditions in spectral domain
+        A_0 = randn(K, 1) + 1i*randn(K, 1);  % [K × 1]
+        A_0 = A_0 / norm(A_0);  % Normalize
+        
+        % Apply propagator: A(λ,t) = K(λ,t) · A_0(λ)
+        A_kl = K_propagator .* A_0;  % [K × T]
+        
+        % Store grid
+        this.SpectralGrid.lambda_grid = lambda_grid;
+        this.SpectralGrid.t_grid = t_grid;
+        
+        fprintf('[bct] Synthesized Dynamic filter: %d modes × %d time points\n', K, T);
+        
+      otherwise
+        error('bct:UnknownFilterType', 'Unknown filter type: %s', filter_type);
     end
     
-    % Normalize spatial power to sum to 1
-    P_space = P_space(:) / sum(P_space);
-    
-    if is_spatial_only
-      % Spatial-only: use random signs (±1) for real signals
-      % This creates a real-valued signal with proper spatial structure
-      sgn = sign(randn(K, T));  % Random ±1
-      A_kl = sgn .* sqrt(P_space);  % [K × 1] real coefficients
-    else
-      % Joint/temporal filters: create spatiotemporal spectrum
-      
-      % Temporal power
-      if isa(filt, 'bct.filters.JointFilter') && ~isempty(filt.phi_time)
-        % Evaluate temporal kernel
-        t_vec = (0:T-1)' / fs;
-        phi_vals = filt.phi_time(t_vec);
-        P_time = abs(phi_vals).^2;
-      elseif isprop(filt, 'freq_band') && ~isempty(filt.freq_band)
-        % Bandpass in temporal frequency
-        freq_band = filt.freq_band;
-        P_time = double(f_time >= freq_band(1) & f_time <= freq_band(2));
-      else
-        % Uniform temporal power
-        P_time = ones(T, 1);
-      end
-      
-      % Normalize temporal power
-      P_time = P_time(:) / sum(P_time);
-      
-      % Joint power spectrum: outer product [K × T]
-      P_joint = P_space(:) * P_time(:)';
-      
-      % Random phases for complex coefficients
-      phase_kl = rand(K, T) * 2*pi;
-      A_kl = sqrt(P_joint) .* exp(1i * phase_kl);
-    end
-    
-    % Apply temporal envelope
-    t = (0:T-1)/fs;
-    if strcmpi(envelope_type, 'gaussian')
+    % Apply temporal envelope (for temporal/joint filters)
+    if T > 1 && strcmpi(envelope_type, 'gaussian')
+      t = this.AxisTime.Values;
       t0 = p.Results.t0;
       if isempty(t0), t0 = t(end)/2; end
       
@@ -1446,39 +1729,34 @@ methods
       if isempty(sigma_t), sigma_t = t(end)/6; end
       
       env_t = exp(-0.5 * ((t - t0) ./ sigma_t).^2);
-      A_kl = A_kl .* env_t;
-    end
-    
-    % Apply traveling wave phase shift
-    if velocity ~= 0
-      % Project vertices onto direction
-      V = this.Manifold.V;
-      xcoords = V * direction';  % [N × 1]
       
-      % Get mode indices used in SpectralGrid
-      [~, mode_idx] = ismember(lambda_vec, this.Manifold.Eigenvalues);
-      U_modes = U(:, mode_idx);  % [N × K]
-      
-      % Spatial phase per mode (approximate)
-      U_phase = U_modes' * xcoords;  % [K × 1]
-      
-      % Apply phase shift: exp(i k·x - i ω t)
-      for l = 1:T
-        A_kl(:, l) = A_kl(:, l) .* exp(1i * U_phase(:) * (2*pi*f_time(l)/velocity));
+      if filter_type == "Time"
+        A_kl = A_kl .* env_t';  % [1 × T]
+      else
+        A_kl = A_kl .* env_t';  % [K × T] broadcast
       end
     end
     
-    % Store coefficients in SpectralGrid
-    this.SpectralGrid.coeffs = A_kl;  % [K × T]
-    
-    % Store metadata
+    % Store coefficients and metadata in SpectralGrid
+    this.SpectralGrid.coeffs = A_kl;
+    this.SpectralGrid.lambda_band = lambda_vec;
+    this.SpectralGrid.filter_type = filter_type;
     this.SpectralGrid.filter_used = filter_identifier;
     this.SpectralGrid.synthesis_params = p.Results;
     
-    fprintf('[bct] Synthesized spectral coefficients: %d modes × %d time points\n', K, T);
-    fprintf('[bct] Spatial band: [%.4f, %.4f] eigenvalues\n', lambda_band(1), lambda_band(2));
-    if isprop(filt, 'freq_band') && ~isempty(filt.freq_band)
-      fprintf('[bct] Temporal band: [%.2f, %.2f] Hz\n', filt.freq_band(1), filt.freq_band(2));
+    if T == 1
+      fprintf('[bct] Spatial band: [%.4f, %.4f] eigenvalues\n', lambda_band(1), lambda_band(2));
+    else
+      % Get time/omega info for display
+      if filter_type == "Dynamic"
+        t_vec = this.AxisTime.Values;
+        fprintf('[bct] Lambda: [%.4f, %.4f], Time: [%.4f, %.4f] s\n', ...
+          min(lambda_vec), max(lambda_vec), t_vec(1), t_vec(end));
+      else
+        omega_vec = this.AxisOmega.Values;
+        fprintf('[bct] Lambda: [%.4f, %.4f], Omega: [%.4f, %.4f] rad/s\n', ...
+          min(lambda_vec), max(lambda_vec), omega_vec(1), omega_vec(end));
+      end
     end
   end
   
@@ -1528,6 +1806,7 @@ methods
     addParameter(p, 'add', true, @islogical);
     addParameter(p, 'symmetric', true, @islogical);
     addParameter(p, 'normalize', true, @islogical);  % Unit RMS normalization
+    addParameter(p, 'output', 'auto', @(x) ischar(x) || isstring(x));  % 'auto', 'real', 'imag', 'magnitude', 'complex'
     parse(p, varargin{:});
     
     % Extract spectral coefficients
@@ -1553,17 +1832,54 @@ methods
       x_wt = U * a;  % [N × 1]
       
     else
-      % Spatiotemporal: inverse temporal FFT then graph synthesis
+      % Spatiotemporal: check if time-domain (Dynamic) or frequency-domain
+      is_time_domain = isfield(this.SpectralGrid, 't_grid') && ~isempty(this.SpectralGrid.t_grid);
       
-      % Step 1: Inverse temporal FFT on each spatial mode
-      if p.Results.symmetric
-        A_time = ifft(A_kl, [], 2, 'symmetric');  % [K × T] - real output
+      if is_time_domain
+        % Dynamic filter: coefficients already in time domain
+        % A_kl is [K × T] time-domain coefficients
+        % Directly reconstruct: x = U * A_time
+        x_wt = U * A_kl;  % [N × T]
+        
       else
-        A_time = ifft(A_kl, [], 2);  % [K × T] - complex output
+        % Separable/Spectral: inverse temporal FFT then graph synthesis
+        
+        % Step 1: Inverse temporal FFT on each spatial mode
+        % Need to reconstruct full FFT spectrum from positive frequencies
+        T_full = this.Time.T;  % Full number of time points
+        
+        if T ~= T_full
+          % We have only positive frequencies - reconstruct full spectrum
+          % For real signals: X[N-k] = conj(X[k])
+          A_full = zeros(K, T_full);
+          A_full(:, 1:T) = A_kl;  % Positive frequencies
+          
+          % Fill negative frequencies (Hermitian symmetry for real output)
+          if mod(T_full, 2) == 0
+            % Even: conjugate symmetric around Nyquist
+            for k_idx = 2:(T-1)
+              A_full(:, T_full - k_idx + 2) = conj(A_kl(:, k_idx));
+            end
+          else
+            % Odd: conjugate symmetric, no Nyquist bin
+            for k_idx = 2:T
+              A_full(:, T_full - k_idx + 2) = conj(A_kl(:, k_idx));
+            end
+          end
+          
+          A_time = ifft(A_full, [], 2, 'symmetric');  % [K × T_full] - real output
+        else
+          % We already have full spectrum
+          if p.Results.symmetric
+            A_time = ifft(A_kl, [], 2, 'symmetric');  % [K × T] - real output
+          else
+            A_time = ifft(A_kl, [], 2);  % [K × T] - complex output
+          end
+        end
+        
+        % Step 2: Reconstruct into vertex domain (inverse graph Fourier)
+        x_wt = U * A_time;  % [N × T]
       end
-      
-      % Step 2: Reconstruct into vertex domain (inverse graph Fourier)
-      x_wt = U * A_time;  % [N × T]
     end
     
     % Step 3: Apply M^(+1/2) mass normalization
@@ -1588,6 +1904,34 @@ methods
     % For spatial-only filters (T=1), squeeze to [N×1]
     if T == 1
       xrec = xrec(:);  % [N×1] spatial-only signal
+    end
+    
+    % Handle complex-valued signals (e.g., from Schrödinger filter)
+    output_type = string(p.Results.output);
+    if output_type == "auto"
+      % Auto: keep complex for Dynamic filters, real for others
+      is_time_domain = isfield(this.SpectralGrid, 't_grid') && ~isempty(this.SpectralGrid.t_grid);
+      if is_time_domain && ~isreal(xrec)
+        % Keep complex for Dynamic propagators
+        output_type = "complex";
+      else
+        % Force real for frequency-domain filters
+        output_type = "real";
+      end
+    end
+    
+    % Apply output type conversion
+    switch output_type
+      case "real"
+        xrec = real(xrec);
+      case "imag"
+        xrec = imag(xrec);
+      case "magnitude"
+        xrec = abs(xrec);
+      case "complex"
+        % Keep as-is
+      otherwise
+        warning('Unknown output type "%s", keeping complex', output_type);
     end
     
     % Generate label

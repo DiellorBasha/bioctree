@@ -7,6 +7,7 @@ function B = mesh(source, varargin)
 %   Supported Formats:
 %     'FreeSurfer'   - FreeSurfer surface files (.pial, .white, etc.)
 %     'Brainstorm'   - Brainstorm anatomy files (tess_*.mat)
+%     'MATLAB'       - Generic MATLAB .mat files with V and F variables
 %     'auto'         - Auto-detect format (default)
 %
 %   FreeSurfer Import:
@@ -96,6 +97,11 @@ function B = mesh(source, varargin)
         case 'brainstorm'
             raw = bct.io.in.readBrainstormAnat(source, opts);
             snap = bct.io.convert.brainstormRawToSnapshot(raw);
+            B = bct.io.construct.mesh(snap.V, snap.F);
+            
+        case 'matlab'
+            raw = bct.io.in.readMat(source);
+            snap = bct.io.convert.matlabRawToSnapshot(raw);
             B = bct.io.construct.mesh(snap.V, snap.F);
             
         otherwise
