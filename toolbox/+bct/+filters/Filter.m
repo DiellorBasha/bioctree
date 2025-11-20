@@ -174,13 +174,7 @@ classdef Filter < handle
             
             obj.KernelParams = p.Results;
             
-            % Check that manifold has eigenvalues
-            if isempty(obj.Manifold.Eigenvalues)
-                error('bct:filters:Filter:NoEigenvalues', ...
-                    'Manifold has no computed eigenvalues. Call meshFourier() first.');
-            end
-            
-            % Design kernel
+            % Design kernel (eigenvalues not needed - only lambda_max from Resolution)
             obj.designKernel();
         end
         
@@ -213,14 +207,15 @@ classdef Filter < handle
             %   kernel g(λ) at the specified eigenvalues
             %
             %   Inputs:
-            %     lambda - Query eigenvalues (optional, default: manifold eigenvalues)
+            %     lambda - Query eigenvalues (optional)
             %
             %   Returns:
             %     g - Filter response values
             
             if nargin < 2 || isempty(lambda_query)
-                if ~isempty(obj.g_lambda)
-                    response = obj.g_lambda;
+                % Return response at lambda_support points
+                if ~isempty(obj.g_support)
+                    response = obj.g_support;
                 else
                     error('bct:filters:Filter:NoFilter', ...
                         'Filter not designed. Call design() first.');
@@ -343,41 +338,58 @@ classdef Filter < handle
     methods (Access = private)
         function designKernel(obj)
             %DESIGNKERNEL Design filter kernel based on type
+            %
+            % For spatial filters, we only need lambda_max from Resolution
+            % to define the filter function g(λ). The actual eigenvalues
+            % will be used later during synthesis when SpectralGrid is built.
             
-            lambda = obj.Manifold.Eigenvalues;
+            % Get lambda range from Resolution (0 to lambda_max)
+            if ~isempty(obj.Manifold.Resolution)
+                lambda_max = obj.Manifold.Resolution.lambda_max;
+                lambda_min = 0;
+            elseif ~isempty(obj.Manifold.Eigenvalues)
+                % Fallback: use actual eigenvalues if available
+                lambda_min = min(obj.Manifold.Eigenvalues);
+                lambda_max = max(obj.Manifold.Eigenvalues);
+            else
+                error('bct:filters:Filter:NoLambdaRange', ...
+                    'Cannot determine lambda range. Manifold needs Resolution or computed eigenvalues.');
+            end
             
+            % Create smooth support for filter function definition
+            obj.lambda_support = linspace(lambda_min, lambda_max, 1000)';
+            
+            % Design kernel using lambda_support (not actual eigenvalues)
             switch obj.KernelType
                 case "ideal"
-                    obj.g_lambda = obj.kernelIdeal(lambda);
+                    obj.g_support = obj.kernelIdeal(obj.lambda_support);
                     
                 case "band"
-                    obj.g_lambda = obj.kernelBand(lambda);
+                    obj.g_support = obj.kernelBand(obj.lambda_support);
                     
                 case "heat"
-                    obj.g_lambda = obj.kernelHeat(lambda);
+                    obj.g_support = obj.kernelHeat(obj.lambda_support);
                     
                 case "mexican_hat"
-                    obj.g_lambda = obj.kernelMexicanHat(lambda);
+                    obj.g_support = obj.kernelMexicanHat(obj.lambda_support);
                     
                 case "morlet"
-                    obj.g_lambda = obj.kernelMorlet(lambda);
+                    obj.g_support = obj.kernelMorlet(obj.lambda_support);
                     
                 case "lowpass"
-                    obj.g_lambda = obj.kernelLowpass(lambda);
+                    obj.g_support = obj.kernelLowpass(obj.lambda_support);
                     
                 case "highpass"
-                    obj.g_lambda = obj.kernelHighpass(lambda);
+                    obj.g_support = obj.kernelHighpass(obj.lambda_support);
                     
                 otherwise
                     error('bct:filters:Filter:UnknownKernel', ...
                         'Unknown kernel type: %s', obj.KernelType);
             end
             
-            % Create smooth support for plotting
-            lambda_min = min(lambda);
-            lambda_max = max(lambda);
-            obj.lambda_support = linspace(lambda_min, lambda_max, 1000)';
-            obj.g_support = obj.evaluateKernel(obj.lambda_support);
+            % Store g_lambda as empty - will be populated during synthesis
+            % when actual eigenvalues are known
+            obj.g_lambda = [];
         end
         
         function g = evaluateKernel(obj, lambda)
@@ -467,10 +479,17 @@ classdef Filter < handle
         
         function g = kernelLowpass(obj, lambda)
             %KERNELLOWPASS Lowpass filter
-            if isempty(obj.lambda_band)
+            if ~isempty(obj.lambda_band)
+                cutoff = obj.lambda_band(2);
+            elseif ~isempty(obj.Manifold.Resolution)
+                % Use half of lambda_max as default cutoff
+                cutoff = obj.Manifold.Resolution.lambda_max / 2;
+            elseif ~isempty(obj.Manifold.Eigenvalues)
+                % Fallback: use median eigenvalue if available
                 cutoff = median(obj.Manifold.Eigenvalues);
             else
-                cutoff = obj.lambda_band(2);
+                error('bct:filters:Filter:NoCutoff', ...
+                    'Cannot determine lowpass cutoff. Set lambda_band or compute Resolution.');
             end
             
             % Smooth cutoff
@@ -480,10 +499,17 @@ classdef Filter < handle
         
         function g = kernelHighpass(obj, lambda)
             %KERNELHIGHPASS Highpass filter
-            if isempty(obj.lambda_band)
+            if ~isempty(obj.lambda_band)
+                cutoff = obj.lambda_band(1);
+            elseif ~isempty(obj.Manifold.Resolution)
+                % Use half of lambda_max as default cutoff
+                cutoff = obj.Manifold.Resolution.lambda_max / 2;
+            elseif ~isempty(obj.Manifold.Eigenvalues)
+                % Fallback: use median eigenvalue if available
                 cutoff = median(obj.Manifold.Eigenvalues);
             else
-                cutoff = obj.lambda_band(1);
+                error('bct:filters:Filter:NoCutoff', ...
+                    'Cannot determine highpass cutoff. Set lambda_band or compute Resolution.');
             end
             
             % Smooth cutoff
