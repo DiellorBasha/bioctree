@@ -1,37 +1,21 @@
 function sm = toSurfaceMesh(M)
 % toSurfaceMesh - Convert Manifold to MATLAB surfaceMesh object
 %
+% DEPRECATED: This function has been moved to bct.io.convert.manifoldToSurfaceMesh
+% This wrapper is provided for backward compatibility and will be removed in a future version.
+%
 % Syntax:
 %   sm = bct.manifold.toSurfaceMesh(M)
 %
-% Inputs:
-%   M - bct.manifold.Manifold object (must be of type "mesh")
+% Please use instead:
+%   sm = bct.io.convert.manifoldToSurfaceMesh(M)
 %
-% Outputs:
-%   sm - MATLAB surfaceMesh object for visualization and analysis
-%
-% Example:
-%   B = bct.bct.fromMesh(V, F);
-%   sm = bct.manifold.toSurfaceMesh(B.Manifold);
-%   surfaceMeshShow(sm);
-%
-% See also: surfaceMesh, bct.manifold.Manifold
+% See also: bct.io.convert.manifoldToSurfaceMesh
 
-% Validate input
-if ~isa(M, 'bct.manifold.Manifold')
-    error('bct:InvalidInput', 'Input must be a bct.manifold.Manifold object');
-end
+warning('bct:deprecated', ...
+    'bct.manifold.toSurfaceMesh is deprecated. Use bct.io.convert.manifoldToSurfaceMesh instead.');
 
-if M.Type ~= "mesh"
-    error('bct:InvalidManifoldType', 'Manifold must be of type "mesh", got "%s"', M.Type);
-end
-
-% Check for required data
-if isempty(M.V) || isempty(M.F)
-    error('bct:MissingData', 'Manifold must have both vertices (V) and faces (F)');
-end
-
-% Create surfaceMesh object
-sm = surfaceMesh(M.V, M.F);
+% Call new location
+sm = bct.io.convert.manifoldToSurfaceMesh(M);
 
 end

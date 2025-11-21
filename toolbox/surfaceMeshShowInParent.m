@@ -5,7 +5,7 @@ function surfaceMeshShowInParent(varargin)
 if isa(data, 'bct.bct')
 B=data;
 % Create surfaceMesh from Manifold
-sMesh = bct.manifold.toSurfaceMesh(B.Manifold);
+sMesh = bct.io.convert.manifoldToSurfaceMesh(B.Manifold);
 
 % Get the vertex center before centering (for camera positioning)
 center = vertexCenter(sMesh);

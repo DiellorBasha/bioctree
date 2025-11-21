@@ -107,13 +107,15 @@ if isa(parent,'images.ui.graphics3d.Viewer3D')
     % Parent is an existing Viewer3D object
     viewer = parent;
 elseif isempty(parent)
-    % No parent provided - create new viewer
+    % No parent provided - create new viewer in standalone figure
     viewer = viewer3d("BackgroundColor",bgcolor,"BackgroundGradient","off","RenderingQuality","high");
     viewer.Mode.Default.CameraVector = [-1 -1 1];
     newfigure = true;
 else
-    % Parent is a graphics object
-    viewer = viewer3d(parent);
+    % Parent is a container (uifigure, uipanel, GridLayout, Tab)
+    % Create viewer3d inside the parent container
+    viewer = viewer3d(parent, "BackgroundColor",bgcolor,"BackgroundGradient","off","RenderingQuality","high");
+    viewer.Mode.Default.CameraVector = [-1 -1 1];
 end
 
 viewer.Busy = true;
@@ -198,7 +200,7 @@ end
 % Process Bct object if provided
 if isa(B, 'bct.bct')
     % Create surfaceMesh from Manifold
-    sMesh = bct.manifold.toSurfaceMesh(B.Manifold);
+    sMesh = bct.io.convert.manifoldToSurfaceMesh(B.Manifold);
     
     % Extract signal data if requested
     if ~isempty(customSignalData)
@@ -400,16 +402,27 @@ if nargin > 1
     remainingInputs = inputs;
     if ~isempty(parentIndices)
         parent = inputs{parentIndices(end) * 2};
+        
+        % Check if parent is a valid type for viewer3d
+        validParent = false;
+        
         if isa(parent,'images.ui.graphics3d.Viewer3D')
+            validParent = true;
+        elseif isa(parent,'matlab.ui.Figure') && ~isa(getCanvas(parent), 'matlab.graphics.primitive.canvas.JavaCanvas')
+            validParent = true;
+        elseif isa(parent,'matlab.ui.container.Panel')  % uipanel
+            validParent = true;
+        elseif isa(parent,'matlab.ui.container.GridLayout')  % GridLayout
+            validParent = true;
+        elseif isa(parent,'matlab.ui.container.Tab')  % Tab
+            validParent = true;
+        end
+        
+        if validParent
             remainingInputs([parentIndices * 2, parentIndices * 2 - 1]) = [];
         else
-            if isa(parent,'matlab.ui.Figure') && ~isa(getCanvas(parent), ...
-                    'matlab.graphics.primitive.canvas.JavaCanvas')
-
-                remainingInputs([parentIndices * 2, parentIndices * 2 - 1]) = [];
-            else
-                error(message('images:volume:invalidViewer'));
-            end
+            error('bct:visualizer:invalidParent', ...
+                'Parent must be a viewer3d, uifigure, uipanel, GridLayout, or Tab object');
         end
     end
 end

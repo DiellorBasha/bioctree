@@ -60,11 +60,11 @@ end
 
 %% Test 4: Test conversion functions
 fprintf('\n\nTest 4: Testing conversion functions...\n');
-sm = bct.manifold.toSurfaceMesh(B2.Manifold);
+sm = bct.io.convert.manifoldToSurfaceMesh(B2.Manifold);
 fprintf('  surfaceMesh: %d vertices, %d faces\n', size(sm.Vertices,1), size(sm.Faces,1));
-g = bct.manifold.toMatlabGraph(B2.Manifold);
+g = bct.io.convert.manifoldToMatlabGraph(B2.Manifold);
 fprintf('  MATLAB graph: %d nodes, %d edges\n', numnodes(g), numedges(g));
-Gsp = bct.manifold.toGspGraph(B2.Manifold);
+Gsp = bct.io.convert.manifoldToGspGraph(B2.Manifold);
 fprintf('  GSP graph: N=%d, W is %dx%d\n', Gsp.N, size(Gsp.W,1), size(Gsp.W,2));
 
 %% Test 5: Visualize eigenmode
