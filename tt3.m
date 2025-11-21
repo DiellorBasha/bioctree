@@ -6,11 +6,13 @@ B.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
 B.Manifold.Resolution;
 B.Time
 
-B.showMesh();
-% In a UI panel
+% Create figure and panel
 fig = uifigure;
 panel = uipanel(fig);
+
+% Show mesh inside the panel
 B.showMesh('Parent', panel);
+
 path = 'toolbox\data\fsaverage_rh_pial.mat';
 BR= bct.io.import.mesh(path);
 fig = uifigure;
