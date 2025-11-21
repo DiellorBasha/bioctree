@@ -5,7 +5,7 @@ function sm = manifoldToSurfaceMesh(M)
 %   sm = bct.io.convert.manifoldToSurfaceMesh(M)
 %
 % Inputs:
-%   M - bct.manifold.Manifold object (must be of type "mesh")
+%   M - bct.Manifold object (must be of type "mesh")
 %
 % Outputs:
 %   sm - MATLAB surfaceMesh object for visualization and analysis
@@ -15,11 +15,11 @@ function sm = manifoldToSurfaceMesh(M)
 %   sm = bct.io.convert.manifoldToSurfaceMesh(B.Manifold);
 %   surfaceMeshShow(sm);
 %
-% See also: surfaceMesh, bct.manifold.Manifold
+% See also: surfaceMesh, bct.Manifold
 
 % Validate input
-if ~isa(M, 'bct.manifold.Manifold')
-    error('bct:InvalidInput', 'Input must be a bct.manifold.Manifold object');
+if ~isa(M, 'bct.Manifold')
+    error('bct:InvalidInput', 'Input must be a bct.Manifold object');
 end
 
 if M.Type ~= "mesh"

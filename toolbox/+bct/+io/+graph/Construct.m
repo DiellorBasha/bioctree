@@ -22,26 +22,23 @@ classdef Construct
       % 2) Clean & make a surfaceMesh (normals, center, defects removal)
       mesh = bct.io.graph.Construct.makeCleanMesh(V, F,'Precenter',true,'RightHandFlip',false,'SkipNormals',false); % already flipped above
       
-      % 3) Create Manifold based on requested type
+      % 3) Use bct factory methods which create Manifold and Lambda with dual linking
       if opts.ManifoldType == "graph"
         % Extract edges from faces
         E = bct.io.graph.Construct.edgesFromFaces(mesh.Faces);
         
-        % Create edges table with EndNodes as Mx2 matrix and default weights
-        EdgesTable = table(double(E), ones(size(E,1),1), 'VariableNames', {'EndNodes', 'Weight'});
+        % Build adjacency matrix from edges
+        N = size(mesh.Vertices, 1);
+        A = sparse(E(:,1), E(:,2), true, N, N);
+        A = A + A.';  % Make symmetric
+        A = A - diag(diag(A));  % Remove self-loops
         
-        % Create graph-type Manifold with edges
-        manifold = bct.manifold.Manifold(size(mesh.Vertices,1), EdgesTable);
-        % Store vertices for spatial embedding
-        manifold.V = mesh.Vertices;
+        % Use fromAdjacency factory method
+        B = bct.bct.fromAdjacency(A, mesh.Vertices);
       else
-        % Create mesh-type Manifold
-        manifold = bct.manifold.Manifold(mesh.Vertices, mesh.Faces);
+        % Use fromMesh factory method
+        B = bct.bct.fromMesh(mesh.Vertices, mesh.Faces);
       end
-      
-      % 4) Create bct object with the Manifold
-      B = bct.bct();
-      B.Manifold = manifold;
 
       % Optionally tag cache/meta
       % B.cache.mesh = mesh;

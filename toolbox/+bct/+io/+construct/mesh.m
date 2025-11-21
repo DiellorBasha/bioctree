@@ -38,10 +38,6 @@ function B = mesh(V, F, opts)
         'RightHandFlip', false, ...  % Already flipped above
         'SkipNormals', opts.SkipNormals);
     
-    % Create mesh-type Manifold
-    manifold = bct.manifold.Manifold(cleanMesh.Vertices, cleanMesh.Faces);
-    
-    % Create bct object
-    B = bct.bct();
-    B.Manifold = manifold;
+    % Use bct.fromMesh factory method which creates Manifold and Lambda with dual linking
+    B = bct.bct.fromMesh(cleanMesh.Vertices, cleanMesh.Faces);
 end

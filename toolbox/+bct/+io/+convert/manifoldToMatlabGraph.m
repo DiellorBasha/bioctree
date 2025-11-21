@@ -5,7 +5,7 @@ function g = manifoldToMatlabGraph(M)
 %   g = bct.io.convert.manifoldToMatlabGraph(M)
 %
 % Inputs:
-%   M - bct.manifold.Manifold object
+%   M - bct.Manifold object
 %
 % Outputs:
 %   g - MATLAB graph object (undirected)
@@ -15,11 +15,11 @@ function g = manifoldToMatlabGraph(M)
 %   g = bct.io.convert.manifoldToMatlabGraph(B.Manifold);
 %   plot(g);
 %
-% See also: graph, bct.manifold.Manifold
+% See also: graph, bct.Manifold
 
 % Validate input
-if ~isa(M, 'bct.manifold.Manifold')
-    error('bct:InvalidInput', 'Input must be a bct.manifold.Manifold object');
+if ~isa(M, 'bct.Manifold')
+    error('bct:InvalidInput', 'Input must be a bct.Manifold object');
 end
 
 % Get adjacency matrix

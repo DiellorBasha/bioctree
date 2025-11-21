@@ -1,36 +1,37 @@
 classdef CoordinateMode
-    %COORDINATEMODE  Enumeration of coordinate display modes
+    %COORDINATEMODE  Display modes for domain axes.
     %
-    %   Each domain chooses from these modes depending on its nature.
+    % Each domain selects the subset of modes it supports.
     %
-    %   Time domain      -> Time
-    %   Omega domain     -> Omega, Frequency
-    %   Space domain     -> Space, Position
-    %   Lambda domain    -> Lambda, Wavenumber, Wavelength
+    % Manifold:
+    %   Vertex, Geodesic
     %
-    %   Joint domain     -> combinations (LambdaTime, SpaceTime, etc)
+    % Lambda:
+    %   Lambda, Wavenumber, Wavelength
     %
-    %   NOTE: Domains will use only the modes relevant to them.
-    
+    % Time:
+    %   Time, Index
+    %
+    % Omega:
+    %   Omega, Frequency
+
     enumeration
-        % ----- Temporal -----
-        Time
-        Omega
-        Frequency
+        % ===== Manifold & Graph Domains =====
+        Vertex          % index (1:N)
+        Geodesic        % geodesic distance or intrinsic coord
         
-        % ----- Spatial -----
-        Space
-        Position
-        
-        % ----- Spectral (spatial) -----
-        Lambda
-        Wavenumber
-        Wavelength
-        
-        % ----- Joint modes (optional, expandable) -----
-        SpaceTime
-        LambdaTime
-        SpaceOmega
-        LambdaOmega
+        % ===== Time Domain =====
+        Time            % seconds
+        Index           % sample index (1:T)
+
+        % ===== Omega Domain (dual of Time) =====
+        Omega           % rad/s
+        Frequency       % Hz
+
+        % ===== Lambda Domain (dual of Manifold) =====
+        Lambda          % eigenvalue (1/mm^2)
+        Wavenumber      % sqrt(lambda)
+        Wavelength      % 1/sqrt(lambda)
     end
+
 end

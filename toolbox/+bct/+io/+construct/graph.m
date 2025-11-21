@@ -41,18 +41,12 @@ function B = graph(V, F, opts)
     % Extract edges from faces
     E = bct.io.construct.edgesFromFaces(cleanMesh.Faces);
     
-    % Create edges table
-    EdgesTable = table(...
-        double(E), ...
-        ones(size(E,1), 1), ...
-        'VariableNames', {'EndNodes', 'Weight'} ...
-    );
+    % Build adjacency matrix from edges
+    N = size(cleanMesh.Vertices, 1);
+    A = sparse(E(:,1), E(:,2), true, N, N);
+    A = A + A.';  % Make symmetric
+    A = A - diag(diag(A));  % Remove self-loops
     
-    % Create graph-type Manifold
-    manifold = bct.manifold.Manifold(size(cleanMesh.Vertices, 1), EdgesTable);
-    manifold.V = cleanMesh.Vertices;  % Store vertex positions
-    
-    % Create bct object
-    B = bct.bct();
-    B.Manifold = manifold;
+    % Use bct.fromAdjacency factory method with coordinates
+    B = bct.bct.fromAdjacency(A, cleanMesh.Vertices);
 end

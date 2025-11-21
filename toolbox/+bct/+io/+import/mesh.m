@@ -51,7 +51,7 @@ function B = mesh(source, varargin)
 %
 %   See also: bct.io.import.graph, bct.io.import.findSphereReg, 
 %             bct.io.import.computeUVFromSphere, bct.io.import.populateUV,
-%             bct.manifold.Manifold.computeUV
+%             bct.Manifold.computeUV
 
     p = inputParser;
     addRequired(p, 'source');

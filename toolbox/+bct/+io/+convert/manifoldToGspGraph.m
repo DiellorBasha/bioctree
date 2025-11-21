@@ -5,7 +5,7 @@ function G = manifoldToGspGraph(M)
 %   G = bct.io.convert.manifoldToGspGraph(M)
 %
 % Inputs:
-%   M - bct.manifold.Manifold object
+%   M - bct.Manifold object
 %
 % Outputs:
 %   G - GSPBox graph structure with fields:
@@ -19,11 +19,11 @@ function G = manifoldToGspGraph(M)
 %   G = bct.io.convert.manifoldToGspGraph(B.Manifold);
 %   G = gsp_compute_fourier_basis(G);
 %
-% See also: gsp_graph, bct.manifold.Manifold
+% See also: gsp_graph, bct.Manifold
 
 % Validate input
-if ~isa(M, 'bct.manifold.Manifold')
-    error('bct:InvalidInput', 'Input must be a bct.manifold.Manifold object');
+if ~isa(M, 'bct.Manifold')
+    error('bct:InvalidInput', 'Input must be a bct.Manifold object');
 end
 
 % Get adjacency matrix

@@ -8,7 +8,7 @@ function populateUV(manifold_obj, source_path)
 %   typically called after mesh import when UV parametrization is needed.
 %
 %   Parameters:
-%     manifold_obj - bct.manifold.Manifold object to populate
+%     manifold_obj - bct.Manifold object to populate
 %     source_path  - Path to the surface file (used to find .sphere.reg)
 %
 %   The function:
@@ -40,12 +40,12 @@ function populateUV(manifold_obj, source_path)
 %     B.Manifold.computeUV('test-data/freesurfer/fsaverage/surf/lh.pial');
 %
 %   See also: bct.io.import.mesh, bct.io.import.computeUVFromSphere,
-%             bct.io.import.findSphereReg, bct.manifold.Manifold.computeUV
+%             bct.io.import.findSphereReg, bct.Manifold.computeUV
 
     % Validate input
-    if ~isa(manifold_obj, 'bct.manifold.Manifold')
+    if ~isa(manifold_obj, 'bct.Manifold')
         error('bct:io:import:InvalidInput', ...
-            'First argument must be a bct.manifold.Manifold object');
+            'First argument must be a bct.Manifold object');
     end
     
     if manifold_obj.Type ~= "mesh"

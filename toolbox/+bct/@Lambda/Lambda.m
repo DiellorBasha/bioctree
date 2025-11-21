@@ -17,10 +17,24 @@ classdef Lambda < bct.Domain
     methods
         % ---------------------------------------------------------------
         function obj = Lambda(eigenStruct)
+            % LAMBDA Constructor for Lambda domain
+            %
+            % Syntax:
+            %   obj = Lambda(eigenStruct)
+            %
+            % Inputs:
+            %   eigenStruct - Structure with fields:
+            %                 .eigenvalues  - [K×1] eigenvalues
+            %                 .eigenvectors - [N×K] eigenvectors (optional)
+            
             obj@bct.Domain("Lambda", "1/mm^2");
 
             obj.lambda = eigenStruct.eigenvalues(:);
-            obj.U      = eigenStruct.eigenvectors;
+            if isfield(eigenStruct, 'eigenvectors') && ~isempty(eigenStruct.eigenvectors)
+                obj.U = eigenStruct.eigenvectors;
+            else
+                obj.U = [];  % Placeholder, will be populated later
+            end
             obj.K      = length(obj.lambda);
 
             obj.resolutionMode       = bct.enum.ResolutionMode.Full;
