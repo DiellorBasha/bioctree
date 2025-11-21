@@ -39,31 +39,28 @@ if strcmp(obj.LaplacianType, 'cotangent-normalized')
     lambda_max_est = 2.0;
 else
     % For cotangent Laplacian: use Gershgorin Circle theorem
-    % λ_max ≤ max_i ( L_ii + Σ_{j≠i} |L_ij| )
-    L = obj.Laplacian;
+    % λ_max ≤ max_i ( Σ_j |K_ij| / M_ii )
+    % 
+    % The cotangent Laplacian is L = M^(-1) * K
+    % So we need to estimate eigenvalues of M^(-1) * K
     
-    % VECTORIZED computation (much faster than loop)
-    % For each row: diagonal + sum of absolute values of off-diagonal elements
-    % Since L is symmetric and sparse, we can use:
-    %   row_sum = sum(abs(L), 2)  % sum of absolute values in each row
-    %   gershgorin_bound = diag(L) + (row_sum - abs(diag(L)))
-    % Simplifies to:
-    %   gershgorin_bound = 2 * row_sum - diag(L)
-    % But for symmetric L with non-negative off-diagonals (cotangent can have negatives),
-    % we need: diag(L) + sum(abs(off-diagonal))
+    K = obj.CotangentMatrix;
+    M = obj.MassMatrix;
     
-    % Get diagonal
-    d = diag(L);
+    % Extract diagonal of mass matrix
+    diagM = full(diag(M));
     
-    % Sum of absolute values in each row
-    row_abs_sum = full(sum(abs(L), 2));
+    % Safety check
+    if any(diagM <= 0)
+        error('Mass matrix has non-positive diagonal entries — cannot estimate λ_max.');
+    end
     
-    % Gershgorin bound for each row: L_ii + Σ_{j≠i} |L_ij|
-    % = L_ii + (row_abs_sum - |L_ii|)
-    gershgorin_bounds = d + (row_abs_sum - abs(d));
+    % Compute row sums of absolute values of K
+    % sum(|K_ij|) over each row i
+    rowAbsSum = full(sum(abs(K), 2));
     
-    % Maximum over all rows gives the upper bound
-    lambda_max_est = max(gershgorin_bounds);
+    % Gershgorin estimate: max( sum_j |K_ij| / M_ii )
+    lambda_max_est = max(rowAbsSum ./ diagM);
 end
 
 end
