@@ -6,8 +6,15 @@ classdef bct < handle
   %   Lambda   - Spectral domain, dual of Manifold (bct.Lambda)
   %   Time     - Temporal domain (bct.Time)
   %   Omega    - Frequency domain, dual of Time (bct.Omega)
+  %   Joint    - Joint domain combining two canonical domains (bct.Joint)
   %   Signals  - Array of Signal objects (bct.signal.Signal)
   %   Viewer   - Visualization handle
+  %
+  % Domain Axes (accessed via domain.axis):
+  %   B.Manifold.axis - Vertex indices [N×1]
+  %   B.Lambda.axis   - Eigenvalues (wavenumber by default) [K×1]
+  %   B.Time.axis     - Time points (seconds) [T×1]
+  %   B.Omega.axis    - Frequency points (Hz by default) [T×1]
   
 properties (Access=private, Transient)
     cache struct = struct();     % holds legacy A, W, E, mesh, mgraph, gsp, w
@@ -52,20 +59,7 @@ properties
 end
 
 properties (SetAccess=private)
-    % Fundamental Axis objects (used internally by filters and transforms)
-    % Filters are always defined on Lambda (manifold) and Omega (temporal)
-    AxisTime bct.resolution.Axis = bct.resolution.Axis.empty()      % Time axis (seconds)
-    AxisOmega bct.resolution.Axis = bct.resolution.Axis.empty()     % Angular frequency (rad/s) - fundamental for filters
-    AxisVertices bct.resolution.Axis = bct.resolution.Axis.empty()  % Vertex indices (1:N)
-    AxisLambda bct.resolution.Axis = bct.resolution.Axis.empty()    % Eigenvalue axis - fundamental for filters
-    
-    % Derived scale axes (for human-readable interactions and visualization)
-    AxisFrequency bct.resolution.Axis = bct.resolution.Axis.empty()      % Frequency (Hz) - derived from Omega
-    AxisTemporalScale bct.resolution.Axis = bct.resolution.Axis.empty()  % Temporal scale (seconds) - derived from Omega
-    AxisWavelength bct.resolution.Axis = bct.resolution.Axis.empty()     % Spatial wavelength (mm) - derived from Lambda
-    AxisSpatialScale bct.resolution.Axis = bct.resolution.Axis.empty()   % Spatial scale (mm) - derived from Lambda
-    
-    % Joint mesh-time spectral grid
+    % Joint mesh-time spectral grid (legacy - prefer using Joint domain)
     % Built from Lambda and Omega axes using meshgrid(lambda, omega)
     % Access as: B.SpectralGrid.lambda_grid, B.SpectralGrid.omega_grid
     SpectralGrid struct = struct('lambda_grid', [], 'omega_grid', [], 'lambda_band', [], 'omega', [])
@@ -628,46 +622,22 @@ methods
   end
   
   function initializeAxes(this)
-    % initializeAxes - Create fundamental and derived Axis objects
+    % initializeAxes - DEPRECATED: Use domain.axis properties instead
     %
-    % Creates all Axis objects needed for Bct workflows:
-    %   Fundamental: Time, Omega, Vertices, Lambda
-    %   Derived: Frequency, TemporalScale, Wavelength, SpatialScale
+    % This method is deprecated. Axes are now managed by domain objects:
+    %   - Time axis: this.Time.axis
+    %   - Omega axis: this.Omega.axis
+    %   - Manifold axis: this.Manifold.axis
+    %   - Lambda axis: this.Lambda.axis
     %
-    % Syntax:
-    %   B.initializeAxes()
+    % Example migration:
+    %   OLD: this.initializeAxes(); t = this.AxisTime.Values;
+    %   NEW: t = this.Time.axis;
     %
-    % Note: Requires Manifold and Time to be set with Resolution
+    % See also: bct.Time, bct.Omega, bct.Manifold, bct.Lambda
     
-    % Validate prerequisites
-    if isempty(this.Manifold)
-      error('bct:NoManifold', 'Manifold must be set before initializing axes');
-    end
-    if isempty(this.Time)
-      error('bct:NoTime', 'Time must be set before initializing axes');
-    end
-    
-    % Fundamental axes
-    this.AxisTime = bct.resolution.Axis.time(this.Time);
-    this.AxisVertices = bct.resolution.Axis.vertex(this.Manifold);
-    
-    % Spectral axes require Resolution
-    if ~isempty(this.Manifold.Resolution)
-      this.AxisLambda = bct.resolution.Axis.lambda(this.Manifold.Resolution);
-      this.AxisWavelength = bct.resolution.Axis.wavelength(this.Manifold.Resolution);
-      this.AxisSpatialScale = bct.resolution.Axis.scale(this.Manifold.Resolution);
-    end
-    
-    if ~isempty(this.Time.Resolution)
-      this.AxisOmega = bct.resolution.Axis.omega(this.Time);
-      this.AxisFrequency = bct.resolution.Axis.frequency(this.Time);
-      % Temporal scale: s = 1/omega (approximately)
-      omega_vals = this.AxisOmega.Values;
-      temporal_scale = 1 ./ (omega_vals + eps);  % Avoid division by zero
-      this.AxisTemporalScale = bct.resolution.Axis('TemporalScale', temporal_scale, 'Temporal Scale', 's');
-    end
-    
-    fprintf('[bct] Initialized Axis objects\n');
+    warning('bct:DeprecatedMethod', ...
+      'initializeAxes is deprecated. Use domain.axis properties instead (e.g., B.Time.axis, B.Lambda.axis)');
   end
   
   function buildSpectralGrid(this, lambda_band, opts)
@@ -714,10 +684,11 @@ methods
     if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
       error('bct:NoTime', 'Time object must be set with T and fs before building spectral grid');
     end
-    
-    % Initialize axes if not already done
-    if isempty(this.AxisLambda) || isempty(this.AxisOmega)
-      this.initializeAxes();
+    if isempty(this.Omega)
+      error('bct:NoOmega', 'Omega domain must be initialized (set B.Omega = B.Time.dual)');
+    end
+    if isempty(this.Lambda)
+      error('bct:NoLambda', 'Lambda domain must be initialized (run B.computeEigenbasis())');
     end
     
     % Parse inputs
@@ -742,8 +713,8 @@ methods
       lambda_vec = lambda_band(:);
     end
     
-    % Get omega vector from Time Resolution
-    omega_vec = this.AxisOmega.Values;  % Angular frequency (rad/s)
+    % Get omega vector from Omega domain
+    omega_vec = this.Omega.axis;  % Angular frequency (rad/s)
     
     % Build joint spectral grid using meshgrid(lambda, omega)
     % meshgrid creates grids where:
@@ -782,7 +753,7 @@ methods
     %
     %   For different filter types:
     %   - Manifold: Requires lambda_band
-    %   - Time: Requires omega (or AxisOmega)
+    %   - Time: Requires omega from Omega domain
     %   - Separable/Spectral/Dynamic: Requires lambda_grid and omega_grid (or t_grid)
     
     % Check if SpectralGrid exists and has coefficients
@@ -1254,9 +1225,9 @@ methods
       if isempty(this.Time) || isempty(this.Time.T) || isempty(this.Time.fs)
         error('bct:NoTime', 'Time must be set for %s filters', filter_type);
       end
-      % Initialize axes if not done yet
-      if isempty(this.AxisOmega)
-        this.initializeAxes();
+      % Ensure Omega domain is initialized
+      if isempty(this.Omega)
+        error('bct:NoOmega', 'Omega domain must be initialized. Set B.Omega = B.Time.dual');
       end
     end
     
@@ -1363,7 +1334,7 @@ methods
         % Grid: omega_vec [T × 1]
         % Output: A_l [T × 1]
         
-        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        omega_vec = this.Omega.axis;  % [T × 1]
         T = length(omega_vec);
         
         % Evaluate filter at omega values
@@ -1387,7 +1358,7 @@ methods
         % Grid: meshgrid(lambda, omega) → [T × K]
         % Output: A_kl [K × T]
         
-        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        omega_vec = this.Omega.axis;  % [T × 1]
         T = length(omega_vec);
         
         % Create meshgrid
@@ -1430,7 +1401,7 @@ methods
         % Grid: meshgrid(lambda, omega) → [T × K]
         % Output: A_kl [K × T]
         
-        omega_vec = this.AxisOmega.Values;  % [T × 1]
+        omega_vec = this.Omega.axis;  % [T × 1]
         T = length(omega_vec);
         
         % Create meshgrid
@@ -1456,7 +1427,7 @@ methods
         % Grid: ndgrid(lambda, t) → [K × T]
         % Output: A_kt [K × T] from propagating initial conditions
         
-        t_vec = this.AxisTime.Values;  % [T × 1]
+        t_vec = this.Time.axis;  % [T × 1]
         T = length(t_vec);
         
         % Create ndgrid for dynamic propagators
@@ -1485,7 +1456,7 @@ methods
     
     % Apply temporal envelope (for temporal/joint filters)
     if T > 1 && strcmpi(envelope_type, 'gaussian')
-      t = this.AxisTime.Values;
+      t = this.Time.axis;
       t0 = p.Results.t0;
       if isempty(t0), t0 = t(end)/2; end
       
@@ -1513,11 +1484,11 @@ methods
     else
       % Get time/omega info for display
       if filter_type == "Dynamic"
-        t_vec = this.AxisTime.Values;
+        t_vec = this.Time.axis;
         fprintf('[bct] Lambda: [%.4f, %.4f], Time: [%.4f, %.4f] s\n', ...
           min(lambda_vec), max(lambda_vec), t_vec(1), t_vec(end));
       else
-        omega_vec = this.AxisOmega.Values;
+        omega_vec = this.Omega.axis;
         fprintf('[bct] Lambda: [%.4f, %.4f], Omega: [%.4f, %.4f] rad/s\n', ...
           min(lambda_vec), max(lambda_vec), omega_vec(1), omega_vec(end));
       end

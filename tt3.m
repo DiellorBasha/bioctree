@@ -1,8 +1,15 @@
 clear B
 path = 'test-data\freesurfer\fsaverage\surf\rh.pial';
 B = bct.io.import.mesh(path);
-B.Time = bct.manifold.Time(100, 100);  % 1 sec @ 100 Hz
+B = B.computeEigenbasis(100);
+B.Time = bct.Time(linspace(0,1,50)', 50);
+B.Omega = B.Time.dual;
+B = B.createJoint('Lambda', 'Omega');
 
+% Access joint coordinates
+[M, N] = B.Joint.size();  % [100, 50]
+lambda_grid = B.Joint.A_grid;  % [100×50]
+omega_grid = B.Joint.B_grid;   % [100×50]
 B.Manifold.Resolution;
 B.Time
 
