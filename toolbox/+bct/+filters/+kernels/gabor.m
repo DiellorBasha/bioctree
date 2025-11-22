@@ -1,17 +1,17 @@
 function kernel_fh = gabor()
-  % gabor - Returns 2D Gabor filter kernel function handle
+  % gabor - Returns 2D Gabor (2D Gaussian) kernel function handle
   %
   % Syntax:
-  %   kernel_fh = bct.filters.kernels.joint.gabor()
+  %   kernel_fh = bct.filters.kernels.gabor()
   %
   % Returns:
   %   kernel_fh - Function handle: @(X, Y, center_x, center_y, sigma_x, sigma_y)
-  %               Evaluates 2D Gabor filter
+  %               Evaluates 2D Gaussian kernel
   %
   % Description:
-  %   2D Gabor filter for joint spectral-temporal filtering.
-  %   Localized in both spatial frequency (lambda) and temporal frequency (omega).
-  %   Ideal for detecting oscillatory patterns with specific spatiotemporal scales.
+  %   Pure 2D Gaussian kernel - domain-agnostic mathematical function.
+  %   Localized in both dimensions with independent center and spread.
+  %   Becomes a joint filter when bound to a Joint domain (e.g., Lambda×Omega).
   %
   % Parameters (when evaluating):
   %   X        - First coordinate grid [M×N] (e.g., lambda)

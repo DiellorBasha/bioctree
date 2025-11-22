@@ -1,4 +1,4 @@
-clear B
+clear 
 path = 'test-data\freesurfer\fsaverage\surf\rh.pial';
 B = bct.io.import.mesh(path);
 B = B.computeEigenbasis(100);

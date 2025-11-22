@@ -1,16 +1,17 @@
 function kernel_fh = separable()
-  % separable - Returns separable 2D filter kernel
+  % separable - Returns separable 2D kernel (product of two 1D kernels)
   %
   % Syntax:
-  %   kernel_fh = bct.filters.kernels.joint.separable()
+  %   kernel_fh = bct.filters.kernels.separable()
   %
   % Returns:
   %   kernel_fh - Function handle: @(X, Y, kernel_x, kernel_y, params_x, params_y)
   %               Evaluates H(X,Y) = kernel_x(X, params_x) * kernel_y(Y, params_y)
   %
   % Description:
-  %   Constructs separable 2D filter as product of two 1D filters.
-  %   Useful for combining spatial and temporal filters efficiently.
+  %   Pure separable 2D kernel - domain-agnostic mathematical function.
+  %   Constructs 2D kernel as outer product of two 1D kernels.
+  %   Becomes a joint filter when bound to a Joint domain.
   %
   % Parameters (when evaluating):
   %   X         - First coordinate grid [M×N]

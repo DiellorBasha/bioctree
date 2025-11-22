@@ -1,17 +1,17 @@
 function kernel_fh = heat()
-  % heat - Returns heat diffusion kernel function handle
+  % heat - Returns exponential decay kernel function handle
   %
   % Syntax:
-  %   kernel_fh = bct.filters.kernels.spatial.heat()
+  %   kernel_fh = bct.filters.kernels.heat()
   %
   % Returns:
-  %   kernel_fh - Function handle: @(lambda, tau)
-  %               Evaluates heat kernel: exp(-tau * lambda)
+  %   kernel_fh - Function handle: @(x, tau)
+  %               Evaluates exponential decay: exp(-tau * x)
   %
   % Description:
-  %   Heat diffusion kernel for graph spectral filtering.
-  %   Used on Lambda (eigenvalue) domain for low-pass spatial filtering.
-  %   Larger tau = more diffusion (lower frequency cutoff).
+  %   Pure exponential decay kernel - domain-agnostic mathematical function.
+  %   Commonly used as heat diffusion on Lambda domain (low-pass spatial).
+  %   Larger tau = faster decay.
   %
   % Parameters (when evaluating):
   %   lambda - Eigenvalues [K×1]

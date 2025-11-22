@@ -4,14 +4,19 @@
 
 ```
 +kernels/          → Pure mathematical functions (domain-agnostic)
-├── +spatial/      → heat, mexican_hat (for Lambda domain)
-├── +temporal/     → gaussian, bandpass (for Time/Omega domain)
-└── +joint/        → gabor, separable (for Joint domain)
+├── gaussian.m     → exp(-(x-c)^2/(2*σ^2))
+├── bandpass.m     → Rectangular window
+├── heat.m         → exp(-τ*x)
+├── mexican_hat.m  → Ricker wavelet
+├── gabor.m        → 2D Gaussian
+└── separable.m    → Product of two 1D kernels
 
 Filter.m           → Kernel + Domain + Parameters
 FilterDesigner.m   → Factory for easy creation
 FilterBank.m       → Collection management
 ```
+
+**Key Principle**: Kernels are domain-agnostic mathematical functions. They become "spatial" or "temporal" only when bound to a Domain object in the Filter class.
 
 ## Basic Usage
 
@@ -73,34 +78,53 @@ end
 
 ## Available Kernels
 
-### Temporal (Time/Omega domain)
+All kernels are domain-agnostic mathematical functions. Domain specificity is determined by the Domain object they're bound to in the Filter class, not by the kernel itself.
+
+### 1D Kernels (for Time, Omega, Lambda, or any 1D domain)
+
 - **gaussian** - `@(x, center, sigma)`
+  - Mathematical form: `exp(-(x - center)^2 / (2*sigma^2))`
+  - Common use: Band-pass filter on frequency domains
   ```matlab
-  filt = designer.temporal('gaussian', 'center', 10, 'sigma', 2);
-  ```
-- **bandpass** - `@(x, low, high)`
-  ```matlab
-  filt = designer.temporal('bandpass', 'low', 8, 'high', 12);
+  filt = designer.temporal('gaussian', 'center', 10, 'sigma', 2);  % Frequency filter
+  filt = designer.spatial('gaussian', 'center', 5, 'sigma', 1);    % Spectral filter (same kernel!)
   ```
 
-### Spatial (Lambda domain)
-- **heat** - `@(lambda, tau)` - Diffusion kernel
+- **bandpass** - `@(x, low, high)`
+  - Mathematical form: Rectangular window [low, high]
+  - Common use: Ideal band-pass filtering
   ```matlab
-  filt = designer.spatial('heat', 'tau', 0.1);
+  filt = designer.temporal('bandpass', 'low', 8, 'high', 12);  % Alpha band
   ```
-- **mexican_hat** - `@(lambda, scale)` - Band-pass wavelet
+
+- **heat** - `@(x, tau)`
+  - Mathematical form: `exp(-tau * x)`
+  - Common use: Low-pass diffusion on Lambda (eigenvalues)
+  ```matlab
+  filt = designer.spatial('heat', 'tau', 0.1);  % Low-pass spatial
+  ```
+
+- **mexican_hat** - `@(x, scale)`
+  - Mathematical form: Ricker wavelet
+  - Common use: Band-pass feature detection
   ```matlab
   filt = designer.spatial('mexican_hat', 'scale', 10);
   ```
 
-### Joint (Joint domain)
+### 2D Kernels (for Joint domains)
+
 - **gabor** - `@(X, Y, center_x, center_y, sigma_x, sigma_y)`
+  - Mathematical form: 2D Gaussian
+  - Common use: Localized spatiotemporal filtering
   ```matlab
   filt = designer.joint('gabor', ...
       'center_x', 5, 'center_y', 10, ...
       'sigma_x', 1, 'sigma_y', 2);
   ```
-- **separable** - Combines two 1D kernels
+
+- **separable** - Product of two 1D kernels
+  - Mathematical form: `H(X,Y) = kernel_x(X) * kernel_y(Y)`
+  - Common use: Efficient 2D filtering
   ```matlab
   filt = designer.joint('separable', ...
       'kernel_x', heat_kernel, 'kernel_y', gauss_kernel, ...
@@ -256,11 +280,17 @@ filt = designer.spatial('heat', 'tau', 0.1);
 
 ## Adding Custom Kernels
 
-1. Create kernel function in appropriate package:
+1. Create kernel function in the kernels package:
    ```matlab
-   % toolbox/+bct/+filters/+kernels/+temporal/mykernel.m
+   % toolbox/+bct/+filters/+kernels/mykernel.m
    function kernel_fh = mykernel()
-       kernel_fh = @(x, param1, param2) ... ;
+       % mykernel - Returns custom kernel function handle
+       %
+       % Description:
+       %   Pure mathematical function - domain-agnostic.
+       %   Becomes a filter when bound to a Domain.
+       
+       kernel_fh = @(x, param1, param2) ...;
    end
    ```
 
@@ -271,7 +301,8 @@ filt = designer.spatial('heat', 'tau', 0.1);
        addParameter(p, 'param2', default_val, @isnumeric);
    ```
 
-3. Use it:
+3. Use it on any domain:
    ```matlab
    filt = designer.temporal('mykernel', 'param1', val1, 'param2', val2);
+   filt = designer.spatial('mykernel', 'param1', val1, 'param2', val2);  % Same kernel!
    ```

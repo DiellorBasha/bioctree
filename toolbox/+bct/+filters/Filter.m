@@ -281,8 +281,14 @@ classdef Filter < handle
       %              Joint domains: [M×N] matrix
       
       if nargin < 2
-        % Use domain axis by default
-        points = obj.Domain.axis;
+        % Use domain axis/grids by default
+        if isa(obj.Domain, 'bct.Joint')
+          % For Joint domains, use grids not axis
+          points = {obj.Domain.A_grid, obj.Domain.B_grid};
+        else
+          % For 1D domains, use axis
+          points = obj.Domain.axis;
+        end
       end
       
       % Evaluate based on domain dimensionality
@@ -323,25 +329,15 @@ classdef Filter < handle
       obj.invalidateCache();
     end
     
-    function kernel_fh = loadKernel(~, domain, kernel_name)
-      % Load kernel function based on domain type
+    function kernel_fh = loadKernel(~, ~, kernel_name)
+      % Load kernel function (domain-agnostic)
       %
-      % Determines the appropriate kernel package (spatial/temporal/joint)
-      % based on the domain type and loads the kernel function.
+      % Loads the kernel function from the kernel package.
+      % Kernels are pure mathematical functions - domain specificity
+      % is determined by binding to the Domain object, not by the kernel itself.
       
-      if isa(domain, 'bct.Joint')
-        % Joint domain - use joint kernels
-        pkg = 'bct.filters.kernels.joint';
-      elseif isa(domain, 'bct.Manifold') || isa(domain, 'bct.Lambda')
-        % Spatial domains - use spatial kernels
-        pkg = 'bct.filters.kernels.spatial';
-      elseif isa(domain, 'bct.Time') || isa(domain, 'bct.Omega')
-        % Temporal domains - use temporal kernels
-        pkg = 'bct.filters.kernels.temporal';
-      else
-        error('Filter:UnknownDomain', ...
-          'Unknown domain type: %s', class(domain));
-      end
+      % All kernels are in root package (domain-agnostic)
+      pkg = 'bct.filters.kernels';
       
       % Get kernel function
       try

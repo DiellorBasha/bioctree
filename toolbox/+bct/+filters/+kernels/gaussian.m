@@ -2,15 +2,15 @@ function kernel_fh = gaussian()
   % gaussian - Returns Gaussian kernel function handle
   %
   % Syntax:
-  %   kernel_fh = bct.filters.kernels.temporal.gaussian()
+  %   kernel_fh = bct.filters.kernels.gaussian()
   %
   % Returns:
   %   kernel_fh - Function handle: @(x, center, sigma)
   %               Evaluates Gaussian: exp(-(x - center)^2 / (2*sigma^2))
   %
   % Description:
-  %   Pure Gaussian kernel function for temporal/frequency domain filtering.
-  %   Domain-agnostic - can be used on Time or Omega domains.
+  %   Pure 1D Gaussian kernel - domain-agnostic mathematical function.
+  %   Becomes a filter when bound to a Domain (Lambda, Time, Omega, etc.).
   %
   % Parameters (when evaluating):
   %   x      - Evaluation points [N×1] (time or frequency)

@@ -52,7 +52,7 @@ classdef FilterDesigner < handle
       % Inputs:
       %   bct_obj - bct object with configured domains
       
-      if ~isa(bct_obj, 'bct')
+      if ~isa(bct_obj, 'bct.bct')
         error('FilterDesigner:InvalidInput', ...
           'Input must be a bct object');
       end
