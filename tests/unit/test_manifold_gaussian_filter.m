@@ -181,3 +181,4 @@ fprintf('✓ Spectral coefficients synthesized (%d modes)\n', size(coeffs, 1));
 fprintf('✓ Signal generated from spectral domain (%d vertices)\n', length(sig.Data));
 fprintf('✓ Visualizations created\n');
 fprintf('\nTest completed successfully!\n');
+

@@ -172,3 +172,4 @@ fprintf('  • Automatic matrix computation via computeLaplacian()\n');
 fprintf('  • Static methods: laplacian, meshFourier, maxLambda\n');
 fprintf('  • Helper methods: numVertices, numFaces, estimateLambdaMax\n');
 fprintf('\n');
+

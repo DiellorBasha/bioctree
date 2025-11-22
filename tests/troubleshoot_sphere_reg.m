@@ -292,3 +292,4 @@ grid on;
 sgtitle('sphere.reg UV Computation Analysis', 'FontSize', 14, 'FontWeight', 'bold');
 
 fprintf('Visualization created.\n');
+

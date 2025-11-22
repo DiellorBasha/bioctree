@@ -88,3 +88,4 @@ fprintf('  • Uses cached modes when available (no k specified)\n');
 fprintf('  • Computes default k=200 when no cache (no k specified)\n');
 fprintf('  • Respects explicit k parameter when provided\n');
 fprintf('  • Efficiently reuses cached basis for multiple signals\n');
+

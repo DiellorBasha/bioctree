@@ -7,14 +7,14 @@ classdef Signal < handle
     %
     %   Properties:
     %       Data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
-    %       Manifold - Reference to bct.manifold.Manifold object
-    %       Time     - Reference to bct.manifold.Time object (optional)
+    %       Manifold - Reference to bct.Manifold object
+    %       Time     - Reference to bct.Time object (optional)
     %       Label    - String label/name for the signal
     %       IsVector - Logical flag indicating if signal is vector-valued (3-component)
     %
     %   Dimensions:
     %       N - Number of spatial points (must match Manifold.N)
-    %       T - Number of time points (must match Time.T if Time exists)
+    %       T - Number of time points (must match Time.N if Time exists)
     %
     %   Signal Types:
     %       Scalar static:    [N×1]   - One value per vertex
@@ -23,25 +23,25 @@ classdef Signal < handle
     %       Vector dynamic:   [N×T×3] - Time-varying 3D vector at each vertex
     %
     %   Example:
-    %       % Create manifold and time
-    %       M = bct.manifold.Manifold(V, F);
-    %       T = bct.manifold.Time(1000, 250);
+    %       % Create BCT object with mesh
+    %       B = bct.bct.fromMesh(V, F);
+    %       B.Time = bct.Time(linspace(0,1,100)', 100);
     %
     %       % Scalar static signal
-    %       s1 = bct.signal.Signal(M, rand(M.N, 1), 'random_activation');
+    %       s1 = bct.Signal(B.Manifold, rand(B.Manifold.N, 1), 'random_activation');
     %
     %       % Scalar dynamic signal
-    %       s2 = bct.signal.Signal(M, rand(M.N, T.T), 'timeseries', T);
+    %       s2 = bct.Signal(B.Manifold, rand(B.Manifold.N, B.Time.N), 'timeseries', B.Time);
     %
     %       % Vector static signal (e.g., tangent vectors)
-    %       s3 = bct.signal.Signal(M, rand(M.N, 3), 'gradient_field');
+    %       s3 = bct.Signal(B.Manifold, rand(B.Manifold.N, 3), 'gradient_field');
     %
-    %   See also: bct.manifold.Manifold, bct.manifold.Time
+    %   See also: bct.Manifold, bct.Time, bct.bct
     
     properties
         Data           % Signal values: [N×1], [N×T], [N×3], or [N×T×3]
-        Manifold       % bct.manifold.Manifold object
-        Time           % bct.manifold.Time object (optional, can also be in Manifold.Time)
+        Manifold       % bct.Manifold object
+        Time           % bct.Time object
         Label string = ""  % Signal name/label
     end
     
@@ -62,18 +62,18 @@ classdef Signal < handle
             %   obj = Signal(manifold, data, label, time_obj) also sets Time object
             %
             %   Inputs:
-            %       manifold - bct.manifold.Manifold object
+            %       manifold - bct.Manifold object
             %       data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
             %       label    - Optional string label
-            %       time_obj - Optional bct.manifold.Time object
+            %       time_obj - Optional bct.Time object
             %
             %   The data dimensions are validated against the manifold dimensions.
             
             if nargin > 0
                 % Validate manifold
-                if ~isa(manifold, 'bct.manifold.Manifold')
+                if ~isa(manifold, 'bct.Manifold')
                     error('Signal:InvalidManifold', ...
-                        'First argument must be a bct.manifold.Manifold object');
+                        'First argument must be a bct.Manifold object');
                 end
                 obj.Manifold = manifold;
                 
@@ -107,7 +107,7 @@ classdef Signal < handle
             % Get expected time dimension from obj.Time
             if ~isempty(obj.Time)
                 has_time = true;
-                T_expected = obj.Time.T;
+                T_expected = obj.Time.N;
             else
                 has_time = false;
                 T_expected = 0;
@@ -176,9 +176,18 @@ classdef Signal < handle
             %GET.ISVECTOR Check if signal is vector-valued
             sz = size(obj.Data);
             if ismatrix(obj.Data)
-                % [N×3] is vector static (unless Time.T == 3, handled above)
-                val = (sz(2) == 3) && (isempty(obj.Manifold.Time) || ...
-                       obj.Manifold.Time.T ~= 3);
+                % [N×3] is vector static (unless Time exists with N==3)
+                if ~isempty(obj.Time)
+                    % Get number of time points from Time object
+                    if isprop(obj.Time, 'N')
+                        T_val = obj.Time.N;  % New bct.Time
+                    else
+                        T_val = obj.Time.T;  % Old bct.manifold.Time
+                    end
+                    val = (sz(2) == 3) && (T_val ~= 3);
+                else
+                    val = (sz(2) == 3);
+                end
             else
                 % [N×T×3] is vector dynamic
                 val = (ndims(obj.Data) == 3) && (sz(3) == 3);
@@ -230,9 +239,15 @@ classdef Signal < handle
             s = [s sprintf('  N = %d spatial points\n', obj.N)];
             if obj.IsDynamic
                 s = [s sprintf('  T = %d time points\n', obj.T)];
-                if ~isempty(obj.Manifold.Time)
-                    s = [s sprintf('  Duration = %.4f s at %.2f Hz\n', ...
-                        obj.Manifold.Time.get_duration(), obj.Manifold.Time.fs)];
+                if ~isempty(obj.Time)
+                    % Handle both old and new Time classes
+                    if isprop(obj.Time, 'N')  % New bct.Time
+                        duration = (obj.Time.N - 1) / obj.Time.fs;
+                        s = [s sprintf('  Duration = %.4f s at %.2f Hz\n', duration, obj.Time.fs)];
+                    else  % Old bct.manifold.Time
+                        s = [s sprintf('  Duration = %.4f s at %.2f Hz\n', ...
+                            obj.Time.get_duration(), obj.Time.fs)];
+                    end
                 end
             end
         end

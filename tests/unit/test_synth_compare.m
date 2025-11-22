@@ -152,3 +152,4 @@ fprintf('B3.Manifold.NumModes = %d (no cache)\n', B3.Manifold.NumModes);
 rng(55);
 [x_nocache, a_nocache, f_nocache] = bct.sim.synth_mesh_signal(B3, spec2, 'verbose', true);
 fprintf('✓ Generated signal with %d modes (auto-computed default)\n', length(a_nocache));
+

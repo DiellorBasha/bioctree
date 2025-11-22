@@ -26,3 +26,4 @@ fprintf('L_min: %.4f %s\n', R.L_min, R.Units.toString());
 fprintf('lambda_max: %.4e\n', R.lambda_max);
 fprintf('f_max: %.4f cycles/%s\n', R.f_max, R.Units.toString());
 fprintf('k_max: %.4f rad/%s\n', R.k_max, R.Units.toString());
+

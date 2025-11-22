@@ -125,3 +125,4 @@ fprintf('  2. ✓ Joint filters can be designed without eigenvalues\n');
 fprintf('  3. ✓ Eigenvalues computed during Synthesize (lazy evaluation)\n');
 fprintf('  4. ✓ Signal generation works correctly\n');
 fprintf('\nWorkflow verified: designFilter → Synthesize → Generate\n');
+

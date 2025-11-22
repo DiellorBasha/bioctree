@@ -128,3 +128,4 @@ grid on;
 
 fprintf('\n✓ All filters generated successfully!\n');
 fprintf('Note: Wavenumber-based filters produce smoother, more stable signals.\n');
+

@@ -38,3 +38,4 @@ trisurf(B.Manifold.F, B.Manifold.V(:,1), B.Manifold.V(:,2), B.Manifold.V(:,3), .
 axis equal; axis off; view(-90, 0);
 colorbar;
 title('Generated Signal');
+

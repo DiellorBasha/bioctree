@@ -141,3 +141,4 @@ fprintf('  - bct.sim.synth_mesh_signal\n');
 if exist('test_sim.h5', 'file')
     delete('test_sim.h5');
 end
+

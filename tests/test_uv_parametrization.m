@@ -178,3 +178,4 @@ fprintf('Usage:\n');
 fprintf('  path = ''test-data/freesurfer/fsaverage/surf/lh.pial'';\n');
 fprintf('  B = bct.io.import.mesh(path);\n');
 fprintf('  UV = B.Manifold.UV;  // [N × 2] UV coordinates\n\n');
+

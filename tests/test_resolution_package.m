@@ -225,3 +225,4 @@ fprintf('✓ Temporal resolution works\n');
 fprintf('✓ Temporal band selection works\n');
 fprintf('✓ Units and Quantity enums work\n');
 fprintf('\nbct.resolution package is fully functional!\n');
+

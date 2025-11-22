@@ -64,7 +64,7 @@ try
     signalData = V(:, 1);  % x-coordinate as signal
     
     % Add as Signal object
-    sig = bct.signal.Signal();
+    sig = bct.Signal();
     sig.Data = signalData;
     sig.Label = 'X-coordinate gradient';
     B.Signals = sig;
@@ -102,7 +102,7 @@ try
         timeSignalData(:,t) = V(:,1) * cos(phase) + V(:,2) * sin(phase);
     end
     
-    sig2 = bct.signal.Signal();
+    sig2 = bct.Signal();
     sig2.Data = timeSignalData;
     sig2.Label = 'Traveling wave';
     B.Signals(2) = sig2;
@@ -171,3 +171,4 @@ fprintf('  - All three API levels working:\n');
 fprintf('    1. Bct methods: B.showMesh(), B.showSignal()\n');
 fprintf('    2. Package functions: bct.show.mesh(), bct.show.signal()\n');
 fprintf('    3. Core visualizer: bct.show.visualizer()\n');
+

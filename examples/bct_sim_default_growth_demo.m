@@ -19,3 +19,4 @@ N = size(B.Manifold.V, 1);
 tSpan = [1 1]; nodeIdx = [1 N];      % first time step
 x1 = B.read_raw(tSpan, nodeIdx);       % 1×N
 fprintf('Read back a slice: size = [%d %d]\n', size(x1,1), size(x1,2));
+

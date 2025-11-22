@@ -63,3 +63,4 @@ fprintf('Signal 3 (300 modes):  size=%dx%d, range=[%.3f, %.3f]\n', ...
     size(x3,1), size(x3,2), min(x3), max(x3));
 
 fprintf('\n✓ All tests passed!\n');
+

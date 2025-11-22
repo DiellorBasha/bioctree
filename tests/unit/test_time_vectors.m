@@ -50,3 +50,4 @@ fprintf('  This verifies the time vector is used correctly in spectral grid cons
 fprintf('  (See test_spectral_grid.m for full test)\n');
 
 fprintf('\n=== All tests completed successfully! ===\n');
+

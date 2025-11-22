@@ -58,7 +58,7 @@ else
     % Fallback: random smooth signal
     data_scalar_static = randn(B.Manifold.N, 1);
 end
-sig1 = bct.signal.Signal(B.Manifold, data_scalar_static, 'activation_map');
+sig1 = bct.Signal(B.Manifold, data_scalar_static, 'activation_map');
 B.addSignal(sig1);
 
 % Scalar dynamic signal (time series)
@@ -73,14 +73,14 @@ else
     % Fallback: random time series
     data_scalar_dynamic = randn(B.Manifold.N, B.Manifold.Time.T);
 end
-sig2 = bct.signal.Signal(B.Manifold, data_scalar_dynamic, 'dynamic_pattern');
+sig2 = bct.Signal(B.Manifold, data_scalar_dynamic, 'dynamic_pattern');
 B.addSignal(sig2);
 
 % Vector static signal (gradient field)
 fprintf('  Generating vector static signal...\n');
 data_vector_static = randn(B.Manifold.N, 3);
 data_vector_static = data_vector_static ./ vecnorm(data_vector_static, 2, 2);
-sig3 = bct.signal.Signal(B.Manifold, data_vector_static, 'tangent_field');
+sig3 = bct.Signal(B.Manifold, data_vector_static, 'tangent_field');
 B.addSignal(sig3);
 
 fprintf('  Added %d signals to BCT\n\n', length(B.Signals));
@@ -126,7 +126,7 @@ fprintf('Step 6: Dimension validation\n');
 % Try to add signal with wrong dimensions
 wrong_data = randn(100, 1);  % Wrong N
 M_wrong = bct.manifold.Manifold(V(1:100,:), F(1:50,:));
-sig_bad = bct.signal.Signal(M_wrong, wrong_data, 'incompatible');
+sig_bad = bct.Signal(M_wrong, wrong_data, 'incompatible');
 
 try
     B.addSignal(sig_bad);
@@ -169,3 +169,4 @@ fprintf('Validation:\n');
 fprintf('  • Signal.N must match Manifold.N\n');
 fprintf('  • Signal.T must match Manifold.Time.T (dynamic signals)\n');
 fprintf('  • Enforced automatically via validateSignalDimensions()\n');
+

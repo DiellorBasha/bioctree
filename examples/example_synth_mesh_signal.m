@@ -129,3 +129,4 @@ fprintf('Signal Access:\n');
 fprintf('  sig = B.Signals(i)           - Get i-th signal\n');
 fprintf('  sig = B.getSignalByLabel(L)  - Get by label\n');
 fprintf('  data = B.Signals(i).Data     - Get signal data\n');
+

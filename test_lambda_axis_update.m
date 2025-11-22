@@ -160,3 +160,4 @@ fprintf('  • K (number of modes) updates automatically with lambda\n');
 fprintf('  • eigenbasis() triggers automatic axis update\n');
 fprintf('  • Axis updates correctly for all coordinate modes\n');
 fprintf('  • Multiple eigenbasis computations handled correctly\n\n');
+

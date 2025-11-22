@@ -26,7 +26,7 @@ V = B.Manifold.V;
 T = B.Time.T;
 
 % Signal 1: Spatial gradient (static)
-sig1 = bct.signal.Signal();
+sig1 = bct.Signal();
 sig1.Data = V(:, 1);  % x-coordinate
 sig1.Label = 'Spatial gradient (X)';
 B.Signals(1) = sig1;
@@ -37,7 +37,7 @@ for t = 1:T
     phase = 2*pi*5*t/T;  % 5 cycles
     timeSignal(:,t) = V(:,1) * cos(phase) + V(:,2) * sin(phase);
 end
-sig2 = bct.signal.Signal();
+sig2 = bct.Signal();
 sig2.Data = timeSignal;
 sig2.Label = 'Traveling wave (5 Hz)';
 B.Signals(2) = sig2;
@@ -119,3 +119,4 @@ fprintf('Signals: %d\n', length(B.Signals));
 fprintf('\n========================================\n');
 fprintf('Demo complete!\n');
 fprintf('========================================\n\n');
+

@@ -38,3 +38,4 @@ fprintf('  Eigenvalues size: %dx%d\n', size(B.Manifold.Eigenvalues));
 % Cleanup
 delete('test_synth.h5');
 fprintf('\n✓ Test complete!\n');
+

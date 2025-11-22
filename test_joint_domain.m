@@ -299,3 +299,4 @@ fprintf('  • Any two canonical BCT domains\n');
 fprintf('  • Maintains axes, units, and metadata from both\n');
 fprintf('  • Provides 2D grid coordinates for joint analysis\n');
 fprintf('  • Supports reshape/flatten for signal processing\n\n');
+

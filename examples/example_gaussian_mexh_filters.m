@@ -173,3 +173,4 @@ fprintf('  Range: [%.4f, %.4f]\n', ...
     min(sig_mexh.Data), max(sig_mexh.Data));
 
 fprintf('\n=== Example Complete ===\n');
+

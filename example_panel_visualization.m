@@ -18,3 +18,4 @@ B.showMesh('Parent', panel);
 % The viewer3d is now a child of the panel
 fprintf('Viewer created: %s\n', class(B.Viewer));
 fprintf('Viewer parent: %s\n', class(B.Viewer.Parent));
+

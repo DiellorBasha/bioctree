@@ -109,3 +109,4 @@ fprintf('=== All Brainstorm Import Tests Complete ===\n');
 if exist('B1', 'var') && ~isempty(B1)
     fprintf('\nVisualization available. Run: surfaceMeshShow(surfaceMesh(B1.Manifold.V, B1.Manifold.F))\n');
 end
+

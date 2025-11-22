@@ -234,7 +234,7 @@ function [B_out, xrec, a] = heat(B, tau, varargin)
         end
         
         % Create Signal object
-        sig = bct.signal.Signal(B_out.Manifold, xrec, label);
+        sig = bct.Signal(B_out.Manifold, xrec, label);
         
         % Add to bct object
         B_out.addSignal(sig);

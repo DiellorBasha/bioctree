@@ -28,7 +28,7 @@
 % SIGNAL VISUALIZATION
 % --------------------
 % First, create a signal:
-%   sig = bct.signal.Signal();
+%   sig = bct.Signal();
 %   sig.Data = randn(B.Manifold.N, 1);  % Static signal
 %   sig.Label = 'Random noise';
 %   B.Signals = sig;
@@ -39,7 +39,7 @@
 % TIME-VARYING SIGNALS
 % --------------------
 % Create a dynamic signal:
-%   sig2 = bct.signal.Signal();
+%   sig2 = bct.Signal();
 %   sig2.Data = randn(B.Manifold.N, B.Time.T);  % [N×T] matrix
 %   sig2.Label = 'Dynamic signal';
 %   B.Signals(2) = sig2;
@@ -79,3 +79,4 @@
 %   test_bct_viz_final.m      - Automated test suite
 %
 % For more information, see the Bct class documentation.
+

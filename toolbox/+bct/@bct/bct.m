@@ -7,7 +7,7 @@ classdef bct < handle
   %   Time     - Temporal domain (bct.Time)
   %   Omega    - Frequency domain, dual of Time (bct.Omega)
   %   Joint    - Joint domain combining two canonical domains (bct.Joint)
-  %   Signals  - Array of Signal objects (bct.signal.Signal)
+  %   Signals  - Array of Signal objects (bct.Signal)
   %   Viewer   - Visualization handle
   %
   % Domain Axes (accessed via domain.axis):
@@ -20,14 +20,14 @@ properties (Access=private, Transient)
     cache struct = struct();     % holds legacy A, W, E, mesh, mgraph, gsp, w
 end
 
-properties
+properties (SetObservable, AbortSet)
     % Manifold object encapsulates mesh/graph topology
     % Preferred way to access mesh geometry and topology
     % Access as: B.Manifold.Vertices, B.Manifold.Faces, B.Manifold.Laplacian, etc.
     Manifold bct.Manifold  % New @Manifold domain class
     
     % Time domain - temporal properties for time-varying signals
-    % Dual of Omega domain, linked automatically on construction
+    % Dual of Omega domain, linked automatically when Time is set
     % Access as: B.Time.T, B.Time.fs, B.Time.axis, etc.
     Time bct.Time = bct.Time.empty()  % Time domain
     
@@ -48,9 +48,9 @@ properties
     Joint bct.Joint = bct.Joint.empty()  % Joint domain for multi-dimensional analysis
     
     % Signals defined on the Manifold
-    % Can be a single bct.signal.Signal object or an array of Signal objects
+    % Can be a single bct.Signal object or an array of Signal objects
     % All signals must have dimensions matching B.Manifold (N and optionally T)
-    Signals bct.signal.Signal = bct.signal.Signal.empty()
+    Signals bct.Signal = bct.Signal.empty()
     
     % Viewer handle for 3D visualization
     % Stores viewer3d handle created by showMesh method
@@ -223,6 +223,18 @@ end
 
 % Eigendecomposition orchestration
 methods
+  function obj = bct(varargin)
+    % Constructor for bct object
+    %
+    % Creates empty BCT object and sets up property listeners for
+    % automatic dual domain creation
+    
+    if nargin == 0
+      % Add property listener for Time to auto-create Omega
+      addlistener(obj, 'Time', 'PostSet', @obj.onTimeSet);
+    end
+  end
+  
   function obj = computeEigenbasis(obj, varargin)
     % computeEigenbasis - Compute eigenvectors and eigenvalues for Lambda domain
     %
@@ -395,14 +407,14 @@ methods
   function addSignal(this, signal_obj)
     % Add a Signal object to the Signals array
     %
-    %   B.addSignal(signal_obj) adds a bct.signal.Signal object
+    %   B.addSignal(signal_obj) adds a bct.Signal object
     %
     %   The signal dimensions are validated against B.Manifold
     
     % Validate input
-    if ~isa(signal_obj, 'bct.signal.Signal')
+    if ~isa(signal_obj, 'bct.Signal')
       error('bct:InvalidSignalType', ...
-        'Input must be a bct.signal.Signal object');
+        'Input must be a bct.Signal object');
     end
     
     % Validate signal matches manifold
@@ -454,7 +466,7 @@ methods
     %   with matching label, or empty if not found
     
     if isempty(this.Signals)
-      sig = bct.signal.Signal.empty();
+      sig = bct.Signal.empty();
       return;
     end
     
@@ -462,7 +474,7 @@ methods
     idx = find(labels == string(label), 1);
     
     if isempty(idx)
-      sig = bct.signal.Signal.empty();
+      sig = bct.Signal.empty();
     else
       sig = this.Signals(idx);
     end
@@ -473,7 +485,7 @@ methods
     %
     %   B.clearSignalsNew() removes all signals from B.Signals
     
-    this.Signals = bct.signal.Signal.empty();
+    this.Signals = bct.Signal.empty();
   end
   
   function validateSignalDimensions(this, signal_obj)
@@ -1039,7 +1051,35 @@ methods
 end
 
 methods (Access=private)
-  % Helper functions for filter design
+  %% Property Change Listeners
+  
+  function onTimeSet(obj, ~, ~)
+    % Listener callback when Time property is set
+    % Automatically creates and links Omega dual domain
+    %
+    % This is called when: B.Time = bct.Time(...)
+    % Results in: B.Omega being automatically created and linked
+    
+    % Only proceed if Time is not empty
+    if isempty(obj.Time)
+      return;
+    end
+    
+    % Create Omega domain from Time
+    omegaDomain = bct.Omega(obj.Time);
+    
+    % Link Time ↔ Omega as dual domains
+    obj.Time.setDual(omegaDomain);
+    
+    % Assign Omega to BCT object
+    obj.Omega = omegaDomain;
+    
+    % Initialize transforms (FFT/IFFT)
+    obj.Time.initializeTransform();
+    omegaDomain.initializeTransform();
+  end
+  
+  %% Helper functions for filter design
   
   function quantity_enum = convertQuantityString(~, quantity_str)
     % Convert string to bct.resolution.Quantity enum

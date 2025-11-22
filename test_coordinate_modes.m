@@ -261,3 +261,4 @@ fprintf('    • Lambda: 1/mm^2 (eigenvalue) ↔ 1/mm (wavenumber) ↔ mm (wavel
 fprintf('    • Omega: rad/s (angular) ↔ Hz (frequency)\n');
 fprintf('    • Time: s (time) ↔ samples (index)\n');
 fprintf('    • Manifold: vertex (index) ↔ mm (geodesic-future)\n\n');
+

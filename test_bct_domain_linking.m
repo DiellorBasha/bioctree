@@ -169,3 +169,4 @@ fprintf('\nDomain structure:\n');
 fprintf('  Manifold ↔ Lambda (spatial/spectral duality)\n');
 fprintf('  Time ↔ Omega (temporal/frequency duality)\n');
 fprintf('\n');
+

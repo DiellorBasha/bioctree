@@ -67,3 +67,4 @@ end
 fprintf('\n=== Example: Using checkUV ===\n');
 fprintf('B1 has UV: %s\n', string(B1.Manifold.checkUV(false)));  % Returns false, no warning
 fprintf('B2 has UV: %s\n', string(B2.Manifold.checkUV(false)));  % Returns true
+

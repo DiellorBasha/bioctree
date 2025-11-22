@@ -115,3 +115,4 @@ fprintf('  • Automatically creates Lambda domain with dual linking\n');
 fprintf('  • All Manifold properties properly populated\n');
 fprintf('  • Compatible with fromMesh factory method\n');
 fprintf('  • Full Domain architecture support\n\n');
+

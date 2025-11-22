@@ -196,3 +196,4 @@ fprintf('  • Manifold domain: MFT transform set after eigenvectors computed\n'
 fprintf('  • Lambda domain: IMFT transform set after eigenvectors computed\n');
 fprintf('  • Forward/inverse transforms work correctly\n');
 fprintf('  • Transform factory integration complete\n\n');
+

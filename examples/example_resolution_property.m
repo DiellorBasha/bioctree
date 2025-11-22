@@ -144,3 +144,4 @@ fprintf('Use it to:\n');
 fprintf('  • Design signals within mesh capabilities\n');
 fprintf('  • Validate simulation parameters\n');
 fprintf('  • Compare mesh quality across subjects\n\n');
+

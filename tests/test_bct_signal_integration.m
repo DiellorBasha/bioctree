@@ -25,21 +25,21 @@ fprintf('Test 1: Adding valid signals\n');
 
 % Create scalar static signal
 data1 = randn(B.Manifold.N, 1);
-s1 = bct.signal.Signal(B.Manifold, data1, 'activation');
+s1 = bct.Signal(B.Manifold, data1, 'activation');
 B.addSignal(s1);
 
 fprintf('✓ Added scalar static signal\n');
 
 % Create scalar dynamic signal
 data2 = randn(B.Manifold.N, B.Manifold.Time.T);
-s2 = bct.signal.Signal(B.Manifold, data2, 'timeseries');
+s2 = bct.Signal(B.Manifold, data2, 'timeseries');
 B.addSignal(s2);
 
 fprintf('✓ Added scalar dynamic signal\n');
 
 % Create vector static signal
 data3 = randn(B.Manifold.N, 3);
-s3 = bct.signal.Signal(B.Manifold, data3, 'gradient');
+s3 = bct.Signal(B.Manifold, data3, 'gradient');
 B.addSignal(s3);
 
 fprintf('✓ Added vector static signal\n');
@@ -68,7 +68,7 @@ fprintf('Test 3: Dimension validation\n');
 % Create signal with wrong N
 wrong_manifold = bct.manifold.Manifold(V(1:100,:), F(1:100,:));
 wrong_data = randn(wrong_manifold.N, 1);
-sig_bad = bct.signal.Signal(wrong_manifold, wrong_data, 'wrong_N');
+sig_bad = bct.Signal(wrong_manifold, wrong_data, 'wrong_N');
 
 try
     B.addSignal(sig_bad);
@@ -86,7 +86,7 @@ end
 wrong_manifold2 = bct.manifold.Manifold(V, F);
 wrong_manifold2.Time = bct.manifold.Time(50, 250);  % Different T
 wrong_data2 = randn(B.Manifold.N, 50);
-sig_bad2 = bct.signal.Signal(wrong_manifold2, wrong_data2, 'wrong_T');
+sig_bad2 = bct.Signal(wrong_manifold2, wrong_data2, 'wrong_T');
 
 try
     B.addSignal(sig_bad2);
@@ -107,7 +107,7 @@ B2 = bct.bct.fromMesh(V, F);
 dyn_data = randn(B2.Manifold.N, 100);
 M_temp = bct.manifold.Manifold(V, F);
 M_temp.Time = bct.manifold.Time(100, 250);
-sig_dyn = bct.signal.Signal(M_temp, dyn_data, 'dynamic');
+sig_dyn = bct.Signal(M_temp, dyn_data, 'dynamic');
 
 try
     B2.addSignal(sig_dyn);
@@ -148,9 +148,9 @@ fprintf('✓ Cleared all signals\n\n');
 %% Test 8: Multiple signals with same label
 fprintf('Test 8: Multiple signals with same label\n');
 
-s_a = bct.signal.Signal(B.Manifold, randn(B.Manifold.N, 1), 'test');
-s_b = bct.signal.Signal(B.Manifold, randn(B.Manifold.N, 1), 'test');
-s_c = bct.signal.Signal(B.Manifold, randn(B.Manifold.N, 1), 'other');
+s_a = bct.Signal(B.Manifold, randn(B.Manifold.N, 1), 'test');
+s_b = bct.Signal(B.Manifold, randn(B.Manifold.N, 1), 'test');
+s_c = bct.Signal(B.Manifold, randn(B.Manifold.N, 1), 'other');
 
 B.addSignal(s_a);
 B.addSignal(s_b);
@@ -210,3 +210,4 @@ fprintf('\nValidation:\n');
 fprintf('  - Signal.N must match Manifold.N\n');
 fprintf('  - Signal.T must match Manifold.Time.T (for dynamic signals)\n');
 fprintf('  - Dynamic signals require Manifold.Time to be set\n');
+

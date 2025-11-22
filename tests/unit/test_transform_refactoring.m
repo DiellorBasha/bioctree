@@ -118,3 +118,4 @@ fprintf('========================================\n');
 fprintf('All tests passed! ✓\n');
 fprintf('bct.signal.transform is working correctly.\n');
 fprintf('========================================\n');
+

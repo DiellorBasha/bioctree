@@ -96,3 +96,4 @@ catch ME
 end
 
 fprintf('\n=== All Time class tests passed! ===\n');
+

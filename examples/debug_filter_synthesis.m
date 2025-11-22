@@ -103,3 +103,4 @@ fprintf('  Try: [%.0f, %.0f] (10%% to 95%% of lambda_max)\n', ...
     0.1*B.Manifold.Resolution.lambda_max, 0.95*B.Manifold.Resolution.lambda_max);
 fprintf('\nOption 2: Request fewer modes (only those in band)\n');
 fprintf('  Estimate modes in band and request that number\n');
+

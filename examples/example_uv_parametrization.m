@@ -155,3 +155,4 @@ fprintf('  • Texture mapping\n');
 fprintf('  • 2D visualization of surface signals\n');
 fprintf('  • Feature extraction in parametric space\n');
 fprintf('  • Cross-subject registration\n\n');
+

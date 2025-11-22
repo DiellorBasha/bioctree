@@ -57,3 +57,4 @@ sig3 = B.Generate('label', 'beta_wave');
 B.designFilter([0.05, 0.15], 'freq', 'band', 'label', 'gamma');
 B.Synthesize('gamma');
 sig4 = B.Generate('label', 'gamma_wave');
+

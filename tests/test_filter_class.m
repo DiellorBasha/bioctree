@@ -254,3 +254,4 @@ fprintf('✓ Multiple wavelength bands\n');
 fprintf('✓ Integration with instrument resolution\n');
 fprintf('✓ Complete workflow\n');
 fprintf('\nbct.filters.Filter class is fully functional!\n');
+

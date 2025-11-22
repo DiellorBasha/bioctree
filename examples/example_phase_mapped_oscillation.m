@@ -214,3 +214,4 @@ fprintf('  • Vertices with similar spatial values oscillate in sync\n');
 fprintf('  • Creates spatially coherent, traveling wave-like patterns\n');
 fprintf('  • All vertices share the same frequency (%.1f Hz)\n', timespec.freq);
 fprintf('  • Phase diversity creates rich spatiotemporal dynamics\n\n');
+

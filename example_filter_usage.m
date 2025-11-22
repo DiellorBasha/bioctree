@@ -180,3 +180,4 @@ fprintf('  ✓ FilterDesigner for easy filter creation\n\n');
 
 fprintf('Your filter parameters can be updated directly from GUI sliders!\n');
 fprintf('The event system ensures plots/calculations update automatically.\n');
+

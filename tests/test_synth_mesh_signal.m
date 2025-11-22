@@ -184,5 +184,6 @@ fprintf('  x = synth_mesh_signal(B, spec, ''return_raw'', true)  - Legacy mode\n
 fprintf('Signal Properties:\n');
 fprintf('  - Automatically added to B.Signals array\n');
 fprintf('  - Auto-generated labels based on spec type\n');
-fprintf('  - Proper bct.signal.Signal objects\n');
+fprintf('  - Proper bct.Signal objects\n');
 fprintf('  - Dimension validation enforced\n');
+

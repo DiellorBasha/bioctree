@@ -25,3 +25,4 @@ catch ME
         fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
     end
 end
+

@@ -83,7 +83,7 @@ data = randn(N, 1);
 data = single(data / std(data));  % Normalize
 
 % Create Signal object
-sig = bct.signal.Signal(B.Manifold, data, 'test_signal');
+sig = bct.Signal(B.Manifold, data, 'test_signal');
 B.addSignal(sig);
 
 fprintf('  ✓ Created Signal object manually\n');
@@ -103,10 +103,11 @@ fprintf('  [B_out, a, f] = synth_mesh_signal(B, spec, varargin)\n\n');
 
 fprintf('Key Changes:\n');
 fprintf('  1. Returns bct object (not raw data) by default\n');
-fprintf('  2. Automatically creates bct.signal.Signal objects\n');
+fprintf('  2. Automatically creates bct.Signal objects\n');
 fprintf('  3. Supports spec array for multiple signals\n');
 fprintf('  4. Auto-generates labels based on spec type\n');
 fprintf('  5. Legacy mode via ''return_raw'' parameter\n\n');
 
 fprintf('Note: Full functional tests require gptoolbox for eigendecomposition\n');
 fprintf('      Run integration tests in an environment with gptoolbox installed\n');
+

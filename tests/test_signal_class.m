@@ -1,4 +1,4 @@
-%% Test bct.signal.Signal class
+%% Test bct.Signal class
 % Tests the Signal class for representing data on manifolds
 
 clear all;
@@ -9,7 +9,7 @@ root = fileparts(pwd);
 addpath(fullfile(root, 'toolbox'));
 addpath(fullfile(root, 'external'));
 
-fprintf('=== Testing bct.signal.Signal Class ===\n\n');
+fprintf('=== Testing bct.Signal Class ===\n\n');
 
 %% Setup: Create a manifold
 [V, F] = icosphere(2);  % Small icosphere for testing
@@ -23,7 +23,7 @@ fprintf('Added time dimension: T=%d at fs=%.2f Hz\n\n', M.Time.T, M.Time.fs);
 %% Test 1: Scalar static signal [N×1]
 fprintf('Test 1: Scalar static signal [N×1]\n');
 data1 = randn(M.N, 1);
-s1 = bct.signal.Signal(M, data1, 'scalar_static');
+s1 = bct.Signal(M, data1, 'scalar_static');
 
 assert(s1.N == M.N, 'N mismatch');
 assert(s1.T == 0, 'Should be static');
@@ -51,7 +51,7 @@ fprintf('✓ Scalar static signal created successfully\n\n');
 %% Test 2: Scalar dynamic signal [N×T]
 fprintf('Test 2: Scalar dynamic signal [N×T]\n');
 data2 = randn(M.N, M.Time.T);
-s2 = bct.signal.Signal(M, data2, 'scalar_dynamic');
+s2 = bct.Signal(M, data2, 'scalar_dynamic');
 
 assert(s2.N == M.N, 'N mismatch');
 assert(s2.T == M.Time.T, 'T mismatch');
@@ -67,7 +67,7 @@ fprintf('✓ Scalar dynamic signal created successfully\n\n');
 %% Test 3: Vector static signal [N×3]
 fprintf('Test 3: Vector static signal [N×3]\n');
 data3 = randn(M.N, 3);
-s3 = bct.signal.Signal(M, data3, 'vector_static');
+s3 = bct.Signal(M, data3, 'vector_static');
 
 assert(s3.N == M.N, 'N mismatch');
 assert(s3.T == 0, 'Should be static');
@@ -83,7 +83,7 @@ fprintf('✓ Vector static signal created successfully\n\n');
 %% Test 4: Vector dynamic signal [N×T×3]
 fprintf('Test 4: Vector dynamic signal [N×T×3]\n');
 data4 = randn(M.N, M.Time.T, 3);
-s4 = bct.signal.Signal(M, data4, 'vector_dynamic');
+s4 = bct.Signal(M, data4, 'vector_dynamic');
 
 assert(s4.N == M.N, 'N mismatch');
 assert(s4.T == M.Time.T, 'T mismatch');
@@ -102,7 +102,7 @@ fprintf('Test 5: Dimension validation\n');
 % Wrong N
 try
     bad_data = randn(M.N + 5, 1);
-    s_bad = bct.signal.Signal(M, bad_data);
+    s_bad = bct.Signal(M, bad_data);
     error('Should have thrown dimension mismatch error');
 catch ME
     if contains(ME.identifier, 'Signal:DimensionMismatch')
@@ -115,7 +115,7 @@ end
 % Wrong T for dynamic
 try
     bad_data = randn(M.N, M.Time.T + 10);
-    s_bad = bct.signal.Signal(M, bad_data);
+    s_bad = bct.Signal(M, bad_data);
     error('Should have thrown dimension mismatch error');
 catch ME
     if contains(ME.identifier, 'Signal:DimensionMismatch')
@@ -129,7 +129,7 @@ end
 M_static = bct.manifold.Manifold(V, F);
 try
     bad_data = randn(M_static.N, 50);
-    s_bad = bct.signal.Signal(M_static, bad_data);
+    s_bad = bct.Signal(M_static, bad_data);
     error('Should have thrown error for dynamic signal without Time');
 catch ME
     if contains(ME.identifier, 'Signal:DimensionMismatch')
@@ -218,3 +218,4 @@ function result = ternary(condition, true_val, false_val)
         result = false_val;
     end
 end
+

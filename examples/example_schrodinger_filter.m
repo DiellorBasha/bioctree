@@ -163,3 +163,4 @@ fprintf('Magnitude range: [%.4f, %.4f]\n', min(abs(sig.Data(:))), max(abs(sig.Da
 fprintf('Total power: %.4f\n', sum(abs(sig.Data(:)).^2));
 
 fprintf('\n=== Example Complete ===\n');
+

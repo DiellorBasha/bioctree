@@ -13,3 +13,4 @@ B.validate();
 X = B.read_raw([1 10],[1 5]);
 verifySize(t, X, [10 5]);
 end
+

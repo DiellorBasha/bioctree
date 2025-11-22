@@ -122,3 +122,4 @@ fprintf('  B.fs → B.Manifold.Time.fs\n');
 fprintf('  B.F  → size(B.Manifold.F, 1) [for meshes]\n');
 fprintf('\nDeprecated properties still work for backward compatibility.\n');
 fprintf('Update your code to use the Manifold object for future compatibility.\n');
+

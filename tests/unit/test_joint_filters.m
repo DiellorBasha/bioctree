@@ -207,3 +207,4 @@ fprintf('  • Multiple dispersion types (heat, wave, none)\n');
 fprintf('  • Flexible kernel types (Mexican hat, Morlet, Gabor, custom)\n');
 fprintf('  • Integration with Bct.SpectralGrid\n');
 fprintf('  • Visualization tools (plotJoint, plotMarginals)\n');
+

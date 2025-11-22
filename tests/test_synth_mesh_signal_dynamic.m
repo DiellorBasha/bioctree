@@ -263,3 +263,4 @@ fprintf('  B.Manifold.Time = bct.manifold.Time(100, 100);  %% 1 sec @ 100 Hz\n')
 fprintf('  spec.type = ''narrowband''; spec.f0 = 0.1; spec.bw_abs = 0.02;\n');
 fprintf('  timespec.type = ''sinusoid''; timespec.freq = 10;\n');
 fprintf('  B = bct.sim.synth_mesh_signal_dynamic(B, spec, timespec);\n');
+

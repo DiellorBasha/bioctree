@@ -222,3 +222,4 @@ fprintf('  • Event system (ParametersChanged)\n');
 fprintf('  • FilterDesigner factory methods\n');
 fprintf('  • FilterBank collection management\n');
 fprintf('  • Automatic cache invalidation\n');
+

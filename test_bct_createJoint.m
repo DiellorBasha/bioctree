@@ -281,3 +281,4 @@ fprintf('  B.Time = bct.Time(t, fs);\n');
 fprintf('  B.Omega = B.Time.dual;\n');
 fprintf('  B = B.createJoint(''Lambda'', ''Omega'');\n');
 fprintf('  % Now access: B.Joint.A_grid, B.Joint.B_grid, etc.\n\n');
+

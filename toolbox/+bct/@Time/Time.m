@@ -24,14 +24,12 @@ classdef Time < bct.Domain
             obj.displayCoordinateMode = bct.enum.CoordinateMode.Time;
 
             obj = obj.buildAxis();
-
-            % -------- Automatically create and assign dual (Omega) -------
-            omegaDomain = bct.Omega(obj);
-            obj.setDual(omegaDomain);
             
-            % -------- Initialize transforms (FFT/IFFT) -------
-            obj.initializeTransform();
-            omegaDomain.initializeTransform();
+            % Note: Omega dual is created by BCT class when Time is assigned
+            % BCT class setter will:
+            %   1. Create Omega domain from this Time domain
+            %   2. Link them as duals
+            %   3. Initialize transforms for both
         end
 
         % ---------------------------------------------------------------

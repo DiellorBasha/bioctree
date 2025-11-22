@@ -128,3 +128,4 @@ info = h5info(fname);              % tree of groups/datasets/attrs
 disp({info.Groups.Name})           % e.g. '/signals'  '/lut'
 h5disp(fname)                      % verbose printout (handy!)
 
+

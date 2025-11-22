@@ -28,3 +28,4 @@ B.Manifold.meshFourier(600);
 fprintf('NumModes after meshFourier(600): %d\n', B.Manifold.NumModes);
 fprintf('Eigenvalues range: [%.6f, %.6f]\n', min(B.Manifold.Eigenvalues), max(B.Manifold.Eigenvalues));
 fprintf('Resolution lambda_max: %.4f (should be >> max eigenvalue)\n', B.Manifold.Resolution.lambda_max);
+

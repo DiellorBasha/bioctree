@@ -206,3 +206,4 @@ fprintf('  • Transforms automatically initialized after computation\n');
 fprintf('  • Custom parameters (tol, maxit) accepted\n');
 fprintf('  • Generalized eigenproblem K*U = M*U*D satisfied\n');
 fprintf('  • MFT/IMFT transforms functional\n\n');
+

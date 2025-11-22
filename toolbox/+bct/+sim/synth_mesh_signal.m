@@ -118,7 +118,7 @@ function [B_out, a, f] = synth_mesh_signal(B, spec, varargin)
                 'return_raw', true);
             
             % Create Signal object and add to bct
-            sig = bct.signal.Signal(B_out.Manifold, xrec_i, label_i);
+            sig = bct.Signal(B_out.Manifold, xrec_i, label_i);
             B_out.addSignal(sig);
             
             % Store outputs for last signal (for backward compatibility)
@@ -245,7 +245,7 @@ function [B_out, a, f] = synth_mesh_signal(B, spec, varargin)
         end
         
         % Create Signal object
-        sig = bct.signal.Signal(B_out.Manifold, xrec, label);
+        sig = bct.Signal(B_out.Manifold, xrec, label);
         
         % Add to bct object
         B_out.addSignal(sig);

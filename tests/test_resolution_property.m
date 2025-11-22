@@ -156,3 +156,4 @@ fprintf('  .freq        - Spatial frequency [cycles/units]\n');
 fprintf('  .wavelength  - Minimum wavelength [units]\n\n');
 
 fprintf('All tests passed! ✓\n\n');
+

@@ -50,3 +50,4 @@ B2.clearSpectralGrid();
 fprintf('hasSpectralGrid() after clear: %s\n', mat2str(B2.hasSpectralGrid()));
 
 fprintf('\n=== Test completed successfully! ===\n');
+

@@ -219,7 +219,7 @@ function [B_out, spatial_pattern, temporal_pattern] = synth_mesh_signal_dynamic(
     end
     
     % Create Signal object
-    sig = bct.signal.Signal(B.Manifold, dynamic_signal, label);
+    sig = bct.Signal(B.Manifold, dynamic_signal, label);
     
     % Add to bct object
     B_out = B;
