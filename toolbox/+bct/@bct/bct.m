@@ -35,6 +35,11 @@ properties
     % Access as: B.Omega.omega, B.Omega.freq, B.Omega.axis, etc.
     Omega bct.Omega = bct.Omega.empty()  % Temporal frequency domain
     
+    % Joint domain - combines two canonical domains
+    % Can combine any pair: Lambda×Omega, Manifold×Time, etc.
+    % Access as: B.Joint.A_grid, B.Joint.B_grid, B.Joint.size(), etc.
+    Joint bct.Joint = bct.Joint.empty()  % Joint domain for multi-dimensional analysis
+    
     % Signals defined on the Manifold
     % Can be a single bct.signal.Signal object or an array of Signal objects
     % All signals must have dimensions matching B.Manifold (N and optionally T)
@@ -318,6 +323,81 @@ methods
     else
       fprintf('      Lambda.transform: %s\n', class(obj.Lambda.transform));
     end
+  end
+  
+  function obj = createJoint(obj, domainA_name, domainB_name)
+    % createJoint - Create joint domain from two canonical domains
+    %
+    % Creates a Joint domain by combining any two canonical BCT domains.
+    % The Joint domain provides 2D meshgrids for multi-dimensional analysis
+    % (e.g., space-time-frequency filtering, spatiotemporal decomposition).
+    %
+    % Syntax:
+    %   obj = obj.createJoint('Lambda', 'Omega')
+    %   obj = obj.createJoint('Manifold', 'Time')
+    %
+    % Inputs:
+    %   domainA_name - Name of first domain: 'Manifold', 'Lambda', 'Time', or 'Omega'
+    %   domainB_name - Name of second domain: 'Manifold', 'Lambda', 'Time', or 'Omega'
+    %
+    % Outputs:
+    %   obj - Updated bct object with:
+    %         .Joint - Joint domain object (bct.Joint)
+    %
+    % Common Joint Domain Combinations:
+    %   'Lambda'   × 'Omega'   - Space-time-frequency analysis (spectral filtering)
+    %   'Manifold' × 'Time'    - Spatiotemporal signals on mesh
+    %   'Lambda'   × 'Time'    - Spectral-temporal evolution
+    %   'Manifold' × 'Omega'   - Spatial-frequency decomposition
+    %   'Time'     × 'Omega'   - Time-frequency analysis
+    %
+    % Example:
+    %   % Create space-time-frequency joint domain
+    %   B = bct.bct.fromMesh(V, F);
+    %   B = B.computeEigenbasis(100);
+    %   B.Time = bct.Time(linspace(0,1,50)', 50);
+    %   B.Omega = B.Time.dual;
+    %   B = B.createJoint('Lambda', 'Omega');
+    %   
+    %   % Now access joint coordinates:
+    %   [M, N] = B.Joint.size();  % [100, 50]
+    %   lambda_grid = B.Joint.A_grid;  % [100×50]
+    %   omega_grid = B.Joint.B_grid;   % [100×50]
+    %
+    % See also: bct.Joint, bct.Lambda, bct.Manifold, bct.Time, bct.Omega
+    
+    % Validate domain names
+    validDomains = {'Manifold', 'Lambda', 'Time', 'Omega'};
+    if ~ismember(domainA_name, validDomains)
+      error('bct:InvalidDomain', ...
+        'domainA_name must be one of: %s', strjoin(validDomains, ', '));
+    end
+    if ~ismember(domainB_name, validDomains)
+      error('bct:InvalidDomain', ...
+        'domainB_name must be one of: %s', strjoin(validDomains, ', '));
+    end
+    
+    % Get domain objects
+    domainA = obj.(domainA_name);
+    domainB = obj.(domainB_name);
+    
+    % Validate domains exist
+    if isempty(domainA)
+      error('bct:DomainNotInitialized', ...
+        '%s domain must be initialized before creating joint domain', domainA_name);
+    end
+    if isempty(domainB)
+      error('bct:DomainNotInitialized', ...
+        '%s domain must be initialized before creating joint domain', domainB_name);
+    end
+    
+    % Create joint domain
+    obj.Joint = bct.Joint(domainA, domainB);
+    
+    fprintf('[bct] Joint domain created: %s\n', obj.Joint.Domain);
+    fprintf('      Grid size: [%d×%d] = %d points\n', ...
+      obj.Joint.size(), obj.Joint.numel());
+    fprintf('      Units: %s\n', obj.Joint.units);
   end
 end
 
