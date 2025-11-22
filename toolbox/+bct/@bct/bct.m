@@ -226,6 +226,101 @@ end
     obj.Lambda.initializeTransform();
   end
 end
+
+% Eigendecomposition orchestration
+methods
+  function obj = computeEigenbasis(obj, varargin)
+    % computeEigenbasis - Compute eigenvectors and eigenvalues for Lambda domain
+    %
+    % Orchestrates the eigendecomposition by passing MassMatrix and 
+    % CotangentMatrix from Manifold to Lambda, then re-initializes
+    % transforms for both domains.
+    %
+    % Syntax:
+    %   obj = obj.computeEigenbasis()
+    %   obj = obj.computeEigenbasis(numModes)
+    %   obj = obj.computeEigenbasis(numModes, Name, Value)
+    %
+    % Inputs:
+    %   numModes - (optional) Number of eigenmodes to compute
+    %              Default: min(600, N-1)
+    %
+    % Name-Value Parameters:
+    %   'sigma'  - Eigenvalue shift (default: 1e-6)
+    %   'tol'    - Convergence tolerance (default: 1e-10)
+    %   'maxit'  - Maximum iterations (default: 5000)
+    %   'mode'   - Eigenvalue selection (default: 'smallestabs')
+    %
+    % Outputs:
+    %   obj - Updated bct object with:
+    %         .Lambda.U      - Eigenvectors
+    %         .Lambda.lambda - Eigenvalues
+    %         .Lambda.K      - Number of modes
+    %         Both Manifold and Lambda transforms re-initialized
+    %
+    % Example:
+    %   B = bct.bct.fromMesh(V, F);
+    %   B = B.computeEigenbasis(500);
+    %   
+    %   % Now transforms are available:
+    %   signal = randn(size(V,1), 1);
+    %   coeffs = B.Manifold.transform.forward(signal);
+    %   reconstructed = B.Lambda.transform.forward(coeffs);
+    %
+    % See also: bct.Lambda.eigenbasis, bct.Manifold.meshFourier
+    
+    % Validate Manifold and Lambda exist
+    if isempty(obj.Manifold)
+      error('bct:NoManifold', 'Manifold domain must be initialized before computing eigenbasis');
+    end
+    if isempty(obj.Lambda)
+      error('bct:NoLambda', 'Lambda domain must be initialized before computing eigenbasis');
+    end
+    
+    % Validate dual linking
+    if obj.Manifold.dual ~= obj.Lambda
+      error('bct:DualNotLinked', 'Manifold and Lambda must be linked as dual domains');
+    end
+    
+    % Get MassMatrix and CotangentMatrix from Manifold
+    M = obj.Manifold.MassMatrix;
+    K = obj.Manifold.CotangentMatrix;
+    
+    if isempty(M) || isempty(K)
+      error('bct:NoMatrices', ...
+        'Manifold MassMatrix and CotangentMatrix must be computed before eigenbasis');
+    end
+    
+    % Compute eigenbasis using Lambda method
+    obj.Lambda = obj.Lambda.eigenbasis(M, K, varargin{:});
+    
+    % Re-initialize transforms for both Manifold and Lambda
+    % Now that eigenvectors are computed, MFT and IMFT will be created
+    obj.Manifold.initializeTransform();
+    obj.Lambda.initializeTransform();
+    
+    % Verify transforms were created
+    if isempty(obj.Manifold.transform)
+      warning('bct:NoMFT', 'Manifold transform (MFT) was not initialized');
+    end
+    if isempty(obj.Lambda.transform)
+      warning('bct:NoIMFT', 'Lambda transform (IMFT) was not initialized');
+    end
+    
+    fprintf('[bct] Eigenbasis computed and transforms initialized\n');
+    if isempty(obj.Manifold.transform)
+      fprintf('      Manifold.transform: empty\n');
+    else
+      fprintf('      Manifold.transform: %s\n', class(obj.Manifold.transform));
+    end
+    if isempty(obj.Lambda.transform)
+      fprintf('      Lambda.transform: empty\n');
+    else
+      fprintf('      Lambda.transform: %s\n', class(obj.Lambda.transform));
+    end
+  end
+end
+
 % Signal management methods
 methods
   function addSignal(this, signal_obj)

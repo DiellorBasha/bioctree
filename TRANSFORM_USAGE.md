@@ -121,7 +121,65 @@ Located in `toolbox/+bct/+factory/+transforms/`:
 
 ## Eigendecomposition Workflow
 
-The complete workflow for setting up MFT/IMFT:
+### Recommended Method: bct.computeEigenbasis()
+
+The simplest way to compute eigenvectors and initialize transforms:
+
+```matlab
+% 1. Create bct object
+[V, F] = icosphere(2);
+B = bct.bct.fromMesh(V, F);
+
+% 2. Compute eigenbasis (automatically initializes transforms)
+B = B.computeEigenbasis(50);  % Request 50 modes
+
+% 3. Use transforms immediately
+signal = randn(size(V,1), 1);
+coeffs = B.Manifold.transform.forward(signal);
+reconstructed = B.Lambda.transform.forward(coeffs);
+```
+
+**What it does:**
+- Passes MassMatrix and CotangentMatrix from Manifold to Lambda
+- Calls `Lambda.eigenbasis()` to compute eigendecomposition
+- Automatically re-initializes transforms for both Manifold and Lambda
+- Returns updated bct object ready for spectral analysis
+
+**Optional parameters:**
+```matlab
+% Custom parameters
+B = B.computeEigenbasis(100, 'tol', 1e-12, 'maxit', 10000);
+```
+
+### Alternative: Direct Lambda.eigenbasis() Call
+
+For more control, call `Lambda.eigenbasis()` directly:
+
+```matlab
+% 1. Create bct object
+[V, F] = icosphere(2);
+B = bct.bct.fromMesh(V, F);
+
+% 2. Get matrices from Manifold
+M = B.Manifold.MassMatrix;
+K = B.Manifold.CotangentMatrix;
+
+% 3. Compute eigenbasis
+B.Lambda = B.Lambda.eigenbasis(M, K, 50);
+
+% 4. Re-initialize transforms
+B.Manifold.initializeTransform();
+B.Lambda.initializeTransform();
+
+% 5. Use transforms
+signal = randn(size(V,1), 1);
+coeffs = B.Manifold.transform.forward(signal);
+reconstructed = B.Lambda.transform.forward(coeffs);
+```
+
+### Legacy Method: meshFourier (Still Available)
+
+The complete workflow for setting up MFT/IMFT using the static method:
 
 ```matlab
 % 1. Create bct object (transforms initially empty)
