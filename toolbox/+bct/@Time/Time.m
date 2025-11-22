@@ -39,9 +39,11 @@ classdef Time < bct.Domain
             switch obj.displayCoordinateMode
                 case bct.enum.CoordinateMode.Time
                     obj.axis = obj.T;
+                    obj.units = "s";  % Time units
 
                 case bct.enum.CoordinateMode.Index
                     obj.axis = (1:obj.N).';
+                    obj.units = "samples";  % Index units
 
                 otherwise
                     error("Unsupported coordinate mode for Time domain.");

@@ -13,7 +13,7 @@ classdef Omega < bct.Domain
             obj@bct.Domain();
 
             obj.name  = "Omega";
-            obj.units = "rad/s";
+            obj.units = "Hz";  % Will be set correctly by updateCoordinateMode
 
             fs = timeDomain.fs;
             N  = timeDomain.N;
@@ -24,10 +24,13 @@ classdef Omega < bct.Domain
             obj.N     = N;
 
             obj.resolutionMode       = bct.enum.ResolutionMode.Full;
-            obj.displayCoordinateMode = bct.enum.CoordinateMode.Omega;
+            obj.displayCoordinateMode = bct.enum.CoordinateMode.Frequency;  % Default for filter design
 
             obj.metadata.fs = fs;
             obj.metadata.N  = N;
+            
+            % Update axis and units based on coordinate mode
+            obj = obj.updateCoordinateMode();
 
             % -------- Automatically assign dual to timeDomain -----------
             obj.setDual(timeDomain);
@@ -45,9 +48,11 @@ classdef Omega < bct.Domain
             switch obj.displayCoordinateMode
                 case bct.enum.CoordinateMode.Omega
                     obj.axis = obj.omega;
+                    obj.units = "rad/s";  % Angular frequency units
 
                 case bct.enum.CoordinateMode.Frequency
                     obj.axis = obj.freq;
+                    obj.units = "Hz";  % Frequency units
 
                 otherwise
                     error("Unsupported coordinate mode for Omega domain.");

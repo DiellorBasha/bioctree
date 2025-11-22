@@ -41,7 +41,7 @@ classdef Lambda < bct.Domain
             obj.K      = length(obj.lambda);
 
             obj.resolutionMode       = bct.enum.ResolutionMode.Full;
-            obj.displayCoordinateMode = bct.enum.CoordinateMode.Lambda;
+            obj.displayCoordinateMode = bct.enum.CoordinateMode.Wavenumber;  % Default for filter design
 
             obj = obj.buildAxis();
             
@@ -76,12 +76,15 @@ classdef Lambda < bct.Domain
             switch obj.displayCoordinateMode
                 case bct.enum.CoordinateMode.Lambda
                     obj.axis = obj.lambda;
+                    obj.units = "1/mm^2";  % Eigenvalue units
 
                 case bct.enum.CoordinateMode.Wavenumber
                     obj.axis = sqrt(obj.lambda);
+                    obj.units = "1/mm";  % Wavenumber units
 
                 case bct.enum.CoordinateMode.Wavelength
                     obj.axis = 1 ./ sqrt(obj.lambda);
+                    obj.units = "mm";  % Wavelength units
 
                 otherwise
                     error("Unsupported coordinate mode for Lambda.");

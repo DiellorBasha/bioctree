@@ -85,6 +85,11 @@ classdef Manifold < bct.Domain
             switch obj.displayCoordinateMode
                 case bct.enum.CoordinateMode.Vertex
                     obj.axis = (1:N).';
+                    obj.units = "vertex";  % Vertex index units
+
+                case bct.enum.CoordinateMode.Geodesic
+                    % Future: geodesic distance coordinates
+                    error("Geodesic coordinate mode not yet implemented.");
 
                 otherwise
                     error("Unsupported coordinate mode for Manifold.");
