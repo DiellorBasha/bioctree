@@ -22,10 +22,10 @@ classdef MFT < bct.factory.transforms.TransformBase
             end
 
             % Eigenvectors (basis functions)
-            U = lambdaDomain.eigenvectors;     % [N x K]
+            U = lambdaDomain.eigenvectors();     % [N x K] - method call
 
             % Mass matrix (FEM geometry)
-            M = spaceDomain.M;                 % [N x N]
+            M = spaceDomain.M();                 % [N x N] - method call
 
             % ----------- Define forward and inverse transforms -----------
             obj.forward = @(x) U' * (M * x);   % Space -> Lambda
@@ -34,7 +34,7 @@ classdef MFT < bct.factory.transforms.TransformBase
             % ----------- Metadata for user / debugging -------------------
             obj.metadata.type      = 'Mesh Fourier Transform (MFT)';
             obj.metadata.numModes  = size(U,2);
-            obj.metadata.lambda    = lambdaDomain.eigenvalues;
+            obj.metadata.lambda    = lambdaDomain.eigenvalues();
             obj.metadata.massDiag  = diag(M);  % optional summary of M
         end
     end

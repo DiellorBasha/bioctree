@@ -22,8 +22,8 @@ classdef IMFT < bct.factory.transforms.TransformBase
             end
 
             % Eigenvectors and mass matrix
-            U = lambdaDomain.eigenvectors;   % [N x K]
-            M = spaceDomain.M;               % [N x N]
+            U = lambdaDomain.eigenvectors();   % [N x K] - method call
+            M = spaceDomain.M();                % [N x N] - method call
 
             % ---------- Define forward and inverse transforms ------------
             obj.forward = @(c) U * c;         % Lambda -> Space
@@ -32,7 +32,7 @@ classdef IMFT < bct.factory.transforms.TransformBase
             % ---------- Metadata -----------------------------------------
             obj.metadata.type     = 'Inverse Mesh Fourier Transform (IMFT)';
             obj.metadata.numModes = size(U,2);
-            obj.metadata.lambda   = lambdaDomain.eigenvalues;
+            obj.metadata.lambda   = lambdaDomain.eigenvalues();
         end
     end
 end

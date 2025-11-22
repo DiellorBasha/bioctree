@@ -54,8 +54,39 @@ classdef (Abstract) Domain < handle
                 return;
             end
 
-            % Use Transform factory
-            obj.transform = bct.Transform.Transform(obj);
+            % Determine which transform to use based on domain type
+            switch obj.name
+                case "Manifold"
+                    % Manifold ↔ Lambda: Use Mesh Fourier Transform
+                    % Check if Lambda has eigenvectors computed
+                    if ~isempty(obj.dual.U)
+                        obj.transform = bct.factory.transforms.MFT(obj);
+                    else
+                        % Eigenvectors not yet computed - transform will be set later
+                        obj.transform = [];
+                    end
+                    
+                case "Lambda"
+                    % Lambda ↔ Manifold: Use Inverse Mesh Fourier Transform
+                    % Check if eigenvectors are available
+                    if ~isempty(obj.U)
+                        obj.transform = bct.factory.transforms.IMFT(obj);  % Pass Lambda itself, not dual
+                    else
+                        % Eigenvectors not yet computed - transform will be set later
+                        obj.transform = [];
+                    end
+                    
+                case "Time"
+                    % Time ↔ Omega: Use FFT
+                    obj.transform = bct.factory.transforms.FFT(obj);
+                    
+                case "Omega"
+                    % Omega ↔ Time: Use IFFT
+                    obj.transform = bct.factory.transforms.IFFT(obj.dual);
+                    
+                otherwise
+                    warning("No transform defined for domain type '%s'", obj.name);
+            end
         end
     end
 

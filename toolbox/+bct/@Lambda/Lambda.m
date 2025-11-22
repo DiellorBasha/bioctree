@@ -44,6 +44,18 @@ classdef Lambda < bct.Domain
         end
 
         % ---------------------------------------------------------------
+        function U = eigenvectors(obj)
+            % Alias for U (for transform compatibility)
+            U = obj.U;
+        end
+        
+        % ---------------------------------------------------------------
+        function lambda = eigenvalues(obj)
+            % Alias for lambda property (for transform compatibility)
+            lambda = obj.lambda;
+        end
+        
+        % ---------------------------------------------------------------
         function obj = buildAxis(obj, varargin)
             switch obj.displayCoordinateMode
                 case bct.enum.CoordinateMode.Lambda

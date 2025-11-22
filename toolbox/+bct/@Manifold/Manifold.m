@@ -92,6 +92,12 @@ classdef Manifold < bct.Domain
         end
 
         % ---------------------------------------------------------------
+        function M = M(obj)
+            % Alias for MassMatrix (for transform compatibility)
+            M = obj.MassMatrix;
+        end
+        
+        % ---------------------------------------------------------------
         function obj = updateResolution(obj)
             % Future: decimation
             if obj.resolutionMode == bct.enum.ResolutionMode.Full

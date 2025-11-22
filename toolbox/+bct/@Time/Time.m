@@ -28,6 +28,10 @@ classdef Time < bct.Domain
             % -------- Automatically create and assign dual (Omega) -------
             omegaDomain = bct.Omega(obj);
             obj.setDual(omegaDomain);
+            
+            % -------- Initialize transforms (FFT/IFFT) -------
+            obj.initializeTransform();
+            omegaDomain.initializeTransform();
         end
 
         % ---------------------------------------------------------------

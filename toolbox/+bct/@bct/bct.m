@@ -116,6 +116,10 @@ end
     
     % Link Manifold ↔ Lambda as dual domains
     obj.Manifold.setDual(obj.Lambda);
+    
+    % Initialize transforms (note: MFT/IMFT won't be set until eigenvectors computed)
+    obj.Manifold.initializeTransform();
+    obj.Lambda.initializeTransform();
   end
 
   function obj = fromEdges(E, N, coords, w)
@@ -179,6 +183,10 @@ end
     
     % Link Manifold ↔ Lambda as dual domains
     obj.Manifold.setDual(obj.Lambda);
+    
+    % Initialize transforms (note: MFT/IMFT won't be set until eigenvectors computed)
+    obj.Manifold.initializeTransform();
+    obj.Lambda.initializeTransform();
   end
 
   function obj = fromMesh(V,F)
@@ -212,6 +220,10 @@ end
     
     % Link Manifold ↔ Lambda as dual domains using inherited setDual method
     obj.Manifold.setDual(obj.Lambda);
+    
+    % Initialize transforms (note: MFT/IMFT won't be set until eigenvectors computed)
+    obj.Manifold.initializeTransform();
+    obj.Lambda.initializeTransform();
   end
 end
 % Signal management methods
