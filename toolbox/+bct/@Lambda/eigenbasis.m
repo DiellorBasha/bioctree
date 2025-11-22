@@ -121,12 +121,13 @@ D = D(mask, mask);
 
 % Update Lambda properties
 obj.U = U;
-obj.lambda = lam;
-obj.K = size(U, 2);  % Actual number of modes after filtering
+obj.lambda = lam;  % Setting lambda automatically updates K and axis via listener
+% Note: obj.K is automatically updated when lambda is set
 
 % Display summary
 fprintf('Lambda.eigenbasis: Computed %d modes (requested %d)\n', obj.K, numModes);
 fprintf('  Eigenvalue range: [%.6f, %.6f]\n', min(lam), max(lam));
 fprintf('  Removed %d modes (DC and negative eigenvalues)\n', numModes - obj.K);
+fprintf('  Lambda.axis updated: %d points\n', length(obj.axis));
 
 end

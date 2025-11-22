@@ -9,11 +9,14 @@ classdef Lambda < bct.Domain
     %   Default = eigenvalues (lambda)
 
     properties
-        lambda      % [K x 1] eigenvalues
         U           % [N x K] eigenvectors
         K           % number of modes
     end
-
+    
+    properties (SetObservable, AbortSet)
+        lambda      % [K x 1] eigenvalues - triggers axis update when set
+    end
+    
     methods
         % ---------------------------------------------------------------
         function obj = Lambda(eigenStruct)
@@ -41,8 +44,21 @@ classdef Lambda < bct.Domain
             obj.displayCoordinateMode = bct.enum.CoordinateMode.Lambda;
 
             obj = obj.buildAxis();
+            
+            % Add listener for lambda property changes
+            addlistener(obj, 'lambda', 'PostSet', @obj.onLambdaChanged);
         end
 
+        % ---------------------------------------------------------------
+        function onLambdaChanged(obj, ~, ~)
+            % Callback when lambda property is set
+            % Automatically updates K and rebuilds axis
+            if ~isempty(obj.lambda)
+                obj.K = length(obj.lambda);
+                obj = obj.buildAxis();
+            end
+        end
+        
         % ---------------------------------------------------------------
         function U = eigenvectors(obj)
             % Alias for U (for transform compatibility)
