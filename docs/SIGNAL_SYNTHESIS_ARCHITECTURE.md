@@ -50,11 +50,11 @@ Filters evaluate kernels on domain grids without handling transforms or signals:
 designer = bct.filters.FilterDesigner(B);
 
 % Spatial filter (Lambda domain)
-filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+filt = designer.lambda('heat', 'tau', 0.1);
 H = filt.evaluate();  % Returns filter response on Lambda.axis
 
 % Temporal filter (Omega domain)  
-filt = designer.temporal('gaussian', 'center', 20*2*pi, 'sigma', 5*2*pi);
+filt = designer.omega('gaussian', 'center', 20*2*pi, 'sigma', 5*2*pi);
 H = filt.evaluate();  % Returns filter response on Omega.axis
 
 % Joint filter (Lambda × Omega)
@@ -129,7 +129,7 @@ delta = B.createImpulse(50);  % Impulse at vertex 50
 
 % Create spatial filter
 designer = bct.filters.FilterDesigner(B);
-filt = designer.spatial('heat_wavenumber', 'tau', 0.05);
+filt = designer.lambda('heat', 'tau', 0.1);
 
 % Apply filter using transforms
 response = delta.applyFilter(filt, B.Manifold, B.Lambda);
@@ -201,7 +201,7 @@ sig = B.Generate('coeffs', coeffs, 'method', 'spectral');
 ```matlab
 % Clear separation of concerns
 delta = B.createImpulse(v0);
-filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+filt = designer.lambda('heat', 'tau', 0.1);
 response = delta.applyFilter(filt, B.Manifold, B.Lambda);
 ```
 
@@ -266,8 +266,7 @@ response = delta_st.applyFilter(filt_joint, B.Joint, B.Joint);
 
 ### Additional Filters
 
-Easy to add new kernels in `bct.filters.kernels`:
-- `mexican_hat_wavenumber` ✅ (already implemented)
+Easy to add new kernels in `bct.filters.kernels`:\n- `mexican_hat` ✅ (already implemented)
 - `morlet_wavelet` (for time-frequency analysis)
 - `von_mises` (for directional filtering)
 - `anisotropic_diffusion` (for edge-preserving smoothing)
@@ -337,7 +336,7 @@ x_reconstructed = B.Lambda.transform.inverse(x_spectral);
 assert(norm(x_spatial - x_reconstructed) < 1e-10, 'Transform roundtrip failed');
 
 % Test Filter evaluation
-filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+filt = designer.lambda('heat', 'tau', 0.1);
 H = filt.evaluate();
 assert(all(H >= 0) && all(H <= 1), 'Heat kernel must be in [0,1]');
 

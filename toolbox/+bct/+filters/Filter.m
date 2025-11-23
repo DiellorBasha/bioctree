@@ -85,8 +85,6 @@ classdef Filter < handle
     tau             % For heat kernel
     low             % Lower bound for bandpass
     high            % Upper bound for bandpass
-    k0              % Center wavenumber for wavenumber kernels (rad/mm)
-    sigma_k         % Bandwidth for wavenumber kernels (rad/mm)
     Response        % Cached filter response
   end
   
@@ -255,30 +253,6 @@ classdef Filter < handle
       obj.setParameter('high', val);
     end
     
-    function val = get.k0(obj)
-      if isfield(obj.Parameters, 'k0')
-        val = obj.Parameters.k0;
-      else
-        val = [];
-      end
-    end
-    
-    function set.k0(obj, val)
-      obj.setParameter('k0', val);
-    end
-    
-    function val = get.sigma_k(obj)
-      if isfield(obj.Parameters, 'sigma_k')
-        val = obj.Parameters.sigma_k;
-      else
-        val = [];
-      end
-    end
-    
-    function set.sigma_k(obj, val)
-      obj.setParameter('sigma_k', val);
-    end
-    
     function H = get.Response(obj)
       % Get cached response, computing if necessary
       if ~obj.CacheValid || isempty(obj.CachedResponse)
@@ -437,18 +411,6 @@ classdef Filter < handle
           addParameter(p, 'kernel_y', [], @(x) isa(x, 'function_handle'));
           addParameter(p, 'params_x', {}, @iscell);
           addParameter(p, 'params_y', {}, @iscell);
-          
-        % Wavenumber-aware kernels for Lambda domain
-        case 'gaussian_wavenumber'
-          addParameter(p, 'k0', 5, @isnumeric);      % Center wavenumber (rad/mm)
-          addParameter(p, 'sigma_k', 2, @isnumeric); % Bandwidth (rad/mm)
-          
-        case 'heat_wavenumber'
-          addParameter(p, 'tau', 0.1, @isnumeric);   % Diffusion time
-          
-        case 'mexican_hat_wavenumber'
-          addParameter(p, 'k0', 5, @isnumeric);      % Center wavenumber (rad/mm)
-          addParameter(p, 'sigma_k', 2, @isnumeric); % Bandwidth (rad/mm)
           
         otherwise
           % Allow arbitrary parameters for custom kernels

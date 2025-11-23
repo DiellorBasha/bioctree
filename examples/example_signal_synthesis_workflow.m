@@ -58,12 +58,12 @@ fprintf('Step 3: Creating spatial filter on Lambda domain...\n');
 % Initialize FilterDesigner
 designer = bct.filters.FilterDesigner(B);
 
-% Create heat (lowpass) filter in wavenumber space
+% Create heat (lowpass) filter
 tau = 0.05;  % Diffusion parameter (smaller = more lowpass)
-filt_spatial = designer.spatial('heat_wavenumber', 'tau', tau, ...
-    'label', 'Spatial Lowpass');
+filt_spatial = designer.lambda('heat', 'tau', tau, 'label', 'Spatial Lowpass');
 
 fprintf('  Filter type: %s\n', filt_spatial.KernelName);
+fprintf('  Filter label: %s\n', filt_spatial.Label);
 fprintf('  Filter domain: %s\n', filt_spatial.Domain.name);
 fprintf('  Parameters: tau = %.3f\n', tau);
 
@@ -255,7 +255,7 @@ fprintf('  B.Generate(...)    - Mixed responsibilities\n');
 
 fprintf('\nNEW (recommended):\n');
 fprintf('  delta = B.createImpulse(v0);\n');
-fprintf('  filt = designer.spatial(''heat_wavenumber'', ''tau'', 0.1);\n');
+fprintf('  filt = designer.lambda(''heat'', ''tau'', 0.1);\n');
 fprintf('  response = delta.applyFilter(filt, B.Manifold, B.Lambda);\n');
 
 fprintf('\nKey improvement: Clear separation of concerns!\n');

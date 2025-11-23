@@ -75,7 +75,7 @@ fprintf('\n=== Step 7: Create Spatial Filter ===\n');
 % Heat kernel: smooths signal on manifold surface
 % tau controls diffusion time (larger = more smoothing)
 tau = 0.05;
-filt_spatial = designer.spatial('heat_wavenumber', 'tau', tau);
+filt_spatial = designer.lambda('heat', 'tau', tau);
 
 fprintf('✓ Heat diffusion filter created (tau=%.3f)\n', tau);
 fprintf('  Filter domain: %s\n', filt_spatial.Domain);
