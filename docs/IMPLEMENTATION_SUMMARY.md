@@ -1,273 +1,232 @@
-# Implementation Summary: Filter Integration & Signal Synthesis
+# Filter Design System Implementation Summary
 
-## Completed Features
+## What Was Implemented
 
-### 1. Filterbank Integration ✓
+### 1. **Filter and FilterDesigner Class Integration**
+The BctFilterDesigner app now properly uses the `bct.filters.Filter` and `bct.filters.FilterDesigner` classes instead of manual kernel evaluation.
 
-#### New Property
-- **`Filterbank`** - Array of Filter/JointFilter objects in Bct class
+### 2. **Default Joint Filter Creation**
+When a BCT object is loaded:
+- **FilterDesigner** instance is created for the BCT object
+- **Joint domain** (Lambda×Omega) is automatically created if not present
+- **Default Gabor filter** is created with parameters from sliders
 
-#### Filter Design Methods
-- **`designFilter(range, quantity, kernelType, ...)`**
-  - Supports: lambda, wavelength, wavenumber, freq
-  - Kernels: ideal, band, heat, mexican_hat
-  - Auto-conversion using Manifold.Resolution
-  
-- **`designJointFilter(spatial_range, spatial_qty, temporal_range, temporal_qty, ...)`**
-  - Types: diffusion, wave, separable
-  - Dual quantity conversion (spatial + temporal)
+### 3. **Slider Control System**
+All four sliders now control Filter object parameters directly:
 
-#### Filter Management Methods
-- **`addFilter(filt, label)`** - Add to filterbank
-- **`getFilter(identifier)`** - Retrieve by index or label
-- **`removeFilter(identifier)`** - Remove by index or label
-- **`clearFilterbank()`** - Clear all filters
-- **`listFilters()`** - Display summary table
+| Slider | Controls | Units | Purpose |
+|--------|----------|-------|---------|
+| **k0Slider** | `Filter.Parameters.center_x` | rad/mm | Center wavenumber (spatial frequency) |
+| **sigma_kSlider** | `Filter.Parameters.sigma_x` | rad/mm | Wavenumber bandwidth (spatial spread) |
+| **omegaSlider** | `Filter.Parameters.center_y` | rad/s | Center frequency (temporal frequency) |
+| **sigma_oSlider** | `Filter.Parameters.sigma_y` | rad/s | Frequency bandwidth (temporal spread) |
 
-#### Helper Functions (private)
-- `convertQuantityString(str)` - String → Quantity enum
-- `convertToLambda(range, quantity)` - Any spatial → λ
-- `convertToFrequency(range, quantity)` - Any temporal → Hz
+### 4. **Automatic Slider Range Setting**
+- **Lambda sliders** (k0, σ_k): Set from `Lambda.axis` (wavenumber range)
+- **Omega sliders** (ω0, σ_ω): Set from `Omega.axis` (angular frequency range)
+- Sensible defaults: center at midpoint, bandwidth ~10% of range
 
----
+### 5. **Real-time Preview**
+- `updateKernelPreview()` evaluates kernel on smooth 200×200 grid
+- Updates automatically when any slider moves
+- Shows Gabor kernel: `H(k,ω) = exp(-((k-k0)²/(2σ_k²) + (ω-ω0)²/(2σ_ω²)))`
 
-### 2. Signal Synthesis Methods ✓
+### 6. **Filter Synthesis**
+- "Synthesize" button calls `Filter.evaluate()` on full Joint domain grid
+- Uses actual Lambda and Omega axes from BCT domains
+- Displays response in UIAxesResponse as heatmap
 
-#### Synthesize Method
-**Function**: `Synthesize(filter_identifier, ...)`
+## Key Architecture Features
 
-Generates spectral coefficients A_kl [K × T] based on filter specifications.
+### Domain Relationships
+```
+Manifold ←→ Lambda  (spatial ←→ spectral/wavenumber)
+   Time ←→ Omega    (temporal ←→ frequency)
+   Lambda × Omega → Joint (2D spectral-temporal domain)
+```
 
-**Parameters:**
-- `numModes` - Override auto mode selection
-- `envelope` - 'none' or 'gaussian'
-- `t0`, `sigma_t` - Gaussian envelope params
-- `velocity` - Traveling wave speed (mm/s)
-- `direction` - Wave propagation [x y z]
+### Filter Creation Flow
+```
+1. Load BCT → 2. Initialize FilterDesigner
+              ↓
+3. Create Joint(Lambda, Omega) if needed
+              ↓
+4. Create Gabor filter: designer.joint('gabor', params...)
+              ↓
+5. Sliders control Filter.Parameters
+              ↓
+6. Filter.evaluate() → Response on Joint grid
+```
 
-**Process:**
-1. Extracts filter's lambda_band (and freq_band if joint)
-2. Builds SpectralGrid with appropriate modes
-3. Computes spatial power from filter kernel g(λ)
-4. Computes temporal power from freq_band
-5. Creates joint power: P = P_space ⊗ P_time
-6. Generates random phases: A_kl = √P · exp(iφ)
-7. Applies temporal envelope (optional)
-8. Applies traveling wave phase shifts (optional)
-9. Stores in SpectralGrid.coeffs
+### Gabor Kernel Parameters
+The default Joint filter uses a **separable 2D Gaussian** (Gabor):
+- **center_x**: k0 (center wavenumber in Lambda domain)
+- **sigma_x**: σ_k (bandwidth in wavenumber)
+- **center_y**: ω0 (center frequency in Omega domain)  
+- **sigma_y**: σ_ω (bandwidth in frequency)
 
-**Storage:**
-- `SpectralGrid.coeffs` [K × T]
-- `SpectralGrid.filter_used`
-- `SpectralGrid.synthesis_params`
+Mathematical form:
+```
+H(k, ω) = Gaussian_k(k; k0, σ_k) × Gaussian_ω(ω; ω0, σ_ω)
+        = exp(-0.5*((k-k0)/σ_k)²) × exp(-0.5*((ω-ω0)/σ_ω)²)
+```
 
----
+## Files Modified
 
-#### Generate Method
-**Function**: `Generate(...) → Signal`
+### `toolbox/BctFilterDesignerCode.m`
+**Added Properties:**
+- `FilterDesigner` - Instance of `bct.filters.FilterDesigner`
+- `CurrentFilter` - Instance of `bct.filters.Filter`
 
-Reconstructs spatial-temporal signal from spectral coefficients.
+**Added Functions:**
+- `createDefaultFilter(app)` - Creates Joint Gabor filter from slider values
+- Updated `LoadButtonPushed()` - Initializes FilterDesigner and filter
+- Updated `updateKernelPreview()` - Uses Filter.Parameters
+- Updated `updateKernelSliders()` - Sets ranges from domain axes
+- Updated all slider callbacks - Update Filter.Parameters and preview
+- Updated `SynthesizeButtonPushed()` - Uses Filter.evaluate()
+- Updated `updateUIAfterLoad()` - Calls updateKernelSliders()
 
-**Parameters:**
-- `label` - Signal label (default: auto)
-- `add` - Add to B.Signals (default: true)
-- `symmetric` - Use symmetric IFFT (default: true)
+**Modified Grid Functions:**
+- `buildJointGrid()` - Now uses `B.Joint` grids instead of manual meshgrid
+- `buildFullJointGrid()` - Uses `B.Joint` grids
 
-**Process (matches synth_mesh_timesignal.m lines 103-113):**
+### `toolbox/+bct/+filters/Filter.m`
+Already supports:
+- Dependent properties for parameter access
+- `setParameter()` method for slider updates
+- `evaluate()` method for filter response
+- Parameter change events
+
+### `toolbox/+bct/+filters/FilterDesigner.m`
+Already provides:
+- `joint()` method for creating Joint domain filters
+- Automatic Joint domain creation
+- Domain validation
+
+### `toolbox/+bct/+filters/+kernels/gabor.m`
+Already implements:
+- 2D Gaussian kernel
+- Parameters: center_x, center_y, sigma_x, sigma_y
+- Separable evaluation
+
+## Usage Example
+
+### In MATLAB (for testing):
 ```matlab
-% 1. Inverse temporal FFT
-A_time = ifft(A_kl, [], 2, 'symmetric');  % [K × T]
+% Create and prepare BCT object
+B = bct.bct();
+B.Manifold = bct.Manifold('mesh.gii');
+B = B.computeEigenbasis(50);
+B.Time = bct.Time(0:0.01:1, 100);
+B = B.createJoint('Lambda', 'Omega');
 
-% 2. Inverse graph Fourier transform
-x_wt = U * A_time;  % [N × T]
+% Use FilterDesigner
+designer = bct.filters.FilterDesigner(B);
+filt = designer.joint('gabor', ...
+    'center_x', 0.2, 'sigma_x', 0.05, ...
+    'center_y', 20*2*pi, 'sigma_y', 5*2*pi);
 
-% 3. Mass normalization
-S = spdiags(sqrt(d), 0, N, N);
-xrec = S * x_wt;  % [N × T]
+% Evaluate filter
+H = filt.evaluate();
+
+% Update parameters (like sliders)
+filt.setParameter('center_x', 0.3);
+H_new = filt.evaluate();
 ```
 
-**Returns:** `bct.signal.Signal` object with data [N × T]
+### In BctFilterDesigner App:
+1. **Scan** workspace for BCT objects
+2. **Load** BCT object → FilterDesigner created, default filter initialized
+3. **Move sliders** → Filter parameters update in real-time
+4. **Synthesize** → Full filter response evaluated and visualized
 
----
+## Test Script
 
-## Usage Examples
+Run `test_filter_designer_system.m`:
+- Creates BCT with icosphere mesh
+- Computes eigenbasis
+- Creates Time/Omega domains
+- Initializes FilterDesigner
+- Creates Gabor filter
+- Tests parameter updates
+- Visualizes results
+- Saves BCT as `B_test` for app testing
 
-### Basic Workflow
-```matlab
-% Load/create Bct object
-B = bct('data.h5');
-B.Time = bct.manifold.Time(500, 250);
+## Documentation
 
-% 1. Design filter
-filt = B.designFilter([10, 50], 'wavelength', 'band', 'label', 'alpha');
+See `BctFilterDesigner_Usage.md` for:
+- Detailed architecture explanation
+- Complete workflow guide
+- Slider behavior documentation
+- Mathematical details
+- Troubleshooting tips
+- Code examples
 
-% 2. Synthesize spectral coefficients
-B.Synthesize('alpha', 'envelope', 'gaussian', 't0', 1.0);
+## Physical Interpretation
 
-% 3. Generate signal
-sig = B.Generate('label', 'alpha_wave');
-```
+### Wavenumber Domain (Lambda)
+- **k0Slider**: Selects spatial frequency (wavelength λ = 2π/k0)
+  - Higher k0 → smaller wavelengths (fine details)
+  - Lower k0 → larger wavelengths (coarse features)
+- **sigma_kSlider**: Controls spatial frequency bandwidth
+  - Larger σ_k → broader frequency range
+  - Smaller σ_k → narrower, more selective filter
 
-### Advanced: Traveling Wave
-```matlab
-B.designFilter([20, 40], 'wavelength', 'band', 'label', 'beta');
-B.Synthesize('beta', ...
-    'envelope', 'gaussian', ...
-    't0', 1.0, ...
-    'sigma_t', 0.2, ...
-    'velocity', 5, ...          % 5 mm/s
-    'direction', [1 0 0]);      % X direction
-sig = B.Generate('label', 'traveling_wave');
-```
+### Frequency Domain (Omega)
+- **omegaSlider**: Selects temporal frequency (f = ω0/2π Hz)
+  - Positive ω0 → oscillations
+  - Zero ω0 → DC component
+  - Negative ω0 → conjugate frequencies
+- **sigma_oSlider**: Controls temporal frequency bandwidth
+  - Larger σ_ω → broader time scales
+  - Smaller σ_ω → narrower band-pass
 
-### Multiple Filters
-```matlab
-% Alpha band
-B.designFilter([10, 50], 'wavelength', 'band', 'label', 'alpha');
-B.Synthesize('alpha');
-sig_alpha = B.Generate('label', 'alpha_wave');
+### Combined Joint Filter
+The filter response `H(k,ω)` shows which **spatio-temporal patterns** are passed:
+- **Peak at (k0, ω0)**: Traveling wave with wavelength 2π/k0 at frequency ω0/2π
+- **Bandwidth (σ_k, σ_ω)**: Range of similar patterns also passed
 
-% Beta band
-B.designFilter([5, 10], 'wavelength', 'band', 'label', 'beta');
-B.Synthesize('beta');
-sig_beta = B.Generate('label', 'beta_wave');
+## Benefits of New Architecture
 
-% List all filters
-B.listFilters();
-```
+1. **Type Safety**: Filter object encapsulates kernel + parameters
+2. **Parameter Validation**: Filter class validates parameter values
+3. **Automatic Grid Management**: Joint class handles meshgrid creation
+4. **Reusable Filters**: Filter objects can be stored, shared, modified
+5. **Event System**: Parameter changes trigger events for UI updates
+6. **Extensibility**: Easy to add new kernel types and filter domains
 
----
+## Next Steps (Optional Enhancements)
 
-## File Modifications
+1. Add FilterTypeDropDown functionality:
+   - Spatial only (Lambda kernels)
+   - Temporal only (Omega kernels)
+   - Different joint kernel types
+   
+2. Add kernel selection dropdown:
+   - Gaussian, Heat, Mexican Hat, Bandpass, etc.
+   
+3. Implement FilterBank:
+   - Multiple filters at different scales
+   - Wavelet-like decomposition
+   
+4. Add signal filtering:
+   - Apply filter to BCT data
+   - Show filtered results
 
-### Modified Files
-1. **`toolbox/+bct/@bct/bct.m`** (1592 lines)
-   - Added Filterbank property (line ~80)
-   - Added 7 filter management methods (lines ~850-1190)
-   - Added 3 helper functions (private methods)
-   - Added Synthesize method (lines 1194-1370)
-   - Added Generate method (lines 1373-1456)
+5. Export functionality:
+   - Save filter to file
+   - Load filter from file
+   - Export parameters to workspace
 
-### New Files Created
-1. **`test_filterbank_integration.m`** - Tests filter design & management
-2. **`test_synthesis_workflow.m`** - Tests complete synthesis pipeline
-3. **`example_synthesis_minimal.m`** - Minimal usage examples
-4. **`SYNTHESIS_ARCHITECTURE.md`** - Complete architecture documentation
-5. **`IMPLEMENTATION_SUMMARY.md`** - This file
+## Conclusion
 
----
+The BctFilterDesigner app now uses a proper **Filter design architecture** with:
+- ✅ FilterDesigner factory for creating filters
+- ✅ Filter objects with automatic parameter management
+- ✅ Joint domain integration for Lambda×Omega filtering
+- ✅ Slider controls directly mapped to Filter parameters
+- ✅ Real-time kernel preview and full response synthesis
+- ✅ Proper use of wavenumber (k) and frequency (ω) units
 
-## Architecture Diagram
-
-```
-Bct Object
-├── Manifold (graph/mesh with eigendecomposition)
-├── Time (T samples at fs Hz)
-├── Filterbank[] (Filter objects)
-│   ├── Filter (spatial)
-│   │   ├── lambda_band
-│   │   ├── g(λ) kernel
-│   │   └── setBand(), design()
-│   └── JointFilter (spatial + temporal)
-│       ├── lambda_band, freq_band
-│       └── design functions
-├── SpectralGrid
-│   ├── lambda_grid, t_grid [K × T]
-│   ├── coeffs [K × T] ← NEW
-│   └── metadata
-└── Signals[] (Signal objects)
-    └── Signal
-        ├── Data [N × T]
-        ├── Label
-        └── Manifold reference
-
-Workflow:
-1. designFilter() → Filterbank[]
-2. Synthesize() → SpectralGrid.coeffs
-3. Generate() → Signals[]
-```
-
----
-
-## Dependencies
-
-- **bct.manifold.Manifold** - Mesh with eigendecomposition (U, λ, M)
-- **bct.manifold.Time** - Time parameters (T, fs)
-- **bct.filters.Filter** - Spatial filter class
-- **bct.filters.JointFilter** - Joint mesh-time filters
-- **bct.filters.design.*** - Filter design functions (diffusion, wave, separable)
-- **bct.resolution.Quantity** - Enum (lambda, wavelength, k, freq, period)
-- **bct.resolution.spatial** - Conversion functions (Manifold.Resolution)
-- **bct.signal.Signal** - Signal container class
-
----
-
-## Testing
-
-Run test scripts to verify implementation:
-
-```matlab
-% Test filter management
-run('test_filterbank_integration.m');
-
-% Test complete synthesis workflow
-run('test_synthesis_workflow.m');
-
-% See minimal examples
-edit('example_synthesis_minimal.m');
-```
-
----
-
-## Key Features
-
-✅ **Flexible Quantity Input**: wavelength, wavenumber, freq, lambda  
-✅ **Auto-Conversion**: Uses Manifold.Resolution for unit conversion  
-✅ **Filter Management**: Add, retrieve, remove, list filters  
-✅ **Spectral Synthesis**: Random phases with filter-based power distribution  
-✅ **Wave Packets**: Gaussian temporal envelopes  
-✅ **Traveling Waves**: Directional phase shifts  
-✅ **Mass Normalization**: Proper M^(1/2) scaling  
-✅ **Signal Integration**: Auto-adds to B.Signals array  
-
----
-
-## Implementation Notes
-
-1. **Follows existing patterns**: 
-   - Based on `bct.sim.synth_mesh_timesignal` reconstruction
-   - Consistent with Filter.setBand() API
-   - Uses existing SpectralGrid structure
-
-2. **Extensible design**:
-   - Easy to add new filter kernels
-   - Supports both spatial and joint filters
-   - Metadata tracking for reproducibility
-
-3. **Error handling**:
-   - Validates prerequisites (Manifold, Time, Filterbank)
-   - Clear error messages with context
-   - Auto-fallbacks for missing parameters
-
-4. **Performance considerations**:
-   - Sparse matrix operations for mass matrix
-   - Vectorized computations
-   - FFT with symmetric option for real signals
-
----
-
-## Future Enhancements (Optional)
-
-- [ ] Support for vector-valued signals (3-component)
-- [ ] Multi-filter synthesis (additive)
-- [ ] Custom power spectral density functions
-- [ ] Visualization methods for spectral coefficients
-- [ ] Export/import spectral grids
-- [ ] Parallel synthesis for multiple filters
-- [ ] Phase-locked multi-band synthesis
-
----
-
-## Status: ✅ COMPLETE
-
-All requested features have been implemented and tested.
+The system is ready for interactive filter design on brain connectivity data!
