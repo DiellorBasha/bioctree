@@ -10,6 +10,12 @@ classdef bct < handle
   %   Signals  - Array of Signal objects (bct.Signal)
   %   Viewer   - Visualization handle
   %
+  % Automatic Domain Creation:
+  %   When Time is set (B.Time = bct.Time(...)):
+  %     - Omega dual is automatically created (Time ↔ Omega)
+  %     - Joint Manifold_Time domain auto-created if Manifold exists
+  %     - Joint.dual = Lambda_Omega (automatic dual relationship)
+  %
   % Domain Axes (accessed via domain.axis):
   %   B.Manifold.axis - Vertex indices [N×1]
   %   B.Lambda.axis   - Eigenvalues (wavenumber by default) [K×1]
@@ -28,6 +34,7 @@ properties (SetObservable, AbortSet)
     
     % Time domain - temporal properties for time-varying signals
     % Dual of Omega domain, linked automatically when Time is set
+    % Setting Time also auto-creates Joint Manifold_Time if Manifold exists
     % Access as: B.Time.T, B.Time.fs, B.Time.axis, etc.
     Time bct.Time = bct.Time.empty()  % Time domain
     
@@ -43,7 +50,9 @@ properties (SetObservable, AbortSet)
     Omega bct.Omega = bct.Omega.empty()  % Temporal frequency domain
     
     % Joint domain - combines two canonical domains
-    % Can combine any pair: Lambda×Omega, Manifold×Time, etc.
+    % Automatically created as Manifold_Time when Time is set
+    % Dual Lambda_Omega created automatically with bidirectional link
+    % Can also create manually: B.createJoint('Lambda', 'Omega')
     % Access as: B.Joint.A_grid, B.Joint.B_grid, B.Joint.size(), etc.
     Joint bct.Joint = bct.Joint.empty()  % Joint domain for multi-dimensional analysis
     
@@ -395,7 +404,27 @@ methods
     % Create joint domain
     obj.Joint = bct.Joint(domainA, domainB);
     
-    fprintf('[bct] Joint domain created: %s\n', obj.Joint.Domain);
+    % Automatically create dual Joint domain if constituent domains have duals
+    if ~isempty(domainA.dual) && ~isempty(domainB.dual)
+      % Create dual Joint domain (e.g., Manifold_Time ↔ Lambda_Omega)
+      dualJoint = bct.Joint(domainA.dual, domainB.dual);
+      
+      % Set bidirectional dual relationship
+      obj.Joint.dual = dualJoint;
+      dualJoint.dual = obj.Joint;
+      
+      fprintf('[bct] Joint domain created: %s ↔ %s (dual)\n', ...
+        obj.Joint.Domain, dualJoint.Domain);
+    else
+      fprintf('[bct] Joint domain created: %s\n', obj.Joint.Domain);
+      if isempty(domainA.dual)
+        fprintf('      Warning: %s has no dual domain\n', domainA_name);
+      end
+      if isempty(domainB.dual)
+        fprintf('      Warning: %s has no dual domain\n', domainB_name);
+      end
+    end
+    
     fprintf('      Grid size: [%d×%d] = %d points\n', ...
       obj.Joint.size(), obj.Joint.numel());
     fprintf('      Units: %s\n', obj.Joint.units);
@@ -1011,42 +1040,126 @@ methods
   
   %% Signal synthesis methods
   
-  function Synthesize(this, ~, varargin)
-    % Synthesize - DEPRECATED: Will be redesigned to use Joint domain
+  function sig = createImpulse(this, v0, t0)
+    % createImpulse - Create Kronecker delta (impulse) signal for filter characterization
     %
-    % This method is deprecated and will be redesigned to use the new
-    % Joint domain infrastructure (B.Joint) instead of SpectralGrid.
+    % Syntax:
+    %   sig = B.createImpulse(v0)        % Spatial impulse at vertex v0
+    %   sig = B.createImpulse(v0, t0)    % Spatiotemporal impulse at (v0, t0)
     %
-    % The new filtering workflow will:
-    %   1. Use B.createJoint('Lambda', 'Omega') to create joint grid
-    %   2. Apply filters directly to joint coordinates
-    %   3. Use domain transforms for synthesis
+    % In signal processing, a filter is fully characterized by its impulse response.
+    % This method creates a delta signal (1 at specified location, 0 elsewhere).
     %
-    % See also: bct.Joint, createJoint
+    % Inputs:
+    %   v0 - Vertex index for spatial impulse (1 to Manifold.N)
+    %   t0 - Optional time index for temporal impulse (1 to Time.N)
+    %
+    % Returns:
+    %   sig - bct.Signal object containing the delta signal
+    %         Can be transformed and filtered using domain transforms
+    %
+    % Workflow for filter characterization:
+    %   1. Create impulse: delta = B.createImpulse(v0, t0)
+    %   2. Apply filter:   response = delta.applyFilter(filt, B.Manifold, B.Lambda)
+    %   3. Visualize:      B.showSignal(response)
+    %
+    % Examples:
+    %   % Spatial impulse response of spectral filter
+    %   delta = B.createImpulse(100);
+    %   designer = bct.filters.FilterDesigner(B);
+    %   filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+    %   response = delta.applyFilter(filt, B.Manifold, B.Lambda);
+    %   
+    %   % Spatiotemporal impulse
+    %   delta = B.createImpulse(50, 25);  % Vertex 50, time 25
+    %
+    % See also: bct.Signal.createDelta, synthesizeFilteredSignal
     
-    error('bct:DeprecatedMethod', ...
-      ['Synthesize is deprecated and will be redesigned. ', ...
-       'The filtering workflow is being updated to use Joint domain. ', ...
-       'Use B.createJoint(''Lambda'', ''Omega'') to create joint grids.']);
+    if nargin < 3
+      t0 = [];
+    end
+    
+    if isempty(t0)
+      % Spatial impulse only
+      sig = bct.Signal.createDelta(this.Manifold, v0);
+    else
+      % Spatiotemporal impulse
+      if isempty(this.Time)
+        error('bct:NoTime', 'Time domain must be set for spatiotemporal impulse');
+      end
+      sig = bct.Signal.createDelta(this.Manifold, v0, this.Time, t0);
+    end
   end
   
-  function sig = Generate(this, varargin)
-    % Generate - DEPRECATED: Will be redesigned to use Joint domain
+  function sig = synthesizeFilteredSignal(this, filter_obj, input_sig)
+    % synthesizeFilteredSignal - Modern signal synthesis using filter and domain transforms
     %
-    % This method is deprecated and will be redesigned to use the new
-    % Joint domain infrastructure (B.Joint) instead of SpectralGrid.
+    % Syntax:
+    %   sig = B.synthesizeFilteredSignal(filter, input_signal)
     %
-    % The new signal generation workflow will:
-    %   1. Use B.createJoint('Lambda', 'Omega') for joint coordinates
-    %   2. Generate coefficients on joint grid
-    %   3. Use domain transforms (B.Lambda.transform, B.Time.transform) for synthesis
+    % This is the modern replacement for the deprecated Synthesize/Generate methods.
+    % Applies a filter using domain transforms following signal processing principles:
+    %   1. Transform input signal to filter's domain
+    %   2. Multiply by filter response
+    %   3. Inverse transform back to Manifold domain
     %
-    % See also: bct.Joint, createJoint, Synthesize
+    % Inputs:
+    %   filter_obj - bct.filters.Filter object (must be evaluated on spectral domain)
+    %   input_sig  - bct.Signal object (optional, defaults to impulse at vertex 1)
+    %
+    % Returns:
+    %   sig - Filtered signal in Manifold domain
+    %
+    % Architecture follows separation of concerns:
+    %   - Domains own transforms (Manifold.transform, Lambda.transform, etc.)
+    %   - Filters define kernels (Filter.evaluate())
+    %   - Signals hold data (Signal.Data)
+    %   - BCT orchestrates the workflow
+    %
+    % Examples:
+    %   % Filter an impulse with spatial lowpass
+    %   designer = bct.filters.FilterDesigner(B);
+    %   filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+    %   delta = B.createImpulse(100);
+    %   filtered = B.synthesizeFilteredSignal(filt, delta);
+    %   B.showSignal(filtered);
+    %   
+    %   % Default: Use impulse at vertex 1
+    %   filtered = B.synthesizeFilteredSignal(filt);
+    %
+    % See also: createImpulse, bct.Signal.applyFilter, bct.filters.Filter.evaluate
     
-    error('bct:DeprecatedMethod', ...
-      ['Generate is deprecated and will be redesigned. ', ...
-       'The filtering workflow is being updated to use Joint domain. ', ...
-       'Use domain transforms for signal reconstruction.']);
+    % Default input: impulse at vertex 1
+    if nargin < 3 || isempty(input_sig)
+      input_sig = bct.Signal.createDelta(this.Manifold, 1);
+    end
+    
+    % Validate filter
+    if ~isa(filter_obj, 'bct.filters.Filter')
+      error('bct:InvalidFilter', 'filter_obj must be a bct.filters.Filter object');
+    end
+    
+    % Determine transform domains based on filter domain
+    filter_domain = filter_obj.Domain;
+    
+    if isa(filter_domain, 'bct.Lambda')
+      % Spectral filter: Manifold -> Lambda (filter) -> Manifold
+      sig = input_sig.applyFilter(filter_obj, this.Manifold, this.Lambda);
+      
+    elseif isa(filter_domain, 'bct.Omega')
+      % Temporal frequency filter: Time -> Omega (filter) -> Time
+      sig = input_sig.applyFilter(filter_obj, this.Time, this.Omega);
+      
+    elseif isa(filter_domain, 'bct.Joint')
+      % Joint filter: Need to handle 2D transform
+      error('bct:JointFilterNotImplemented', ...
+        ['Joint domain filtering requires 2D transforms. ', ...
+         'Use Filter.evaluate() directly and manual transform for now.']);
+         
+    else
+      error('bct:UnsupportedFilterDomain', ...
+        'Filter domain must be Lambda, Omega, or Joint');
+    end
   end
 end
 
@@ -1056,9 +1169,12 @@ methods (Access=private)
   function onTimeSet(obj, ~, ~)
     % Listener callback when Time property is set
     % Automatically creates and links Omega dual domain
+    % Also creates default Joint Manifold_Time domain if Manifold exists
     %
     % This is called when: B.Time = bct.Time(...)
-    % Results in: B.Omega being automatically created and linked
+    % Results in: 
+    %   - B.Omega being automatically created and linked
+    %   - B.Joint = Manifold_Time (with dual Lambda_Omega) if Manifold exists
     
     % Only proceed if Time is not empty
     if isempty(obj.Time)
@@ -1077,6 +1193,12 @@ methods (Access=private)
     % Initialize transforms (FFT/IFFT)
     obj.Time.initializeTransform();
     omegaDomain.initializeTransform();
+    
+    % Auto-create Joint Manifold_Time domain if Manifold exists
+    if ~isempty(obj.Manifold)
+      obj = obj.createJoint('Manifold', 'Time');
+      fprintf('      (Joint domain created automatically)\n');
+    end
   end
   
   %% Helper functions for filter design

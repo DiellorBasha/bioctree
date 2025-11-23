@@ -1,86 +1,224 @@
 classdef Signal < handle
-    %SIGNAL Signal data defined on a Manifold
+    %SIGNAL Signal data defined on any BCT domain
     %
-    %   The Signal class represents data defined on a spatial manifold (mesh or graph)
-    %   with optional temporal evolution. Signals can be scalar-valued or vector-valued
-    %   (3-component) at each spatial location.
+    %   The Signal class represents data defined on any BCT domain (Manifold, Time,
+    %   Lambda, Omega, or Joint). Signal dimensions must match the domain structure.
     %
     %   Properties:
-    %       Data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
-    %       Manifold - Reference to bct.Manifold object
-    %       Time     - Reference to bct.Time object (optional)
+    %       Data     - Signal values matching domain dimensions
+    %       Domain   - Reference to bct.Domain object (Manifold, Time, Lambda, Omega, Joint)
     %       Label    - String label/name for the signal
     %       IsVector - Logical flag indicating if signal is vector-valued (3-component)
     %
-    %   Dimensions:
-    %       N - Number of spatial points (must match Manifold.N)
-    %       T - Number of time points (must match Time.N if Time exists)
+    %   Dimension Validation:
+    %       - Manifold/Lambda: Data must be [N×1] or [N×3] (scalar or vector)
+    %       - Time/Omega: Data must be [T×1]
+    %       - Joint: Data must match Joint.size() → [M×N] or [M×N×3]
     %
-    %   Signal Types:
-    %       Scalar static:    [N×1]   - One value per vertex
-    %       Scalar dynamic:   [N×T]   - Time-varying scalar at each vertex
-    %       Vector static:    [N×3]   - 3D vector at each vertex
-    %       Vector dynamic:   [N×T×3] - Time-varying 3D vector at each vertex
+    %   Signal Types by Domain:
+    %       Manifold/Lambda:
+    %         Scalar:  [N×1]   - One value per vertex/eigenmode
+    %         Vector:  [N×3]   - 3D vector per vertex/eigenmode
+    %       
+    %       Time/Omega:
+    %         Scalar:  [T×1]   - Time series or frequency spectrum
+    %       
+    %       Joint (e.g., Manifold_Time):
+    %         Scalar:  [N×T]   - Spatiotemporal field
+    %         Vector:  [N×T×3] - Spatiotemporal vector field
     %
     %   Example:
-    %       % Create BCT object with mesh
+    %       % Create BCT object
     %       B = bct.bct.fromMesh(V, F);
     %       B.Time = bct.Time(linspace(0,1,100)', 100);
     %
-    %       % Scalar static signal
-    %       s1 = bct.Signal(B.Manifold, rand(B.Manifold.N, 1), 'random_activation');
+    %       % Signal on Manifold domain
+    %       s1 = bct.Signal(B.Manifold, rand(B.Manifold.N, 1), 'spatial');
     %
-    %       % Scalar dynamic signal
-    %       s2 = bct.Signal(B.Manifold, rand(B.Manifold.N, B.Time.N), 'timeseries', B.Time);
+    %       % Signal on Time domain
+    %       s2 = bct.Signal(B.Time, rand(B.Time.N, 1), 'timeseries');
     %
-    %       % Vector static signal (e.g., tangent vectors)
-    %       s3 = bct.Signal(B.Manifold, rand(B.Manifold.N, 3), 'gradient_field');
+    %       % Signal on Joint Manifold_Time domain
+    %       sz = B.Joint.size();
+    %       s3 = bct.Signal(B.Joint, rand(sz(1), sz(2)), 'spatiotemporal');
     %
-    %   See also: bct.Manifold, bct.Time, bct.bct
+    %       % Vector signal on Joint domain
+    %       s4 = bct.Signal(B.Joint, rand(sz(1), sz(2), 3), 'vector_field');
+    %
+    %   See also: bct.Domain, bct.Manifold, bct.Time, bct.Lambda, bct.Omega, bct.Joint
     
     properties
-        Data           % Signal values: [N×1], [N×T], [N×3], or [N×T×3]
-        Manifold       % bct.Manifold object
-        Time           % bct.Time object
+        Data           % Signal values matching domain dimensions
+        Domain         % bct.Domain object (Manifold, Time, Lambda, Omega, or Joint)
         Label string = ""  % Signal name/label
     end
     
     properties (Dependent)
         IsVector       % True if signal is vector-valued (3-component)
-        N              % Number of spatial points
-        T              % Number of time points (0 if static)
-        IsStatic       % True if signal has no time dimension
-        IsDynamic      % True if signal has time dimension
+    end
+    
+    % Legacy properties for backward compatibility
+    properties (Dependent, Hidden)
+        Manifold       % Deprecated: use Domain instead
+        Time           % Deprecated: use Domain instead
+        N              % Deprecated: domain-specific
+        T              % Deprecated: domain-specific
+        IsStatic       % Deprecated: domain-specific
+        IsDynamic      % Deprecated: domain-specific
+    end
+    
+    methods (Static)
+        function sig = createDelta(domain_obj, varargin)
+            %CREATEDELTA Create Kronecker delta (impulse) signal on domain axis
+            %
+            %   sig = Signal.createDelta(domain_obj, idx) creates delta at index on single domain
+            %   sig = Signal.createDelta(joint_domain, idx1, idx2) creates delta on joint domain axes
+            %
+            % In signal processing, a filter is fully characterized by its impulse response.
+            % The delta signal (Kronecker delta) is 1 at the specified location and 0 elsewhere.
+            %
+            % Inputs:
+            %   domain_obj - bct.Domain object (Manifold, Lambda, Time, Omega, or Joint)
+            %
+            %   For single domains (Manifold, Lambda, Time, Omega):
+            %     idx - Index on domain axis (1 to domain.N)
+            %
+            %   For Joint domains (e.g., Manifold×Time):
+            %     idx1 - Index on first domain axis (1 to domain.A.N)
+            %     idx2 - Index on second domain axis (1 to domain.B.N)
+            %
+            % Outputs:
+            %   sig - bct.Signal object with impulse at specified location
+            %
+            % Examples:
+            %   % Spatial impulse at vertex 100
+            %   delta_v = bct.Signal.createDelta(B.Manifold, 100);
+            %   
+            %   % Temporal impulse at time index 25
+            %   delta_t = bct.Signal.createDelta(B.Time, 25);
+            %   
+            %   % Spatiotemporal impulse at vertex 50, time 25
+            %   delta_vt = bct.Signal.createDelta(B.Joint, 50, 25);
+            %
+            % See also: bct.Domain.transform
+            
+            % Validate domain input
+            if ~isa(domain_obj, 'bct.Domain')
+                error('Signal:InvalidInput', 'First argument must be a bct.Domain object');
+            end
+            
+            % Create delta signal based on domain type
+            if isa(domain_obj, 'bct.Joint')
+                % Joint domain: requires two indices (one per component domain)
+                if numel(varargin) ~= 2
+                    error('Signal:InvalidInput', ...
+                        'Joint domain requires two indices: createDelta(joint_domain, idx1, idx2)');
+                end
+                
+                idx1 = varargin{1};
+                idx2 = varargin{2};
+                
+                % Get dimensions from component domains
+                N1 = domain_obj.A.N;  % First domain (e.g., Manifold)
+                N2 = domain_obj.B.N;  % Second domain (e.g., Time)
+                
+                % Validate indices
+                if ~isscalar(idx1) || idx1 < 1 || idx1 > N1 || mod(idx1, 1) ~= 0
+                    error('Signal:InvalidIndex', ...
+                        'First index must be integer between 1 and %d', N1);
+                end
+                if ~isscalar(idx2) || idx2 < 1 || idx2 > N2 || mod(idx2, 1) ~= 0
+                    error('Signal:InvalidIndex', ...
+                        'Second index must be integer between 1 and %d', N2);
+                end
+                
+                % Create [N1×N2] delta
+                data = zeros(N1, N2);
+                data(idx1, idx2) = 1;
+                
+                % Create descriptive label based on domain types
+                if isa(domain_obj.A, 'bct.Manifold') && isa(domain_obj.B, 'bct.Time')
+                    label = sprintf('Delta(v=%d, t=%d)', idx1, idx2);
+                elseif isa(domain_obj.A, 'bct.Lambda') && isa(domain_obj.B, 'bct.Omega')
+                    label = sprintf('Delta(k=%d, f=%d)', idx1, idx2);
+                else
+                    label = sprintf('Delta(%s=%d, %s=%d)', ...
+                        class(domain_obj.A), idx1, class(domain_obj.B), idx2);
+                end
+                
+            elseif isa(domain_obj, 'bct.Manifold') || isa(domain_obj, 'bct.Lambda') || ...
+                   isa(domain_obj, 'bct.Time') || isa(domain_obj, 'bct.Omega')
+                % Single domain: requires one index
+                if numel(varargin) ~= 1
+                    error('Signal:InvalidInput', ...
+                        'Single domain requires one index: createDelta(domain, idx)');
+                end
+                
+                idx = varargin{1};
+                N_dim = domain_obj.N;
+                
+                % Validate index
+                if ~isscalar(idx) || idx < 1 || idx > N_dim || mod(idx, 1) ~= 0
+                    error('Signal:InvalidIndex', ...
+                        'Index must be integer between 1 and %d', N_dim);
+                end
+                
+                % Create [N×1] delta
+                data = zeros(N_dim, 1);
+                data(idx) = 1;
+                
+                % Create label based on domain type
+                if isa(domain_obj, 'bct.Manifold')
+                    label = sprintf('Delta(v=%d)', idx);
+                elseif isa(domain_obj, 'bct.Lambda')
+                    label = sprintf('Delta(k=%d)', idx);
+                elseif isa(domain_obj, 'bct.Time')
+                    label = sprintf('Delta(t=%d)', idx);
+                else  % Omega
+                    label = sprintf('Delta(f=%d)', idx);
+                end
+            else
+                error('Signal:UnsupportedDomain', ...
+                    'Unsupported domain type: %s', class(domain_obj));
+            end
+            
+            % Create Signal object
+            sig = bct.Signal(domain_obj, data, label);
+        end
     end
     
     methods
-        function obj = Signal(manifold, data, label, time_obj)
+        function obj = Signal(domain_obj, data, label)
             %SIGNAL Construct a Signal object
             %
-            %   obj = Signal(manifold, data) creates a Signal with given data
-            %   obj = Signal(manifold, data, label) also sets a label
-            %   obj = Signal(manifold, data, label, time_obj) also sets Time object
+            %   obj = Signal(domain, data) creates a Signal on the specified domain
+            %   obj = Signal(domain, data, label) also sets a label
             %
             %   Inputs:
-            %       manifold - bct.Manifold object
-            %       data     - Signal values ([N×1], [N×T], [N×3], or [N×T×3])
-            %       label    - Optional string label
-            %       time_obj - Optional bct.Time object
+            %       domain - bct.Domain object (Manifold, Time, Lambda, Omega, or Joint)
+            %       data   - Signal values matching domain dimensions
+            %       label  - Optional string label
             %
-            %   The data dimensions are validated against the manifold dimensions.
+            %   Data dimension requirements by domain type:
+            %       Manifold/Lambda: [N×1] scalar or [N×3] vector
+            %       Time/Omega:      [T×1] scalar
+            %       Joint:           [M×N] scalar or [M×N×3] vector
+            %
+            %   Examples:
+            %       % Manifold signal
+            %       s = bct.Signal(B.Manifold, rand(B.Manifold.N, 1), 'spatial');
+            %
+            %       % Joint Manifold_Time signal
+            %       sz = B.Joint.size();
+            %       s = bct.Signal(B.Joint, rand(sz(1), sz(2)), 'spatiotemporal');
             
             if nargin > 0
-                % Validate manifold
-                if ~isa(manifold, 'bct.Manifold')
-                    error('Signal:InvalidManifold', ...
-                        'First argument must be a bct.Manifold object');
+                % Validate domain
+                if ~isa(domain_obj, 'bct.Domain')
+                    error('Signal:InvalidDomain', ...
+                        'First argument must be a bct.Domain object (Manifold, Time, Lambda, Omega, or Joint)');
                 end
-                obj.Manifold = manifold;
-                
-                % Set Time object if provided
-                if nargin >= 4 && ~isempty(time_obj)
-                    obj.Time = time_obj;
-                end
+                obj.Domain = domain_obj;
                 
                 % Validate and set data
                 obj.validateAndSetData(data);
@@ -93,138 +231,172 @@ classdef Signal < handle
         end
         
         function validateAndSetData(obj, data)
-            %VALIDATEANDSETDATA Validate data dimensions against manifold
+            %VALIDATEANDSETDATA Validate data dimensions against domain
             
-            if isempty(obj.Manifold)
-                error('Signal:NoManifold', 'Manifold must be set before data');
+            if isempty(obj.Domain)
+                error('Signal:NoDomain', 'Domain must be set before data');
             end
             
-            N = obj.Manifold.N;
-            if N == 0
-                error('Signal:InvalidManifold', 'Manifold.N must be > 0');
-            end
-            
-            % Get expected time dimension from obj.Time
-            if ~isempty(obj.Time)
-                has_time = true;
-                T_expected = obj.Time.N;
-            else
-                has_time = false;
-                T_expected = 0;
-            end
-            
-            % Validate data dimensions
             sz = size(data);
             
-            % Must start with N
-            if sz(1) ~= N
-                error('Signal:DimensionMismatch', ...
-                    'First dimension of data (%d) must match Manifold.N (%d)', ...
-                    sz(1), N);
-            end
-            
-            % Check for valid signal types
-            if ismatrix(data)
-                % [N×1] scalar static, [N×T] scalar dynamic, or [N×3] vector static
-                if sz(2) == 1
-                    % [N×1] scalar static - always valid
-                elseif sz(2) == 3
-                    % [N×3] could be vector static or scalar with T=3
-                    % Assume vector static unless Manifold.Time.T == 3
-                    if has_time && T_expected == 3
-                        % Ambiguous case - could be either, accept as scalar dynamic
-                        warning('Signal:AmbiguousDimensions', ...
-                            'Data is [N×3] and Manifold.Time.T=3. Interpreting as scalar dynamic. Use [N×3×1] for vector static.');
+            % Validation logic depends on domain type
+            if isa(obj.Domain, 'bct.Joint')
+                % Joint domain: data must be [M×N] or [M×N×3]
+                joint_sz = obj.Domain.size();  % [M, N]
+                M = joint_sz(1);
+                N = joint_sz(2);
+                
+                if ismatrix(data)
+                    % [M×N] scalar signal on joint domain
+                    if sz(1) ~= M || sz(2) ~= N
+                        error('Signal:DimensionMismatch', ...
+                            'Data dimensions [%d×%d] must match Joint.size() [%d×%d]', ...
+                            sz(1), sz(2), M, N);
                     end
-                elseif has_time && sz(2) == T_expected
-                    % [N×T] scalar dynamic - valid
-                elseif ~has_time && sz(2) > 1
-                    error('Signal:DimensionMismatch', ...
-                        'Data is [%d×%d] but Manifold has no Time. Expected [N×1] or [N×3]', ...
-                        sz(1), sz(2));
+                elseif ndims(data) == 3
+                    % [M×N×3] vector signal on joint domain
+                    if sz(1) ~= M || sz(2) ~= N || sz(3) ~= 3
+                        error('Signal:DimensionMismatch', ...
+                            'Vector data must be [%d×%d×3], got [%d×%d×%d]', ...
+                            M, N, sz(1), sz(2), sz(3));
+                    end
                 else
+                    error('Signal:InvalidDimensions', ...
+                        'Joint domain signal must be 2D [M×N] or 3D [M×N×3]');
+                end
+                
+            elseif isa(obj.Domain, 'bct.Manifold') || isa(obj.Domain, 'bct.Lambda')
+                % Spatial/Spectral domain: data must be [N×1] or [N×3]
+                N_dim = obj.Domain.N;
+                if N_dim == 0
+                    error('Signal:InvalidDomain', 'Domain.N must be > 0');
+                end
+                
+                if ~ismatrix(data)
+                    error('Signal:InvalidDimensions', ...
+                        'Manifold/Lambda signal must be 2D: [N×1] scalar or [N×3] vector');
+                end
+                
+                if sz(1) ~= N_dim
                     error('Signal:DimensionMismatch', ...
-                        'Data is [%d×%d]. Expected [N×1], [N×T=%d], or [N×3]', ...
-                        sz(1), sz(2), T_expected);
+                        'First dimension of data (%d) must match Domain.N (%d)', ...
+                        sz(1), N_dim);
                 end
-            elseif ndims(data) == 3
-                % [N×T×3] vector dynamic
-                if sz(3) ~= 3
-                    error('Signal:InvalidVectorDimension', ...
-                        '3D data must have size [N×T×3], got [%d×%d×%d]', ...
-                        sz(1), sz(2), sz(3));
+                
+                if sz(2) ~= 1 && sz(2) ~= 3
+                    error('Signal:InvalidDimensions', ...
+                        'Manifold/Lambda signal must be [N×1] scalar or [N×3] vector, got [%d×%d]', ...
+                        sz(1), sz(2));
                 end
-                if ~has_time
-                    error('Signal:NoTimeForDynamic', ...
-                        'Data is [N×T×3] but Manifold has no Time property');
+                
+            elseif isa(obj.Domain, 'bct.Time') || isa(obj.Domain, 'bct.Omega')
+                % Temporal/Frequency domain: data must be [T×1]
+                T_dim = obj.Domain.N;
+                if T_dim == 0
+                    error('Signal:InvalidDomain', 'Domain.N must be > 0');
                 end
-                if sz(2) ~= T_expected
+                
+                if ~iscolumn(data)
+                    error('Signal:InvalidDimensions', ...
+                        'Time/Omega signal must be column vector [T×1], got [%d×%d]', ...
+                        sz(1), sz(2));
+                end
+                
+                if sz(1) ~= T_dim
                     error('Signal:DimensionMismatch', ...
-                        'Second dimension (%d) must match Manifold.Time.T (%d)', ...
-                        sz(2), T_expected);
+                        'Data length (%d) must match Domain.N (%d)', ...
+                        sz(1), T_dim);
                 end
+                
             else
-                error('Signal:InvalidDimensions', ...
-                    'Data must be 2D or 3D, got %dD', ndims(data));
+                error('Signal:UnsupportedDomain', ...
+                    'Unsupported domain type: %s', class(obj.Domain));
             end
             
+            % Data is valid, set it
             obj.Data = data;
         end
         
         %% Dependent property getters
         function val = get.IsVector(obj)
-            %GET.ISVECTOR Check if signal is vector-valued
+            %GET.ISVECTOR Check if signal is vector-valued (3-component)
             sz = size(obj.Data);
-            if ismatrix(obj.Data)
-                % [N×3] is vector static (unless Time exists with N==3)
-                if ~isempty(obj.Time)
-                    % Get number of time points from Time object
-                    if isprop(obj.Time, 'N')
-                        T_val = obj.Time.N;  % New bct.Time
-                    else
-                        T_val = obj.Time.T;  % Old bct.manifold.Time
-                    end
-                    val = (sz(2) == 3) && (T_val ~= 3);
-                else
-                    val = (sz(2) == 3);
-                end
-            else
-                % [N×T×3] is vector dynamic
+            
+            if isa(obj.Domain, 'bct.Joint')
+                % Joint: [M×N×3] is vector
                 val = (ndims(obj.Data) == 3) && (sz(3) == 3);
+            elseif isa(obj.Domain, 'bct.Manifold') || isa(obj.Domain, 'bct.Lambda')
+                % Spatial/Spectral: [N×3] is vector
+                val = ismatrix(obj.Data) && (sz(2) == 3);
+            elseif isa(obj.Domain, 'bct.Time') || isa(obj.Domain, 'bct.Omega')
+                % Temporal: cannot be vector
+                val = false;
+            else
+                val = false;
+            end
+        end
+        
+        function m = get.Manifold(obj)
+            %GET.MANIFOLD Backward compatibility: return Manifold domain if applicable
+            if isa(obj.Domain, 'bct.Manifold')
+                m = obj.Domain;
+            elseif isa(obj.Domain, 'bct.Joint') && isa(obj.Domain.A, 'bct.Manifold')
+                m = obj.Domain.A;
+            else
+                m = [];
+            end
+        end
+        
+        function t = get.Time(obj)
+            %GET.TIME Backward compatibility: return Time domain if applicable
+            if isa(obj.Domain, 'bct.Time')
+                t = obj.Domain;
+            elseif isa(obj.Domain, 'bct.Joint') && isa(obj.Domain.B, 'bct.Time')
+                t = obj.Domain.B;
+            else
+                t = [];
             end
         end
         
         function val = get.N(obj)
-            %GET.N Get number of spatial points
-            val = size(obj.Data, 1);
+            %GET.N Get number of spatial points (deprecated, domain-specific)
+            if isa(obj.Domain, 'bct.Manifold') || isa(obj.Domain, 'bct.Lambda')
+                val = obj.Domain.N;
+            elseif isa(obj.Domain, 'bct.Joint')
+                % For Joint, return total elements (M*N)
+                sz = obj.Domain.size();
+                val = sz(1) * sz(2);
+            else
+                val = size(obj.Data, 1);
+            end
         end
         
         function val = get.T(obj)
-            %GET.T Get number of time points (0 if static)
-            sz = size(obj.Data);
-            if obj.IsVector
-                if ndims(obj.Data) == 3
-                    val = sz(2);  % [N×T×3]
-                else
-                    val = 0;      % [N×3] static
-                end
+            %GET.T Get number of time points (deprecated, domain-specific)
+            if isa(obj.Domain, 'bct.Time') || isa(obj.Domain, 'bct.Omega')
+                val = obj.Domain.N;
+            elseif isa(obj.Domain, 'bct.Joint') && (isa(obj.Domain.B, 'bct.Time') || isa(obj.Domain.B, 'bct.Omega'))
+                val = obj.Domain.B.N;
             else
-                if sz(2) > 1 && sz(2) ~= 3
-                    val = sz(2);  % [N×T] scalar dynamic
-                else
-                    val = 0;      % [N×1] static
-                end
+                val = 0;  % No time dimension
             end
         end
         
         function val = get.IsStatic(obj)
-            %GET.ISSTATIC Check if signal is static (no time dimension)
-            val = (obj.T == 0);
+            %GET.ISSTATIC Check if signal is static (deprecated)
+            % Static if domain has no time component
+            if isa(obj.Domain, 'bct.Time') || isa(obj.Domain, 'bct.Omega')
+                val = false;
+            elseif isa(obj.Domain, 'bct.Joint')
+                val = ~(isa(obj.Domain.B, 'bct.Time') || isa(obj.Domain.B, 'bct.Omega'));
+            else
+                val = true;  % Manifold/Lambda only = static
+            end
         end
         
         function val = get.IsDynamic(obj)
-            %GET.ISDYNAMIC Check if signal has time dimension
-            val = (obj.T > 0);
+            %GET.ISDYNAMIC Check if signal has time dimension (deprecated)
+            val = ~obj.IsStatic;
         end
         
         %% Utility methods
@@ -312,6 +484,72 @@ classdef Signal < handle
             else
                 ts = obj.Data(node_idx, :)';  % [T×1] or [T×length(node_idx)]
             end
+        end
+        
+        function sig_out = applyFilter(obj, filter_obj, domain_src, domain_dst)
+            %APPLYFILTER Apply filter and transform signal between domains
+            %
+            %   sig_out = obj.applyFilter(filter, domain_src, domain_dst)
+            %
+            % Applies a filter in the transform domain and synthesizes result.
+            % This is the modern replacement for the old Synthesize/Generate methods.
+            %
+            % Workflow:
+            %   1. Transform signal from source domain (domain_src)
+            %   2. Multiply by filter response (filter.evaluate())
+            %   3. Inverse transform to destination domain (domain_dst)
+            %
+            % Inputs:
+            %   filter_obj - bct.filters.Filter object (evaluated on transform domain)
+            %   domain_src - Source domain (must have .transform property)
+            %   domain_dst - Destination domain (dual of source)
+            %
+            % Example:
+            %   % Create impulse in Manifold
+            %   delta = bct.Signal.createDelta(B.Manifold, 50);
+            %   
+            %   % Create spectral filter (Lambda domain)
+            %   filt = designer.spatial('heat_wavenumber', 'tau', 0.1);
+            %   
+            %   % Apply filter: Manifold → Lambda (filter) → Manifold
+            %   filtered = delta.applyFilter(filt, B.Manifold, B.Lambda);
+            %
+            % See also: createDelta, bct.filters.Filter.evaluate
+            
+            if ~isa(filter_obj, 'bct.filters.Filter')
+                error('Signal:InvalidFilter', ...
+                    'filter_obj must be a bct.filters.Filter object');
+            end
+            
+            if isempty(domain_src.transform)
+                error('Signal:NoTransform', ...
+                    'Source domain %s has no transform initialized', domain_src.name);
+            end
+            
+            % Forward transform: domain_src → its dual
+            coeffs = domain_src.transform.forward(obj.Data);
+            
+            % Evaluate filter on transform domain
+            H = filter_obj.evaluate();
+            
+            % Apply filter (element-wise multiplication)
+            if isvector(coeffs) && isvector(H)
+                filtered_coeffs = coeffs(:) .* H(:);
+            else
+                filtered_coeffs = coeffs .* H;
+            end
+            
+            % Inverse transform: dual → domain_dst
+            if isempty(domain_dst.transform)
+                error('Signal:NoTransform', ...
+                    'Destination domain %s has no transform initialized', domain_dst.name);
+            end
+            
+            data_out = domain_dst.transform.inverse(filtered_coeffs);
+            
+            % Create output signal
+            label_out = sprintf('%s_filtered_by_%s', obj.Label, filter_obj.Label);
+            sig_out = bct.Signal(obj.Manifold, data_out, label_out, obj.Time);
         end
     end
 end

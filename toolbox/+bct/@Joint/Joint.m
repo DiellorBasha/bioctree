@@ -2,7 +2,14 @@ classdef Joint < bct.Domain
     %JOINT  Joint domain constructed from two canonical BCT domains
     %
     % A Joint domain combines two domains (e.g., Lambda × Omega, Manifold × Time)
-    % to represent signals or filters in joint coordinates.
+    % to represent signals or filters in joint coordinates. Joint domains follow
+    % the dual relationship architecture: if constituent domains have duals, the
+    % Joint domain also has a dual constructed from those duals.
+    %
+    % Dual Relationships:
+    %   Manifold_Time ↔ Lambda_Omega   (spatiotemporal ↔ spectral-frequency)
+    %   Lambda_Time   ↔ Manifold_Omega (spectral-temporal ↔ spatial-frequency)
+    %   Manifold_Omega ↔ Lambda_Time   (spatial-frequency ↔ spectral-temporal)
     %
     % Properties:
     %   Domain       - String describing the joint domain (e.g., "Lambda_Omega")
@@ -16,26 +23,50 @@ classdef Joint < bct.Domain
     %   B_name       - Name of second domain
     %   A_units      - Units of first domain
     %   B_units      - Units of second domain
+    %   transformType- 'Separable' or 'NonSeparable' (default: 'Separable')
+    %   dual         - Dual Joint domain (automatically created from constituent duals)
+    %   transform    - Transform to/from dual domain (type determined by transformType)
+    %
+    % Transform Types:
+    %   'Separable': Composes 1D transforms from constituent domains
+    %                Forward: Apply A transform → B transform
+    %                Inverse: Apply B inverse → A inverse
+    %                Created automatically if both domains have transforms
+    %
+    %   'NonSeparable': Uses full 2D joint basis matrix Φ
+    %                   Forward: X_hat = reshape(Φ' * X(:), sizeOut)
+    %                   Inverse: X = reshape(Φ * X_hat(:), sizeIn)
+    %                   Requires explicit basis matrix and size specification
+    %                   Use setTransformType('NonSeparable', Phi, sizeOut)
     %
     % Example:
     %   % Create Lambda-Omega joint domain for space-time frequency analysis
-    %   J = bct.Joint(B.Lambda, B.Omega);
+    %   J_spectral = bct.Joint(B.Lambda, B.Omega);
+    %   % Dual automatically created: J_spectral.dual = Manifold_Time
     %   
     %   % Create Manifold-Time joint domain for spatiotemporal signals
-    %   J = bct.Joint(B.Manifold, B.Time);
+    %   J_spatial = bct.Joint(B.Manifold, B.Time);
+    %   % Dual automatically created: J_spatial.dual = Lambda_Omega
+    %
+    %   % Access dual domain
+    %   J_dual = J_spectral.dual;  % Manifold_Time joint domain
+    %
+    % See also: bct.Domain, bct.Manifold, bct.Lambda, bct.Time, bct.Omega
 
     properties
-        Domain      % joint domain name (e.g., "Lambda_Omega")
-        A           % first domain object
-        B           % second domain object
-        A_axis      % canonical axis of first domain [M×1]
-        B_axis      % canonical axis of second domain [N×1]
-        A_grid      % meshgrid of A [M×N]
-        B_grid      % meshgrid of B [M×N]
-        A_name      % name of first domain
-        B_name      % name of second domain
-        A_units     % units of first domain
-        B_units     % units of second domain
+        Domain          % joint domain name (e.g., "Lambda_Omega")
+        A               % first domain object
+        B               % second domain object
+        A_axis          % canonical axis of first domain [M×1]
+        B_axis          % canonical axis of second domain [N×1]
+        A_grid          % meshgrid of A [M×N]
+        B_grid          % meshgrid of B [M×N]
+        A_name          % name of first domain
+        B_name          % name of second domain
+        A_units         % units of first domain
+        B_units         % units of second domain
+        transformType   % 'Separable' or 'NonSeparable' (default: 'Separable')
+        % Note: dual and transform inherited from bct.Domain base class
     end
 
     methods
@@ -118,6 +149,17 @@ classdef Joint < bct.Domain
             obj.metadata.A_units = obj.A_units;
             obj.metadata.B_units = obj.B_units;
             obj.metadata.shape = [length(obj.A_axis), length(obj.B_axis)];
+            
+            % Set default transform type
+            obj.transformType = 'Separable';
+            
+            % Create separable joint transform if both domains have transforms
+            if ~isempty(domainA.transform) && ~isempty(domainB.transform)
+                obj.transform = bct.factory.transforms.JointSeparable(domainA, domainB);
+            end
+            
+            % Note: dual property is inherited from bct.Domain
+            % It will be set externally by BCT.createJoint() or via createDual()
         end
 
         % ---------------------------------------------------------------
@@ -226,6 +268,124 @@ classdef Joint < bct.Domain
         end
         
         % ---------------------------------------------------------------
+        function obj = setTransformType(obj, transformType, varargin)
+            %SETTRANSFORMTYPE Set the transform type and create appropriate transform
+            %
+            %   obj = setTransformType(obj, 'Separable')
+            %   obj = setTransformType(obj, 'NonSeparable', Phi, sizeOut)
+            %
+            % Inputs:
+            %   transformType - 'Separable' or 'NonSeparable'
+            %
+            %   For 'Separable':
+            %     No additional arguments needed. Creates JointSeparable
+            %     transform from constituent domain transforms.
+            %
+            %   For 'NonSeparable':
+            %     Phi     - Full joint basis matrix [prod(sizeOut) × prod(sizeIn)]
+            %     sizeOut - Output dimensions [N_modes, T_modes] (optional)
+            %               If not provided, uses sizeIn (square transform)
+            %
+            % Example:
+            %   % Use separable transform (default)
+            %   B.Joint.setTransformType('Separable');
+            %
+            %   % Use non-separable transform with custom basis
+            %   Phi = createWavePacketBasis(B.Manifold, B.Time);
+            %   B.Joint.setTransformType('NonSeparable', Phi, [64, 128]);
+            
+            % Validate transform type
+            validTypes = {'Separable', 'NonSeparable'};
+            if ~ismember(transformType, validTypes)
+                error('bct:Joint:InvalidTransformType', ...
+                    'transformType must be ''Separable'' or ''NonSeparable''');
+            end
+            
+            % Set transform type
+            obj.transformType = transformType;
+            
+            % Create appropriate transform
+            switch transformType
+                case 'Separable'
+                    % Check that constituent domains have transforms
+                    if isempty(obj.A.transform)
+                        error('bct:Joint:NoTransform', ...
+                            'Domain A (%s) does not have a transform', obj.A_name);
+                    end
+                    if isempty(obj.B.transform)
+                        error('bct:Joint:NoTransform', ...
+                            'Domain B (%s) does not have a transform', obj.B_name);
+                    end
+                    
+                    % Create separable transform
+                    obj.transform = bct.factory.transforms.JointSeparable(obj.A, obj.B);
+                    
+                case 'NonSeparable'
+                    % Check required arguments
+                    if nargin < 3
+                        error('bct:Joint:MissingArguments', ...
+                            'NonSeparable transform requires Phi matrix');
+                    end
+                    
+                    Phi = varargin{1};
+                    sizeIn = obj.size();  % [M, N]
+                    
+                    % Get output size (default to input size if not provided)
+                    if nargin >= 4
+                        sizeOut = varargin{2};
+                    else
+                        sizeOut = sizeIn;
+                    end
+                    
+                    % Create non-separable transform
+                    obj.transform = bct.factory.transforms.JointNonSeparable(...
+                        obj.A, obj.B, Phi, sizeIn, sizeOut);
+            end
+        end
+        
+        % ---------------------------------------------------------------
+        function dualJoint = createDual(obj)
+            % Create dual Joint domain from constituent domain duals
+            %
+            % The dual of a Joint domain is constructed from the duals of its
+            % constituent domains:
+            %   - Manifold_Time ↔ Lambda_Omega
+            %   - Lambda_Time ↔ Manifold_Omega (if defined)
+            %
+            % Syntax:
+            %   dualJoint = obj.createDual()
+            %
+            % Outputs:
+            %   dualJoint - Joint domain constructed from A.dual and B.dual
+            %
+            % Example:
+            %   % Create Lambda_Omega joint domain
+            %   J_spectral = bct.Joint(B.Lambda, B.Omega);
+            %   
+            %   % Create its dual Manifold_Time domain
+            %   J_spatial = J_spectral.createDual();
+            %   % J_spatial.A = B.Manifold (dual of Lambda)
+            %   % J_spatial.B = B.Time (dual of Omega)
+            
+            % Check if constituent domains have duals
+            if isempty(obj.A.dual)
+                error('bct:Joint:NoDual', ...
+                    'First domain (%s) does not have a dual domain defined', obj.A_name);
+            end
+            if isempty(obj.B.dual)
+                error('bct:Joint:NoDual', ...
+                    'Second domain (%s) does not have a dual domain defined', obj.B_name);
+            end
+            
+            % Create dual Joint domain from constituent duals
+            dualJoint = bct.Joint(obj.A.dual, obj.B.dual);
+            
+            % Set bidirectional dual relationship
+            dualJoint.dual = obj;
+            obj.dual = dualJoint;
+        end
+        
+        % ---------------------------------------------------------------
         function tf = isDual(obj, otherJoint)
             % Check if this joint domain is dual to another
             % Two joint domains are dual if their constituent domains are dual
@@ -267,6 +427,22 @@ classdef Joint < bct.Domain
             fprintf('    Joint grid size: [%d×%d] = %d points\n', ...
                 length(obj.A_axis), length(obj.B_axis), obj.numel());
             fprintf('    Joint units: %s\n', obj.units);
+            
+            % Show dual domain if it exists
+            if ~isempty(obj.dual)
+                fprintf('    Dual domain: %s\n', obj.dual.Domain);
+            else
+                fprintf('    Dual domain: <not set>\n');
+            end
+            
+            % Show transform type and status
+            fprintf('    Transform type: %s\n', obj.transformType);
+            if ~isempty(obj.transform)
+                fprintf('    Transform: %s\n', class(obj.transform));
+            else
+                fprintf('    Transform: <not implemented>\n');
+            end
+            
             fprintf('\n');
         end
     end
