@@ -483,76 +483,7 @@ methods
       'initializeAxes is deprecated. Use domain.axis properties instead (e.g., B.Time.axis, B.Lambda.axis)');
   end
   
-  %% Filter design and management methods
-  
-  function filt = designFilter(this, range, quantity, kernelType, varargin)
-    % designFilter - DEPRECATED: Use bct.filters.FilterDesigner instead
-    %
-    % DEPRECATED: This method uses the old bct.filters.design package.
-    % Use bct.filters.FilterDesigner for all new code.
-    %
-    % New API:
-    %   designer = bct.filters.FilterDesigner(B);
-    %   filt = designer.lambda('gaussian', 'center', 50, 'sigma', 10);
-    %   filt = designer.lambda('heat', 'tau', 0.1);
-    %   B.addFilter(filt);
-    %
-    % See also: bct.filters.FilterDesigner, bct.filters.Filter
-    
-    warning('bct:DeprecatedMethod', ...
-      ['designFilter is deprecated and will be removed in a future release.\n' ...
-       'Use bct.filters.FilterDesigner instead:\n' ...
-       '  designer = bct.filters.FilterDesigner(B);\n' ...
-       '  filt = designer.lambda(''gaussian'', ''center'', 50, ''sigma'', 10);\n' ...
-       '  B.addFilter(filt);']);
-    
-    % Return empty - method is deprecated
-    error('bct:DeprecatedMethod', ...
-      'designFilter is no longer functional. Use bct.filters.FilterDesigner.');
-  end
-  
-  function filt = designJointFilter(this, spatial_range, spatial_quantity, temporal_range, temporal_quantity, varargin)
-    % designJointFilter - DEPRECATED: Use bct.filters.FilterDesigner instead
-    %
-    % DEPRECATED: This method uses the old bct.filters.design package.
-    % Use bct.filters.FilterDesigner for all new code.
-    %
-    % New API:
-    %   designer = bct.filters.FilterDesigner(B);
-    %   B = B.createJoint('Lambda', 'Omega');
-    %   filt = designer.joint('gabor', 'center_x', 50, 'center_y', 2*pi*10, ...);
-    %   B.addFilter(filt);
-    %
-    % See also: bct.filters.FilterDesigner, bct.filters.Filter, bct.Joint
-    
-    warning('bct:DeprecatedMethod', ...
-      ['designJointFilter is deprecated and will be removed in a future release.\n' ...
-       'Use bct.filters.FilterDesigner instead:\n' ...
-       '  designer = bct.filters.FilterDesigner(B);\n' ...
-       '  B = B.createJoint(''Lambda'', ''Omega'');\n' ...
-       '  filt = designer.joint(''gabor'', ''center_x'', 50, ''center_y'', 10, ...);\n' ...
-       '  B.addFilter(filt);']);
-    %
-    % Inputs:
-    %   spatial_range    - [low, high] spatial spectral range
-    %   spatial_quantity - 'lambda', 'wavelength', 'wavenumber', 'freq'
-    %   temporal_range   - [low, high] temporal spectral range
-    %   temporal_quantity - 'frequency', 'period'
-    %
-    % Parameters:
-    %   'type'   - Joint filter type: 'diffusion', 'wave', 'separable'
-    %            Default: 'diffusion'
-    %   'label'  - String label for filter
-    %   'add'    - Add to Filterbank (default: true)
-    %   Additional design-specific parameters
-    %
-    % Returns:
-    %   filt - bct.filters.JointFilter object
-    
-    % Return empty - method is deprecated
-    error('bct:DeprecatedMethod', ...
-      'designJointFilter is no longer functional. Use bct.filters.FilterDesigner.');
-  end
+  %% Filter management methods
   
   function addFilter(this, filt)
     % addFilter - Add filter to filterbank (delegates to FilterBank)
