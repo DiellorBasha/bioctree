@@ -5,6 +5,7 @@ classdef (Abstract) Domain < handle
     %   name                 - String ("Space", "Lambda", "Time", "Omega", "Joint")
     %   units                - Display units ("mm", "s", "Hz", "1/mm^2")
     %   axis                 - Numeric coordinate array (time points, eigenvalues, etc.)
+    %   N                    - Dimension of domain (number of points/modes/vertices)
     %   resolutionMode       - Enum: Full or Instrument
     %   displayCoordinateMode - Enum: lambda, wavenumber, wavelength, etc.
     %   dual                 - Reference to the dual domain
@@ -25,8 +26,28 @@ classdef (Abstract) Domain < handle
         metadata            struct = struct()
         transform           % transform object created by Transform factory
     end
+    
+    properties (Dependent)
+        N                   % Dimension of domain (length of axis for single domains)
+    end
 
     methods
+        function n = get.N(obj)
+            %GET.N Get dimension of domain
+            % For single domains: returns length of axis
+            % For Joint domains: overridden to return total elements
+            if isempty(obj.axis)
+                n = 0;
+            elseif ismatrix(obj.axis) && size(obj.axis, 2) == 2
+                % Joint domain with 2-column axis [A_coords, B_coords]
+                % This will be overridden in Joint class
+                n = size(obj.axis, 1);
+            else
+                % Single domain: axis is a vector
+                n = length(obj.axis);
+            end
+        end
+        
         function obj = Domain(name, units)
             % Base constructor. Subclasses will call this.
             if nargin > 0

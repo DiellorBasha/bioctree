@@ -20,8 +20,12 @@ B = bct.io.import.mesh(path);
 
 fprintf('  Mesh loaded: %s\n', path);
 fprintf('  Manifold: N = %d vertices\n', B.Manifold.N);
-fprintf('  Lambda: N = %d spectral modes\n', B.Lambda.N);
-fprintf('  Manifold transform: %s\n', class(B.Manifold.transform));
+if ~isempty(B.Lambda)
+    fprintf('  Lambda: N = %d spectral modes\n', B.Lambda.N);
+end
+if ~isempty(B.Manifold.transform)
+    fprintf('  Manifold transform: %s\n', class(B.Manifold.transform));
+end
 
 %% Step 2: Create delta signal at a vertex
 fprintf('\nStep 2: Create delta (impulse) signal\n');
