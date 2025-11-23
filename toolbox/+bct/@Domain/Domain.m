@@ -34,10 +34,16 @@ classdef (Abstract) Domain < handle
     methods
         function n = get.N(obj)
             %GET.N Get dimension of domain
+            % For Manifold: returns number of vertices
             % For single domains: returns length of axis
             % For Joint domains: overridden to return total elements
             if isempty(obj.axis)
-                n = 0;
+                % Check if this is a Manifold with Vertices
+                if isa(obj, 'bct.Manifold') && ~isempty(obj.Vertices)
+                    n = size(obj.Vertices, 1);
+                else
+                    n = 0;
+                end
             elseif ismatrix(obj.axis) && size(obj.axis, 2) == 2
                 % Joint domain with 2-column axis [A_coords, B_coords]
                 % This will be overridden in Joint class

@@ -20,22 +20,8 @@ classdef Manifold < bct.Domain
         CotangentMatrix  % Cotangent stiffness matrix
         LaplacianType    % "cotangent" or "cotangent-normalized"
     end
-    
-    properties (Dependent)
-        N                % Number of vertices (computed from Vertices)
-    end
 
     methods
-        % ---------------------------------------------------------------
-        function n = get.N(obj)
-            % Get number of vertices
-            if isempty(obj.Vertices)
-                n = 0;
-            else
-                n = size(obj.Vertices, 1);
-            end
-        end
-        
         % ---------------------------------------------------------------
         function obj = Manifold(meshStruct, laplacianType)
             % MANIFOLD Constructor for Manifold domain

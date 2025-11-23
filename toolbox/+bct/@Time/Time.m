@@ -4,7 +4,6 @@ classdef Time < bct.Domain
     properties
         T      % time vector
         fs     % sampling frequency
-        N      % number of samples
     end
 
     methods
@@ -18,7 +17,6 @@ classdef Time < bct.Domain
 
             obj.T  = timeVector(:);
             obj.fs = fs;
-            obj.N  = length(obj.T);
 
             obj.resolutionMode       = bct.enum.ResolutionMode.Full;
             obj.displayCoordinateMode = bct.enum.CoordinateMode.Time;

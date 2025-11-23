@@ -4,7 +4,6 @@ classdef Omega < bct.Domain
     properties
         freq    % Hz
         omega   % rad/s
-        N
     end
 
     methods
@@ -16,18 +15,17 @@ classdef Omega < bct.Domain
             obj.units = "Hz";  % Will be set correctly by updateCoordinateMode
 
             fs = timeDomain.fs;
-            N  = timeDomain.N;
+            N_time  = timeDomain.N;
 
-            obj.freq  = (0:N-1)' * (fs / N);
+            obj.freq  = (0:N_time-1)' * (fs / N_time);
             obj.omega = 2*pi*obj.freq;
             obj.axis  = obj.omega;
-            obj.N     = N;
 
             obj.resolutionMode       = bct.enum.ResolutionMode.Full;
             obj.displayCoordinateMode = bct.enum.CoordinateMode.Frequency;  % Default for filter design
 
             obj.metadata.fs = fs;
-            obj.metadata.N  = N;
+            obj.metadata.N  = N_time;
             
             % Update axis and units based on coordinate mode
             obj = obj.updateCoordinateMode();
