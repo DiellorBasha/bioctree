@@ -2,13 +2,13 @@ classdef bct < handle
   % bct: BioCTree object for brain connectivity analysis
   %
   % Properties:
-  %   Manifold - Surface mesh domain (bct.Manifold)
-  %   Lambda   - Spectral domain, dual of Manifold (bct.Lambda)
-  %   Time     - Temporal domain (bct.Time)
-  %   Omega    - Frequency domain, dual of Time (bct.Omega)
-  %   Joint    - Joint domain combining two canonical domains (bct.Joint)
-  %   Signals  - Array of Signal objects (bct.Signal)
-  %   Viewer   - Visualization handle
+  %   Manifold   - Surface mesh domain (bct.Manifold)
+  %   Lambda     - Spectral domain, dual of Manifold (bct.Lambda)
+  %   Time       - Temporal domain (bct.Time)
+  %   Omega      - Frequency domain, dual of Time (bct.Omega)
+  %   Joint      - Joint domain combining two canonical domains (bct.Joint)
+  %   Filterbank - Collection of filters for multi-band analysis (bct.filters.FilterBank)
+  %   Viewer     - Visualization handle
   %
   % Automatic Domain Creation:
   %   When Time is set (B.Time = bct.Time(...)):
@@ -56,11 +56,6 @@ properties (SetObservable, AbortSet)
     % Access as: B.Joint.A_grid, B.Joint.B_grid, B.Joint.size(), etc.
     Joint bct.Joint = bct.Joint.empty()  % Joint domain for multi-dimensional analysis
     
-    % Signals defined on the Manifold
-    % Can be a single bct.Signal object or an array of Signal objects
-    % All signals must have dimensions matching B.Manifold (N and optionally T)
-    Signals bct.Signal = bct.Signal.empty()
-    
     % Viewer handle for 3D visualization
     % Stores viewer3d handle created by showMesh method
     % Access as: B.Viewer to interact with the visualization
@@ -68,10 +63,11 @@ properties (SetObservable, AbortSet)
 end
 
 properties (SetAccess=private)
-    % Filterbank - collection of designed filters
-    % Array of bct.filters.Filter or bct.filters.JointFilter objects
-    % Access as: B.Filterbank(i) or B.getFilter(label)
-    Filterbank = []
+    % Filterbank - collection of filters for multi-band analysis
+    % Uses bct.filters.FilterBank for proper filter management
+    % Access filters via: B.Filterbank.get(label), B.Filterbank.list(), etc.
+    % Add filters with FilterDesigner: designer.spatial(...) then B.Filterbank.add(filt)
+    Filterbank bct.filters.FilterBank
 end
 
 
@@ -237,6 +233,9 @@ methods
     %
     % Creates empty BCT object and sets up property listeners for
     % automatic dual domain creation
+    
+    % Initialize Filterbank
+    obj.Filterbank = bct.filters.FilterBank();
     
     if nargin == 0
       % Add property listener for Time to auto-create Omega
@@ -431,126 +430,9 @@ methods
   end
 end
 
-% Signal management methods
+%% Visualization methods
+
 methods
-  function addSignal(this, signal_obj)
-    % Add a Signal object to the Signals array
-    %
-    %   B.addSignal(signal_obj) adds a bct.Signal object
-    %
-    %   The signal dimensions are validated against B.Manifold
-    
-    % Validate input
-    if ~isa(signal_obj, 'bct.Signal')
-      error('bct:InvalidSignalType', ...
-        'Input must be a bct.Signal object');
-    end
-    
-    % Validate signal matches manifold
-    this.validateSignalDimensions(signal_obj);
-    
-    % Add to array
-    if isempty(this.Signals)
-      this.Signals = signal_obj;
-    else
-      this.Signals(end+1) = signal_obj;
-    end
-  end
-  
-  function removeSignal(this, index_or_label)
-    % Remove a signal by index or label
-    %
-    %   B.removeSignal(idx) removes signal at index idx
-    %   B.removeSignal('label') removes signal with matching label
-    
-    if isempty(this.Signals)
-      warning('bct:NoSignals', 'No signals to remove');
-      return;
-    end
-    
-    if isnumeric(index_or_label)
-      idx = index_or_label;
-      if idx < 1 || idx > length(this.Signals)
-        error('bct:SignalIndexOutOfRange', ...
-          'Signal index %d out of range (1-%d)', idx, length(this.Signals));
-      end
-    else
-      % Find by label
-      labels = arrayfun(@(s) s.Label, this.Signals);
-      idx = find(labels == string(index_or_label), 1);
-      if isempty(idx)
-        error('bct:SignalLabelNotFound', ...
-          'Signal with label "%s" not found', string(index_or_label));
-      end
-    end
-    
-    % Remove from array
-    this.Signals(idx) = [];
-  end
-  
-  function sig = getSignalByLabel(this, label)
-    % Get signal object by label
-    %
-    %   sig = B.getSignalByLabel('label') returns the first Signal
-    %   with matching label, or empty if not found
-    
-    if isempty(this.Signals)
-      sig = bct.Signal.empty();
-      return;
-    end
-    
-    labels = arrayfun(@(s) s.Label, this.Signals);
-    idx = find(labels == string(label), 1);
-    
-    if isempty(idx)
-      sig = bct.Signal.empty();
-    else
-      sig = this.Signals(idx);
-    end
-  end
-  
-  function clearSignalsNew(this)
-    % Clear all Signal objects
-    %
-    %   B.clearSignalsNew() removes all signals from B.Signals
-    
-    this.Signals = bct.Signal.empty();
-  end
-  
-  function validateSignalDimensions(this, signal_obj)
-    % Validate that signal dimensions match manifold
-    %
-    %   B.validateSignalDimensions(signal_obj)
-    %
-    %   Checks that signal.N matches B.Manifold.N and if signal is
-    %   dynamic, that signal.T matches B.Manifold.Time.T
-    
-    if isempty(this.Manifold)
-      error('bct:NoManifold', ...
-        'BCT object must have a Manifold before adding signals');
-    end
-    
-    % Check spatial dimensions
-    if signal_obj.N ~= this.Manifold.N
-      error('bct:SignalDimensionMismatch', ...
-        'Signal N (%d) does not match Manifold.N (%d)', ...
-        signal_obj.N, this.Manifold.N);
-    end
-    
-    % Check temporal dimensions if signal is dynamic
-    if signal_obj.IsDynamic
-      if isempty(this.Time)
-        error('bct:NoTime', ...
-          'Dynamic signal requires Time to be set');
-      end
-      if signal_obj.T ~= this.Time.T
-        error('bct:SignalDimensionMismatch', ...
-          'Signal T (%d) does not match Time.T (%d)', ...
-          signal_obj.T, this.Time.T);
-      end
-    end
-  end
-  
   function showMesh(this, varargin)
     % showMesh - Display the mesh with light gray vertex colors
     %
@@ -580,81 +462,6 @@ methods
     
     % Pass all arguments to bct.show.mesh
     this.Viewer = bct.show.mesh(this, varargin{:});
-  end
-  
-  function showSignal(this, varargin)
-    % showSignal - Display a static signal on the mesh
-    %
-    % Syntax:
-    %   B.showSignal()                    % Shows first signal
-    %   B.showSignal(idx)                 % Shows signal at index idx
-    %   B.showSignal(idx, 'Parent', p)    % Shows in parent container
-    %   B.showSignal(idx, 'TimePoint', t) % Shows time point t
-    %
-    % Displays a signal from B.Signals as vertex colors on the mesh.
-    % For time-varying signals, displays only the specified time point.
-    % Use showAnimation for time-varying visualization.
-    %
-    % Name-Value Parameters:
-    %   'Parent'     - Parent container for the viewer
-    %   'ColorMap'   - Colormap to use (default: 'parula')
-    %   'TimePoint'  - Time point to display (default: 1)
-    %
-    % Example:
-    %   B.showSignal();
-    %   B.showSignal(1);
-    %   B.showSignal(1, 'TimePoint', 50);
-    %   B.showSignal(1, 'Parent', myPanel);
-    %
-    % See also: showMesh, showAnimation
-    
-    % Pass all arguments to bct.show.signal
-    this.Viewer = bct.show.signal(this, varargin{:});
-  end
-  
-  function showAnimation(this, signalIndex)
-    % showAnimation - Animate a time-varying signal on the mesh
-    %
-    % Syntax:
-    %   B.showAnimation()       % Animates first signal
-    %   B.showAnimation(idx)    % Animates signal at index idx
-    %
-    % Animates a signal from B.Signals over time using the time vector
-    % from B.Time. Updates vertex colors for each time point.
-    %
-    % Requires B.Time to have a time vector (time-varying signal).
-    % For static signals, use showSignal instead.
-    %
-    % Example:
-    %   B.showMesh();
-    %   B.showAnimation(1);
-    %
-    % See also: showMesh, showSignal
-    
-    % Default to first signal
-    if nargin < 2
-      signalIndex = 1;
-    end
-    
-    % Validate prerequisites
-    if isempty(this.Signals) || signalIndex > length(this.Signals)
-      error('bct:InvalidSignalIndex', ...
-        'Signal index %d out of range (1-%d)', signalIndex, length(this.Signals));
-    end
-    
-    if isempty(this.Time) || isempty(this.Time.t_vec)
-      error('bct:NoTimeVector', ...
-        'B.Time must have a time vector for animation. Use showSignal for static display.');
-    end
-    
-    % Create viewer if needed
-    if isempty(this.Viewer)
-      this.Viewer = bct.show.mesh(this);
-    end
-    
-    % Animate the signal
-    sig = this.Signals(signalIndex);
-    bct.show.animate(this, this.Viewer, sig);
   end
   
   function initializeAxes(this)
@@ -842,130 +649,66 @@ methods
     end
     
     % Add label if provided
-    if ~isempty(filter_label) && isfield(filt, 'KernelParams')
-      filt.KernelParams.label = filter_label;
+    if ~isempty(filter_label)
+      filt.Label = filter_label;
     end
     
     % Add to filterbank if requested
     if add_to_bank
-      this.addFilter(filt, filter_label);
+      this.addFilter(filt);
     end
   end
   
-  function addFilter(this, filt, label)
-    % addFilter - Add filter to filterbank
+  function addFilter(this, filt)
+    % addFilter - Add filter to filterbank (delegates to FilterBank)
     %
-    %   B.addFilter(filt) adds filter to filterbank
-    %   B.addFilter(filt, label) adds with a label
+    %   B.addFilter(filt) adds filter to B.Filterbank
     %
     % Inputs:
-    %   filt  - bct.filters.Filter or bct.filters.JointFilter object
-    %   label - Optional string label
+    %   filt - bct.filters.Filter object with optional Label property
+    %
+    % Note: This is a convenience wrapper. Use FilterDesigner for creating filters:
+    %   designer = bct.filters.FilterDesigner(B);
+    %   filt = designer.spatial('gaussian', 'center', 50, 'sigma', 10, 'label', 'myfilter');
+    %   B.addFilter(filt);
+    %
+    % Or add directly:
+    %   B.Filterbank.add(filt);
     
-    if nargin < 3, label = ''; end
-    label = string(label);
-    
-    % Add label to filter params if provided
-    if ~isempty(label) && isfield(filt, 'KernelParams')
-      filt.KernelParams.label = label;
-    end
-    
-    % Initialize filterbank if empty
-    if isempty(this.Filterbank)
-      this.Filterbank = filt;
-    else
-      this.Filterbank(end+1) = filt;
-    end
-    
-    fprintf('[bct] Added filter to filterbank (index: %d', length(this.Filterbank));
-    if ~isempty(label)
-      fprintf(', label: "%s"', label);
-    end
-    fprintf(')\n');
+    this.Filterbank.add(filt);
   end
   
   function filt = getFilter(this, identifier)
-    % getFilter - Retrieve filter from filterbank
+    % getFilter - Retrieve filter from filterbank (delegates to FilterBank)
     %
-    %   filt = B.getFilter(index) gets filter by index
     %   filt = B.getFilter(label) gets filter by label
+    %   filt = B.getFilter(index) gets filter by index
     %
     % Inputs:
-    %   identifier - Integer index or string label
+    %   identifier - String label or integer index
     %
     % Returns:
-    %   filt - bct.filters.Filter or bct.filters.JointFilter object
+    %   filt - bct.filters.Filter object
+    %
+    % Note: This is a convenience wrapper. Access directly with:
+    %   B.Filterbank.get('label') or B.Filterbank.get(index)
     
-    if isempty(this.Filterbank)
-      error('bct:EmptyFilterbank', 'Filterbank is empty');
-    end
-    
-    if isnumeric(identifier)
-      % Get by index
-      idx = round(identifier);
-      if idx < 1 || idx > length(this.Filterbank)
-        error('bct:FilterIndexOutOfRange', ...
-          'Filter index %d out of range [1, %d]', idx, length(this.Filterbank));
-      end
-      filt = this.Filterbank(idx);
-    else
-      % Get by label
-      label = string(identifier);
-      found = false;
-      for i = 1:length(this.Filterbank)
-        if isfield(this.Filterbank(i).KernelParams, 'label') && ...
-           this.Filterbank(i).KernelParams.label == label
-          filt = this.Filterbank(i);
-          found = true;
-          break;
-        end
-      end
-      if ~found
-        error('bct:FilterNotFound', 'No filter with label "%s" found', label);
-      end
-    end
+    filt = this.Filterbank.get(identifier);
   end
   
   function removeFilter(this, identifier)
-    % removeFilter - Remove filter from filterbank
+    % removeFilter - Remove filter from filterbank (delegates to FilterBank)
     %
-    %   B.removeFilter(index) removes filter by index
     %   B.removeFilter(label) removes filter by label
+    %   B.removeFilter(index) removes filter by index
     %
     % Inputs:
-    %   identifier - Integer index or string label
+    %   identifier - String label or integer index
+    %
+    % Note: This is a convenience wrapper. Use directly:
+    %   B.Filterbank.remove(identifier)
     
-    if isempty(this.Filterbank)
-      warning('bct:EmptyFilterbank', 'Filterbank is already empty');
-      return;
-    end
-    
-    if isnumeric(identifier)
-      % Remove by index
-      idx = round(identifier);
-      if idx < 1 || idx > length(this.Filterbank)
-        error('bct:FilterIndexOutOfRange', ...
-          'Filter index %d out of range [1, %d]', idx, length(this.Filterbank));
-      end
-      this.Filterbank(idx) = [];
-    else
-      % Remove by label
-      label = string(identifier);
-      found = false;
-      for i = 1:length(this.Filterbank)
-        if isfield(this.Filterbank(i).KernelParams, 'label') && ...
-           this.Filterbank(i).KernelParams.label == label
-          this.Filterbank(i) = [];
-          found = true;
-          break;
-        end
-      end
-      if ~found
-        error('bct:FilterNotFound', 'No filter with label "%s" found', label);
-      end
-    end
-    
-    fprintf('[bct] Removed filter from filterbank\n');
+    this.Filterbank.remove(identifier);
   end
   
   function clearFilterbank(this)
