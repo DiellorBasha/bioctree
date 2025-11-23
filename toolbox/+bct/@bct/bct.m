@@ -486,86 +486,52 @@ methods
   %% Filter design and management methods
   
   function filt = designFilter(this, range, quantity, kernelType, varargin)
-    % designFilter - Design a spatial filter using spectral quantity
+    % designFilter - DEPRECATED: Use bct.filters.FilterDesigner instead
     %
-    % Syntax:
-    %   filt = B.designFilter(range, quantity, kernelType)
-    %   filt = B.designFilter(range, quantity, kernelType, 'param', value, ...)
+    % DEPRECATED: This method uses the old bct.filters.design package.
+    % Use bct.filters.FilterDesigner for all new code.
     %
-    % Inputs:
-    %   range      - [low, high] spectral range
-    %   quantity   - Spectral quantity type:
-    %                'lambda'      - Eigenvalue λ
-    %                'wavelength'  - Spatial wavelength L (mm)
-    %                'wavenumber'  - Wavenumber k (rad/mm)
-    %                'freq'        - Spatial frequency f (cycles/mm)
-    %   kernelType - Filter kernel: 'ideal', 'band', 'heat', 'mexican_hat'
+    % New API:
+    %   designer = bct.filters.FilterDesigner(B);
+    %   filt = designer.lambda('gaussian', 'center', 50, 'sigma', 10);
+    %   filt = designer.lambda('heat', 'tau', 0.1);
+    %   B.addFilter(filt);
     %
-    % Parameters:
-    %   'label'  - String label for filter (optional)
-    %   'add'    - Add to Filterbank (default: true)
-    %   Additional kernel-specific parameters (see bct.filters.Filter.design)
-    %
-    % Returns:
-    %   filt - bct.filters.Filter object
-    %
-    % Example:
-    %   % Design bandpass for 5-50mm wavelengths
-    %   filt = B.designFilter([5, 50], 'wavelength', 'band', 'taper', 'hann');
-    %   
-    %   % Design heat diffusion filter
-    %   filt = B.designFilter([0.01, 1], 'lambda', 'heat', 'time', 0.5);
-    %   
-    %   % Design using wavenumber
-    %   filt = B.designFilter([0.1, 2], 'wavenumber', 'band');
-    %
-    % See also: designJointFilter, bct.filters.Filter, bct.resolution.Quantity
+    % See also: bct.filters.FilterDesigner, bct.filters.Filter
     
-    % Validate manifold
-    if isempty(this.Manifold)
-      error('bct:NoManifold', 'Manifold must be set before designing filters');
-    end
+    warning('bct:DeprecatedMethod', ...
+      ['designFilter is deprecated and will be removed in a future release.\n' ...
+       'Use bct.filters.FilterDesigner instead:\n' ...
+       '  designer = bct.filters.FilterDesigner(B);\n' ...
+       '  filt = designer.lambda(''gaussian'', ''center'', 50, ''sigma'', 10);\n' ...
+       '  B.addFilter(filt);']);
     
-    % Parse optional parameters
-    p = inputParser;
-    p.KeepUnmatched = true;
-    addParameter(p, 'label', '', @(x) ischar(x) || isstring(x));
-    addParameter(p, 'add', true, @islogical);
-    parse(p, varargin{:});
-    
-    filter_label = string(p.Results.label);
-    add_to_bank = p.Results.add;
-    
-    % Convert quantity string to enum
-    quantity_enum = this.convertQuantityString(quantity);
-    
-    % Create filter
-    filt = bct.filters.Filter(this.Manifold);
-    
-    % Set band using quantity
-    filt.setBand(range, quantity_enum);
-    
-    % Design kernel with remaining parameters
-    kernel_params = [fieldnames(p.Unmatched), struct2cell(p.Unmatched)]';
-    filt.design(kernelType, kernel_params{:});
-    
-    % Add label if provided
-    if ~isempty(filter_label)
-      filt.KernelParams.label = filter_label;
-    end
-    
-    % Add to filterbank if requested
-    if add_to_bank
-      this.addFilter(filt, filter_label);
-    end
+    % Return empty - method is deprecated
+    error('bct:DeprecatedMethod', ...
+      'designFilter is no longer functional. Use bct.filters.FilterDesigner.');
   end
   
   function filt = designJointFilter(this, spatial_range, spatial_quantity, temporal_range, temporal_quantity, varargin)
-    % designJointFilter - Design a joint mesh-time filter
+    % designJointFilter - DEPRECATED: Use bct.filters.FilterDesigner instead
     %
-    % Syntax:
-    %   filt = B.designJointFilter(spatial_range, spatial_quantity, temporal_range, temporal_quantity)
-    %   filt = B.designJointFilter(..., 'param', value, ...)
+    % DEPRECATED: This method uses the old bct.filters.design package.
+    % Use bct.filters.FilterDesigner for all new code.
+    %
+    % New API:
+    %   designer = bct.filters.FilterDesigner(B);
+    %   B = B.createJoint('Lambda', 'Omega');
+    %   filt = designer.joint('gabor', 'center_x', 50, 'center_y', 2*pi*10, ...);
+    %   B.addFilter(filt);
+    %
+    % See also: bct.filters.FilterDesigner, bct.filters.Filter, bct.Joint
+    
+    warning('bct:DeprecatedMethod', ...
+      ['designJointFilter is deprecated and will be removed in a future release.\n' ...
+       'Use bct.filters.FilterDesigner instead:\n' ...
+       '  designer = bct.filters.FilterDesigner(B);\n' ...
+       '  B = B.createJoint(''Lambda'', ''Omega'');\n' ...
+       '  filt = designer.joint(''gabor'', ''center_x'', 50, ''center_y'', 10, ...);\n' ...
+       '  B.addFilter(filt);']);
     %
     % Inputs:
     %   spatial_range    - [low, high] spatial spectral range
@@ -582,81 +548,10 @@ methods
     %
     % Returns:
     %   filt - bct.filters.JointFilter object
-    %
-    % Example:
-    %   % Diffusion filter: 10-50mm wavelength, 8-12 Hz
-    %   filt = B.designJointFilter([10, 50], 'wavelength', [8, 12], 'frequency', ...
-    %       'type', 'diffusion', 'label', 'alpha_band');
-    %   
-    %   % Wave filter using wavenumber
-    %   filt = B.designJointFilter([0.1, 1], 'wavenumber', [5, 15], 'frequency', ...
-    %       'type', 'wave', 'velocity', 5);
-    %
-    % See also: designFilter, bct.filters.design.diffusion, bct.filters.design.wave
     
-    % Validate manifold and time
-    if isempty(this.Manifold)
-      error('bct:NoManifold', 'Manifold must be set before designing joint filters');
-    end
-    if isempty(this.Time)
-      error('bct:NoTime', 'Time must be set before designing joint filters');
-    end
-    
-    % Parse parameters
-    p = inputParser;
-    p.KeepUnmatched = true;
-    addParameter(p, 'type', 'diffusion', @(x) ischar(x) || isstring(x));
-    addParameter(p, 'label', '', @(x) ischar(x) || isstring(x));
-    addParameter(p, 'add', true, @islogical);
-    parse(p, varargin{:});
-    
-    filter_type = string(p.Results.type);
-    filter_label = string(p.Results.label);
-    add_to_bank = p.Results.add;
-    
-    % Convert spatial range to lambda
-    spatial_quantity_enum = this.convertQuantityString(spatial_quantity);
-    lambda_range = this.convertToLambda(spatial_range, spatial_quantity_enum);
-    
-    % Convert temporal range to frequency (Hz)
-    temporal_quantity_enum = this.convertQuantityString(temporal_quantity);
-    freq_range = this.convertToFrequency(temporal_range, temporal_quantity_enum);
-    
-    % Call appropriate design function
-    design_params = [fieldnames(p.Unmatched), struct2cell(p.Unmatched)]';
-    
-    switch lower(filter_type)
-      case 'diffusion'
-        filt = bct.filters.design.diffusion(this, ...
-          'lambda_band', lambda_range, ...
-          'freq_band', freq_range, ...
-          design_params{:});
-          
-      case 'wave'
-        filt = bct.filters.design.wave(this, ...
-          'lambda_band', lambda_range, ...
-          'freq_band', freq_range, ...
-          design_params{:});
-          
-      case 'separable'
-        filt = bct.filters.design.separable(this, ...
-          'lambda_band', lambda_range, ...
-          'freq_band', freq_range, ...
-          design_params{:});
-          
-      otherwise
-        error('bct:UnknownFilterType', 'Unknown joint filter type: %s', filter_type);
-    end
-    
-    % Add label if provided
-    if ~isempty(filter_label)
-      filt.Label = filter_label;
-    end
-    
-    % Add to filterbank if requested
-    if add_to_bank
-      this.addFilter(filt);
-    end
+    % Return empty - method is deprecated
+    error('bct:DeprecatedMethod', ...
+      'designJointFilter is no longer functional. Use bct.filters.FilterDesigner.');
   end
   
   function addFilter(this, filt)
