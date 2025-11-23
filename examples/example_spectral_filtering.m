@@ -84,10 +84,15 @@ designer = bct.filters.FilterDesigner(B);
 k0 = 50;      % Center mode (controls spatial frequency)
 sigma = 20;   % Bandwidth (controls spatial scale)
 
-filter = designer.spatial('gaussian', ...
+% DOMAIN-AGNOSTIC API: Explicitly specify domain
+filter = designer.create(B.Lambda, 'gaussian', ...
     'center', k0, ...
     'sigma', sigma, ...
     'label', 'Bandpass Spatial Filter');
+
+% Alternative shortcut syntax (equivalent):
+% filter = designer.lambda('gaussian', 'center', k0, 'sigma', sigma, ...
+%     'label', 'Bandpass Spatial Filter');
 
 fprintf('  Filter type: %s\n', filter.KernelName);
 fprintf('  Domain: %s\n', class(filter.Domain));
@@ -233,9 +238,12 @@ fprintf('\nBonus: Compare Gaussian vs Heat kernel\n');
 fprintf('---------------------------------------\n');
 
 % Create heat kernel filter (low-pass for spatial smoothing)
-heat_filter = designer.spatial('heat', ...
+heat_filter = designer.create(B.Lambda, 'heat', ...
     'tau', 0.01, ...
     'label', 'Heat Diffusion Filter');
+
+% Alternative shortcut syntax (equivalent):
+% heat_filter = designer.lambda('heat', 'tau', 0.01, 'label', 'Heat Diffusion Filter');
 
 fprintf('  Heat kernel: H(λ) = exp(-τ·λ)\n');
 fprintf('  Diffusion time τ = %.3f\n', heat_filter.tau);
@@ -257,7 +265,6 @@ fprintf('  Heat filtered signal: max = %.4f\n', max(abs(signal_heat)));
 fprintf('  → Gaussian: bandpass (selects specific frequencies)\n');
 fprintf('  → Heat: lowpass (smooth spatial features)\n');
 
-%% Summary
 fprintf('\n========================================\n');
 fprintf('EXAMPLE COMPLETE!\n');
 fprintf('========================================\n');
@@ -265,13 +272,15 @@ fprintf('Demonstrated:\n');
 fprintf('  1. Delta signal creation on Manifold\n');
 fprintf('  2. Forward transform to spectral domain (Lambda)\n');
 fprintf('  3. Filter design using bct.filters.FilterDesigner\n');
-fprintf('  4. Gaussian filtering in spectral domain\n');
-fprintf('  5. Inverse transform back to Manifold\n');
-fprintf('  6. Analysis of filtering effects\n');
-fprintf('  7. Dynamic filter parameter adjustment\n');
+fprintf('  4. Domain-agnostic filter creation: create(domain, kernel, params)\n');
+fprintf('  5. Gaussian filtering in spectral domain\n');
+fprintf('  6. Inverse transform back to Manifold\n');
+fprintf('  7. Analysis of filtering effects\n');
+fprintf('  8. Dynamic filter parameter adjustment\n');
 fprintf('\n');
 fprintf('Key concepts:\n');
-fprintf('  - FilterDesigner provides domain-validated filter creation\n');
+fprintf('  - FilterDesigner.create(domain, kernel, params) is domain-agnostic\n');
+fprintf('  - Convenience methods: lambda(), omega(), joint() for shortcuts\n');
 fprintf('  - Filter.evaluate() automatically uses domain axis\n');
 fprintf('  - Spectral filtering = pointwise multiplication in Lambda\n');
 fprintf('  - Low-pass filter (small k0) → spatial smoothing\n');

@@ -1,40 +1,55 @@
 classdef FilterDesigner < handle
-  % FilterDesigner - Factory for creating filters with domain validation
+  % FilterDesigner - Domain-agnostic factory for creating Filter objects
   %
-  % FilterDesigner provides convenient methods for creating Filter objects
-  % with automatic domain validation and kernel loading. It simplifies the
-  % filter creation process by providing domain-specific factory methods.
+  % FilterDesigner creates filters by combining:
+  %   1. A kernel function (mathematical shape: gaussian, heat, gabor, etc.)
+  %   2. A domain (where the kernel is evaluated: Lambda, Omega, Joint, etc.)
+  %   3. Parameters (center, sigma, tau, etc.)
+  %
+  % The filter is domain-agnostic at creation but domain-aware at evaluation.
   %
   % Properties:
   %   BCT - Reference to bct object for accessing domains
   %
   % Methods:
-  %   FilterDesigner(bct_obj)           - Constructor
-  %   spatial(kernel_name, ...)         - Create filter on Lambda domain
-  %   temporal(kernel_name, ...)        - Create filter on Omega domain
-  %   joint(kernel_name, ...)           - Create filter on Joint domain
-  %   custom(domain, kernel_name, ...)  - Create filter on custom domain
+  %   FilterDesigner(bct_obj)              - Constructor
+  %   create(domain, kernel_name, ...)     - Create filter on any domain
+  %   lambda(kernel_name, ...)             - Shortcut for B.Lambda
+  %   omega(kernel_name, ...)              - Shortcut for B.Omega  
+  %   joint(kernel_name, ...)              - Shortcut for B.Joint
   %
-  % Example - Basic usage:
-  %   B = bct();
-  %   B.Time = bct.Time(0:0.01:1, 100);
-  %   B.Omega = B.Time.dual;
-  %   B.Lambda = B.Manifold.dual;
-  %   
+  % Core Design Principle:
+  %   A filter's shape (e.g., Gaussian) is independent of domain.
+  %   A filter's meaning (e.g., Gaussian on λ vs k vs ω) depends on domain.
+  %   Therefore: create(domain, kernel) explicitly binds shape to meaning.
+  %
+  % Example - Explicit domain specification:
   %   designer = bct.filters.FilterDesigner(B);
   %   
-  %   % Design filters
-  %   filt1 = designer.temporal('gaussian', 'center', 10, 'sigma', 2);
-  %   filt2 = designer.spatial('heat', 'tau', 0.1);
-  %   filt3 = designer.joint('gabor', ...
-  %       'center_x', 5, 'center_y', 10, ...
-  %       'sigma_x', 1, 'sigma_y', 2);
+  %   % Gaussian filter on Lambda domain (spectral filtering)
+  %   filt1 = designer.create(B.Lambda, 'gaussian', 'center', 50, 'sigma', 10);
+  %   
+  %   % Same Gaussian shape, but on Omega domain (temporal filtering)
+  %   filt2 = designer.create(B.Omega, 'gaussian', 'center', 10, 'sigma', 2);
+  %   
+  %   % Joint filter on Lambda×Omega
+  %   filt3 = designer.create(B.Joint, 'gabor', ...
+  %       'center_x', 50, 'center_y', 10, ...
+  %       'sigma_x', 10, 'sigma_y', 2);
   %
-  % Example - With automatic Joint domain creation:
-  %   filt = designer.joint('gabor', ...
-  %       'domains', {'Lambda', 'Omega'}, ...  % Auto-creates Joint
-  %       'center_x', 5, 'center_y', 10, ...
-  %       'sigma_x', 1, 'sigma_y', 2);
+  % Example - Using shortcuts (cleaner but same result):
+  %   filt1 = designer.lambda('gaussian', 'center', 50, 'sigma', 10);
+  %   filt2 = designer.omega('gaussian', 'center', 10, 'sigma', 2);
+  %   filt3 = designer.joint('gabor', ...
+  %       'center_x', 50, 'center_y', 10, ...
+  %       'sigma_x', 10, 'sigma_y', 2);
+  %
+  % Example - Custom domains:
+  %   % Create filter on Time domain (not Omega)
+  %   filt = designer.create(B.Time, 'gaussian', 'center', 0.5, 'sigma', 0.1);
+  %   
+  %   % Create filter on Manifold (vertex space, not spectral)
+  %   filt = designer.create(B.Manifold, 'delta', 'location', 1000);
   %
   % See also: bct.filters.Filter, bct.filters.FilterBank
   
@@ -60,57 +75,97 @@ classdef FilterDesigner < handle
       obj.BCT = bct_obj;
     end
     
-    function filt = spatial(obj, kernel_name, varargin)
-      % Design filter on Lambda (spectral) domain
+    function filt = create(obj, domain, kernel_name, varargin)
+      % Create filter on any domain (MAIN METHOD)
       %
       % Syntax:
-      %   filt = designer.spatial(kernel_name, 'param', value, ...)
+      %   filt = designer.create(domain, kernel_name, 'param', value, ...)
       %
       % Inputs:
-      %   kernel_name - Kernel type: 'heat', 'mexican_hat', etc.
+      %   domain      - bct.Domain object (Lambda, Omega, Joint, Time, Manifold, etc.)
+      %   kernel_name - Kernel type: 'gaussian', 'heat', 'gabor', 'bandpass', etc.
+      %   varargin    - Parameter name-value pairs (kernel-specific)
+      %
+      % Returns:
+      %   filt - bct.filters.Filter object bound to specified domain
+      %
+      % Examples:
+      %   % Spectral filter (on eigenvalues)
+      %   filt = designer.create(B.Lambda, 'gaussian', 'center', 50, 'sigma', 10);
+      %   
+      %   % Temporal filter (on angular frequency)
+      %   filt = designer.create(B.Omega, 'gaussian', 'center', 2*pi*10, 'sigma', 2*pi*2);
+      %   
+      %   % Joint spatiotemporal filter
+      %   filt = designer.create(B.Joint, 'gabor', ...
+      %       'center_x', 50, 'center_y', 2*pi*10, ...
+      %       'sigma_x', 10, 'sigma_y', 2*pi*2);
+      %
+      % See also: lambda, omega, joint
+      
+      if ~isa(domain, 'bct.Domain')
+        error('FilterDesigner:InvalidDomain', ...
+          'First argument must be a bct.Domain object (Lambda, Omega, Joint, etc.)');
+      end
+      
+      % Create filter with domain, kernel, and parameters
+      filt = bct.filters.Filter(domain, kernel_name, varargin{:});
+    end
+    
+    function filt = lambda(obj, kernel_name, varargin)
+      % Create filter on Lambda (spectral) domain - SHORTCUT
+      %
+      % Syntax:
+      %   filt = designer.lambda(kernel_name, 'param', value, ...)
+      %
+      % Inputs:
+      %   kernel_name - Kernel type: 'gaussian', 'heat', 'mexican_hat', etc.
       %   varargin    - Parameter name-value pairs
       %
       % Returns:
-      %   filt - bct.filters.Filter object on Lambda domain
+      %   filt - bct.filters.Filter object on B.Lambda
       %
       % Example:
-      %   filt = designer.spatial('heat', 'tau', 0.1, 'label', 'lowpass');
+      %   filt = designer.lambda('gaussian', 'center', 50, 'sigma', 10, 'label', 'bandpass');
+      %
+      % Note: Equivalent to designer.create(B.Lambda, kernel_name, ...)
       
       if isempty(obj.BCT.Lambda)
         error('FilterDesigner:NoLambda', ...
-          'Lambda domain not initialized. Compute eigendecomposition first.');
+          'Lambda domain not initialized. Compute eigendecomposition first: B = B.computeEigenbasis(k)');
       end
       
-      filt = bct.filters.Filter(obj.BCT.Lambda, kernel_name, varargin{:});
+      filt = obj.create(obj.BCT.Lambda, kernel_name, varargin{:});
     end
     
-    function filt = temporal(obj, kernel_name, varargin)
-      % Design filter on Omega (frequency) domain
+    function filt = omega(obj, kernel_name, varargin)
+      % Create filter on Omega (frequency) domain - SHORTCUT
       %
       % Syntax:
-      %   filt = designer.temporal(kernel_name, 'param', value, ...)
+      %   filt = designer.omega(kernel_name, 'param', value, ...)
       %
       % Inputs:
       %   kernel_name - Kernel type: 'gaussian', 'bandpass', etc.
       %   varargin    - Parameter name-value pairs
       %
       % Returns:
-      %   filt - bct.filters.Filter object on Omega domain
+      %   filt - bct.filters.Filter object on B.Omega
       %
       % Example:
-      %   filt = designer.temporal('gaussian', ...
-      %       'center', 10, 'sigma', 2, 'label', 'alpha');
+      %   filt = designer.omega('gaussian', 'center', 2*pi*10, 'sigma', 2*pi*2, 'label', 'alpha');
+      %
+      % Note: Equivalent to designer.create(B.Omega, kernel_name, ...)
       
       if isempty(obj.BCT.Omega)
         error('FilterDesigner:NoOmega', ...
-          'Omega domain not initialized. Set B.Omega = B.Time.dual');
+          'Omega domain not initialized. Omega is auto-created when Time is set: B.Time = bct.Time(...)');
       end
       
-      filt = bct.filters.Filter(obj.BCT.Omega, kernel_name, varargin{:});
+      filt = obj.create(obj.BCT.Omega, kernel_name, varargin{:});
     end
     
     function filt = joint(obj, kernel_name, varargin)
-      % Design filter on Joint domain
+      % Create filter on Joint domain - SHORTCUT
       %
       % Syntax:
       %   filt = designer.joint(kernel_name, 'param', value, ...)
@@ -121,34 +176,40 @@ classdef FilterDesigner < handle
       %   varargin    - Parameter name-value pairs
       %
       % Name-Value Parameters:
-      %   'domains' - Cell array {'DomainA', 'DomainB'} or Joint object
-      %               Default: {'Lambda', 'Omega'}
+      %   'domains' - Cell array {'DomainA', 'DomainB'} to create Joint
+      %               Default: uses existing B.Joint
       %
       % Returns:
       %   filt - bct.filters.Filter object on Joint domain
       %
-      % Example:
+      % Examples:
       %   % Use existing Joint domain
       %   filt = designer.joint('gabor', ...
-      %       'center_x', 5, 'center_y', 10);
+      %       'center_x', 50, 'center_y', 2*pi*10, ...
+      %       'sigma_x', 10, 'sigma_y', 2*pi*2);
       %   
-      %   % Auto-create Joint domain
+      %   % Auto-create Joint domain from Lambda×Time
       %   filt = designer.joint('gabor', ...
       %       'domains', {'Lambda', 'Time'}, ...
-      %       'center_x', 5, 'center_y', 0.5);
+      %       'center_x', 50, 'center_y', 0.5, ...
+      %       'sigma_x', 10, 'sigma_y', 0.1);
+      %
+      % Note: Equivalent to designer.create(B.Joint, kernel_name, ...)
       
       % Parse domains parameter
       p = inputParser;
       p.KeepUnmatched = true;
-      addParameter(p, 'domains', {'Lambda', 'Omega'}, ...
-        @(x) iscell(x) || isa(x, 'bct.Joint'));
+      addParameter(p, 'domains', {}, @iscell);
       parse(p, varargin{:});
       
       % Get or create Joint domain
-      if isa(p.Results.domains, 'bct.Joint')
-        joint = p.Results.domains;
-      elseif iscell(p.Results.domains) && length(p.Results.domains) == 2
-        % Create Joint domain from domain names
+      if ~isempty(p.Results.domains)
+        % User specified domains to combine
+        if length(p.Results.domains) ~= 2
+          error('FilterDesigner:InvalidDomains', ...
+            'domains must be cell array with 2 elements: {''DomainA'', ''DomainB''}');
+        end
+        
         domA_name = p.Results.domains{1};
         domB_name = p.Results.domains{2};
         
@@ -162,11 +223,15 @@ classdef FilterDesigner < handle
           joint = obj.BCT.createJoint(domA_name, domB_name);
         end
       else
-        error('FilterDesigner:InvalidDomains', ...
-          'domains must be Joint object or cell array {''DomainA'', ''DomainB''}');
+        % Use existing Joint domain
+        if isempty(obj.BCT.Joint)
+          error('FilterDesigner:NoJoint', ...
+            'Joint domain not initialized. Create with B.createJoint(''Lambda'', ''Omega'') or specify ''domains'' parameter');
+        end
+        joint = obj.BCT.Joint;
       end
       
-      % Remove 'domains' from varargin before passing to Filter
+      % Remove 'domains' from varargin before passing to create()
       remaining_args = {};
       skip_next = false;
       for i = 1:length(varargin)
@@ -181,33 +246,23 @@ classdef FilterDesigner < handle
         remaining_args{end+1} = varargin{i}; %#ok<AGROW>
       end
       
-      filt = bct.filters.Filter(joint, kernel_name, remaining_args{:});
+      filt = obj.create(joint, kernel_name, remaining_args{:});
     end
     
-    function filt = custom(obj, domain, kernel_name, varargin)
-      % Design filter on custom domain
-      %
-      % Syntax:
-      %   filt = designer.custom(domain, kernel_name, 'param', value, ...)
-      %
-      % Inputs:
-      %   domain      - Any bct.Domain object
-      %   kernel_name - Kernel type
-      %   varargin    - Parameter name-value pairs
-      %
-      % Returns:
-      %   filt - bct.filters.Filter object on specified domain
-      %
-      % Example:
-      %   filt = designer.custom(B.Time, 'gaussian', ...
-      %       'center', 0.5, 'sigma', 0.1);
-      
-      if ~isa(domain, 'bct.Domain')
-        error('FilterDesigner:InvalidDomain', ...
-          'First argument must be a bct.Domain object');
-      end
-      
-      filt = bct.filters.Filter(domain, kernel_name, varargin{:});
+    %% Legacy methods (DEPRECATED - use create() instead)
+    
+    function filt = spatial(obj, kernel_name, varargin)
+      % DEPRECATED: Use lambda() or create(B.Lambda, ...) instead
+      warning('FilterDesigner:Deprecated', ...
+        'spatial() is deprecated. Use lambda() or create(B.Lambda, ...) for clarity');
+      filt = obj.lambda(kernel_name, varargin{:});
+    end
+    
+    function filt = temporal(obj, kernel_name, varargin)
+      % DEPRECATED: Use omega() or create(B.Omega, ...) instead
+      warning('FilterDesigner:Deprecated', ...
+        'temporal() is deprecated. Use omega() or create(B.Omega, ...) for clarity');
+      filt = obj.omega(kernel_name, varargin{:});
     end
   end
 end
