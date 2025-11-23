@@ -141,7 +141,8 @@ classdef Filter < handle
         obj.Label = obj.Parameters.label;
         obj.Parameters = rmfield(obj.Parameters, 'label');
       else
-        obj.Label = sprintf('%s_%s', class(domain), kernel_name);
+        % Auto-generate label: kernel_domain (e.g., gaussian_lambda, gabor_lambda-omega)
+        obj.Label = obj.generateAutoLabel(domain, kernel_name);
       end
       
       % Add listener for parameter changes
@@ -355,6 +356,27 @@ classdef Filter < handle
       obj.invalidateCache();
     end
     
+    function label = generateAutoLabel(~, domain, kernel_name)
+      % Generate automatic label: kernel_domain
+      %
+      % Examples:
+      %   Lambda → "gaussian_lambda"
+      %   Omega → "bandpass_omega"
+      %   Joint(Lambda,Omega) → "gabor_lambda-omega"
+      %   Joint(Lambda,Time) → "separable_lambda-time"
+      
+      if isa(domain, 'bct.Joint')
+        % Joint domain: kernel_domainA-domainB
+        domA_name = lower(strrep(class(domain.A), 'bct.', ''));
+        domB_name = lower(strrep(class(domain.B), 'bct.', ''));
+        label = sprintf('%s_%s-%s', kernel_name, domA_name, domB_name);
+      else
+        % Single domain: kernel_domain
+        dom_name = lower(strrep(class(domain), 'bct.', ''));
+        label = sprintf('%s_%s', kernel_name, dom_name);
+      end
+    end
+    
     function kernel_fh = loadKernel(~, ~, kernel_name)
       % Load kernel function (domain-agnostic)
       %
@@ -459,17 +481,23 @@ classdef Filter < handle
       % Evaluate on 2D joint domain
       %
       % Uses joint domain grids or custom grid points.
+      % Handles both separable and non-separable kernels on joint domains.
       
       if nargin < 2 || isempty(points)
-        % Use joint grids from domain
-        X = obj.Domain.A_grid;
-        Y = obj.Domain.B_grid;
+        % Use joint grids from domain (default)
+        if ~isempty(obj.Domain.A_grid) && ~isempty(obj.Domain.B_grid)
+          X = obj.Domain.A_grid;
+          Y = obj.Domain.B_grid;
+        else
+          error('Filter:NoJointGrids', ...
+            'Joint domain grids not initialized. Call createJoint() properly.');
+        end
       elseif iscell(points) && length(points) == 2
         % Custom grids provided
         X = points{1};
         Y = points{2};
       else
-        % Assume domain axis for 1D evaluation (shouldn't happen for Joint)
+        % Invalid input for Joint domain
         error('Filter:InvalidJointPoints', ...
           'Joint domain requires 2D grid points as cell {X, Y}');
       end
