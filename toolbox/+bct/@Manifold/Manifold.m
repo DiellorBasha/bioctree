@@ -130,6 +130,25 @@ classdef Manifold < bct.Domain
             % Get number of faces
             M = size(obj.Faces, 1);
         end
+        
+        % ---------------------------------------------------------------
+        function obj = initializeTransform(obj)
+            % Initialize MFT transform (Manifold → Lambda)
+            % Requires Lambda dual to be set with computed eigenvectors
+            
+            if isempty(obj.dual)
+                warning('bct:Manifold:NoDual', 'Cannot initialize transform: dual Lambda domain not set');
+                return;
+            end
+            
+            if isempty(obj.dual.U)
+                warning('bct:Manifold:NoEigenvectors', 'Cannot initialize transform: eigenvectors not computed');
+                return;
+            end
+            
+            % Create MFT transform object
+            obj.transform = bct.factory.transforms.MFT(obj);
+        end
 
     end
 

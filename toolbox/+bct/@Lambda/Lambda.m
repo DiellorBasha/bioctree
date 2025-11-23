@@ -100,6 +100,25 @@ classdef Lambda < bct.Domain
         function obj = updateCoordinateMode(obj)
             obj = obj.buildAxis();
         end
+        
+        % ---------------------------------------------------------------
+        function obj = initializeTransform(obj)
+            % Initialize IMFT transform (Lambda → Manifold)
+            % Requires Manifold dual to be set
+            
+            if isempty(obj.dual)
+                warning('bct:Lambda:NoDual', 'Cannot initialize transform: dual Manifold domain not set');
+                return;
+            end
+            
+            if isempty(obj.U)
+                warning('bct:Lambda:NoEigenvectors', 'Cannot initialize transform: eigenvectors not computed');
+                return;
+            end
+            
+            % Create IMFT transform object
+            obj.transform = bct.factory.transforms.IMFT(obj);
+        end
 
     end
 end

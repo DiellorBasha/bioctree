@@ -20,11 +20,16 @@ B = bct.io.import.mesh(path);
 
 fprintf('  Mesh loaded: %s\n', path);
 fprintf('  Manifold: N = %d vertices\n', B.Manifold.N);
-if ~isempty(B.Lambda)
-    fprintf('  Lambda: N = %d spectral modes\n', B.Lambda.N);
-end
+
+% Compute eigenbasis for spectral analysis
+fprintf('  Computing eigenbasis (100 modes)...\n');
+B = B.computeEigenbasis(100);
+
+fprintf('  Lambda: N = %d spectral modes\n', B.Lambda.N);
 if ~isempty(B.Manifold.transform)
     fprintf('  Manifold transform: %s\n', class(B.Manifold.transform));
+else
+    error('Transform not initialized after computeEigenbasis!');
 end
 
 %% Step 2: Create delta signal at a vertex
@@ -67,26 +72,35 @@ for k = 1:min(10, length(delta_spectral))
     fprintf('    Mode %d: %.6f\n', k, delta_spectral(k));
 end
 
-%% Step 4: Create Gaussian spectral filter
-fprintf('\nStep 4: Create Gaussian spectral filter\n');
-fprintf('----------------------------------------\n');
+%% Step 4: Create spectral filter using bct.filters
+fprintf('\nStep 4: Create spectral filter using bct.filters\n');
+fprintf('-------------------------------------------------\n');
 
-% Gaussian filter parameters
+% Create FilterDesigner for this BCT object
+designer = bct.filters.FilterDesigner(B);
+
+% Design a Gaussian bandpass filter on Lambda domain
+% Center at mode 50 with bandwidth of 20 modes
 k0 = 50;      % Center mode (controls spatial frequency)
 sigma = 20;   % Bandwidth (controls spatial scale)
 
-fprintf('  Filter type: Gaussian\n');
-fprintf('  Center mode k0 = %d\n', k0);
-fprintf('  Bandwidth σ = %d\n', sigma);
+filter = designer.spatial('gaussian', ...
+    'center', k0, ...
+    'sigma', sigma, ...
+    'label', 'Bandpass Spatial Filter');
 
-% Create Gaussian filter in spectral domain
-% H(k) = exp(-0.5 * ((k - k0) / sigma)^2)
-k_axis = (1:B.Lambda.N)';
-H = exp(-0.5 * ((k_axis - k0) / sigma).^2);
+fprintf('  Filter type: %s\n', filter.KernelName);
+fprintf('  Domain: %s\n', class(filter.Domain));
+fprintf('  Center mode k0 = %d\n', filter.center);
+fprintf('  Bandwidth σ = %d\n', filter.sigma);
 
+% Evaluate filter on Lambda domain (uses Lambda.axis automatically)
+H = filter.evaluate();
+
+fprintf('  Filter response size: [%d × 1]\n', length(H));
 fprintf('  Filter peak value: %.6f at mode %d\n', max(H), k0);
 fprintf('  Filter at DC (mode 1): %.6f\n', H(1));
-fprintf('  Filter at Nyquist (mode %d): %.6f\n', B.Lambda.N, H(end));
+fprintf('  Filter at mode %d: %.6f\n', B.Lambda.N, H(end));
 
 %% Step 5: Apply filter in spectral domain
 fprintf('\nStep 5: Apply spectral filter\n');
@@ -186,14 +200,17 @@ figure('Position', [100 600 1200 400]);
 for i = 1:length(sigmas)
     sig = sigmas(i);
     
-    % Create filter
-    H_i = exp(-0.5 * ((k_axis - k0) / sig).^2);
+    % Update filter parameters (demonstrates dynamic parameter adjustment)
+    filter.sigma = sig;
+    
+    % Evaluate filter with new parameters
+    H_i = filter.evaluate();
     
     % Apply filter
     delta_spec_filt = delta_spectral .* H_i;
     
     % Inverse transform
-    sig_filt = B.Manifold.transform.inverse(delta_spec_filt);
+    sig_filt = B.Lambda.transform.forward(delta_spec_filt);
     
     % Plot
     subplot(1, 3, i);
@@ -211,6 +228,35 @@ end
 
 fprintf('  Larger σ → wider spatial extent (more smoothing)\n');
 
+%% Bonus: Compare Gaussian vs Heat kernel
+fprintf('\nBonus: Compare Gaussian vs Heat kernel\n');
+fprintf('---------------------------------------\n');
+
+% Create heat kernel filter (low-pass for spatial smoothing)
+heat_filter = designer.spatial('heat', ...
+    'tau', 0.01, ...
+    'label', 'Heat Diffusion Filter');
+
+fprintf('  Heat kernel: H(λ) = exp(-τ·λ)\n');
+fprintf('  Diffusion time τ = %.3f\n', heat_filter.tau);
+
+% Evaluate both filters
+H_gaussian = filter.evaluate();
+H_heat = heat_filter.evaluate();
+
+% Apply both filters to delta
+delta_spec_gaussian = delta_spectral .* H_gaussian;
+delta_spec_heat = delta_spectral .* H_heat;
+
+signal_gaussian = B.Lambda.transform.forward(delta_spec_gaussian);
+signal_heat = B.Lambda.transform.forward(delta_spec_heat);
+
+fprintf('  Gaussian filtered signal: max = %.4f\n', max(abs(signal_gaussian)));
+fprintf('  Heat filtered signal: max = %.4f\n', max(abs(signal_heat)));
+
+fprintf('  → Gaussian: bandpass (selects specific frequencies)\n');
+fprintf('  → Heat: lowpass (smooth spatial features)\n');
+
 %% Summary
 fprintf('\n========================================\n');
 fprintf('EXAMPLE COMPLETE!\n');
@@ -218,13 +264,18 @@ fprintf('========================================\n');
 fprintf('Demonstrated:\n');
 fprintf('  1. Delta signal creation on Manifold\n');
 fprintf('  2. Forward transform to spectral domain (Lambda)\n');
-fprintf('  3. Gaussian filtering in spectral domain\n');
-fprintf('  4. Inverse transform back to Manifold\n');
-fprintf('  5. Analysis of filtering effects\n');
+fprintf('  3. Filter design using bct.filters.FilterDesigner\n');
+fprintf('  4. Gaussian filtering in spectral domain\n');
+fprintf('  5. Inverse transform back to Manifold\n');
+fprintf('  6. Analysis of filtering effects\n');
+fprintf('  7. Dynamic filter parameter adjustment\n');
 fprintf('\n');
 fprintf('Key concepts:\n');
+fprintf('  - FilterDesigner provides domain-validated filter creation\n');
+fprintf('  - Filter.evaluate() automatically uses domain axis\n');
 fprintf('  - Spectral filtering = pointwise multiplication in Lambda\n');
 fprintf('  - Low-pass filter (small k0) → spatial smoothing\n');
 fprintf('  - Band-pass filter → feature extraction at specific scale\n');
 fprintf('  - Filter bandwidth (σ) controls spatial extent\n');
+fprintf('  - Filter parameters can be updated dynamically (e.g., for GUIs)\n');
 fprintf('========================================\n');
