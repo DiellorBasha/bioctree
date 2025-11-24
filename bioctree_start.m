@@ -18,6 +18,18 @@ fprintf('╔══════════════════════�
 fprintf('║          Bioctree Toolbox Initialization                ║\n');
 fprintf('╚══════════════════════════════════════════════════════════╝\n\n');
 
+%% 0. Add Config Directory to Path
+% Get the bioctree root directory (where this script is located)
+bioctree_root = fileparts(mfilename('fullpath'));
+config_dir = fullfile(bioctree_root, 'config');
+
+% Add config directory to path so bioctree_config() can be found
+if exist(config_dir, 'dir')
+    addpath(config_dir);
+else
+    error('bioctree:ConfigDirNotFound', 'Config directory not found: %s', config_dir);
+end
+
 %% 1. Load Configuration
 fprintf('[1/6] Loading configuration...\n');
 try
@@ -31,17 +43,44 @@ end
 %% 2. Add Paths
 fprintf('\n[2/6] Adding paths to MATLAB...\n');
 try
-    % Add config directory
-    addpath(fullfile(cfg.root, 'config'));
-    
     % Add toolbox (brings +bct package into scope)
     addpath(cfg.toolbox);
     fprintf('      ✓ Toolbox: %s\n', cfg.toolbox);
     
     % Add external directory
     if exist(cfg.external, 'dir')
-        addpath(cfg.external);
+        addpath(genpath(cfg.external));
         fprintf('      ✓ External: %s\n', cfg.external);
+    end
+    
+    % Add data directory
+    if exist(cfg.data, 'dir')
+        addpath(cfg.data);
+        fprintf('      ✓ Data: %s\n', cfg.data);
+    end
+    
+    % Add apps directory
+    if exist(cfg.apps, 'dir')
+        addpath(cfg.apps);
+        fprintf('      ✓ Apps: %s\n', cfg.apps);
+    end
+    
+    % Add app_code directory
+    if exist(cfg.app_code, 'dir')
+        addpath(cfg.app_code);
+        fprintf('      ✓ App code: %s\n', cfg.app_code);
+    end
+    
+    % Add examples directory
+    if exist(cfg.examples, 'dir')
+        addpath(cfg.examples);
+        fprintf('      ✓ Examples: %s\n', cfg.examples);
+    end
+    
+    % Add scripts directory
+    if exist(cfg.scripts, 'dir')
+        addpath(cfg.scripts);
+        fprintf('      ✓ Scripts: %s\n', cfg.scripts);
     end
     
     % Add tests directory

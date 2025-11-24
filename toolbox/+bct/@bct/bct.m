@@ -40,7 +40,7 @@ properties (SetObservable, AbortSet)
     
     % Lambda domain - spectral decomposition of Manifold Laplacian
     % Dual of Manifold domain, linked automatically on construction
-    % Stores eigenvalues, eigenvectors from meshFourier
+    % Stores eigenvalues, eigenvectors from bct.Lambda.eigenbasis
     % Access as: B.Lambda.lambda, B.Lambda.U, B.Lambda.axis, etc.
     Lambda bct.Lambda = bct.Lambda.empty()  % Spectral domain
     
@@ -211,10 +211,10 @@ end
     lambda_max_est = obj.Manifold.estimateLambdaMax();
     
     % Create placeholder Lambda with estimated range [0, lambda_max_est]
-    % Actual eigenvalues will be computed when meshFourier is called
+    % Actual eigenvalues will be computed when bct.Lambda.eigenbasis is called
     eigenStruct = struct();
     eigenStruct.eigenvalues = linspace(0, lambda_max_est, 100)';  % Placeholder
-    eigenStruct.eigenvectors = [];  % Will be populated by meshFourier
+    eigenStruct.eigenvectors = [];  % Will be populated by eigenbasis
     obj.Lambda = bct.Lambda(eigenStruct);
     
     % Link Manifold ↔ Lambda as dual domains using inherited setDual method
@@ -281,7 +281,7 @@ methods
     %   coeffs = B.Manifold.transform.forward(signal);
     %   reconstructed = B.Lambda.transform.forward(coeffs);
     %
-    % See also: bct.Lambda.eigenbasis, bct.Manifold.meshFourier
+    % See also: bct.Lambda.eigenbasis
     
     % Validate Manifold and Lambda exist
     if isempty(obj.Manifold)
@@ -657,6 +657,117 @@ methods
         error('bct:NoTime', 'Time domain must be set for spatiotemporal impulse');
       end
       sig = bct.Signal.createDelta(this.Manifold, v0, this.Time, t0);
+    end
+  end
+  
+  function sig_out = applyFilter(obj, filter_obj, signal_in)
+    % applyFilter - Apply filter to signal using domain transforms
+    %
+    % Orchestrates the complete filtering workflow:
+    %   1. Forward transform: signal from source domain to filter domain
+    %   2. Apply filter: multiply by filter response in filter domain
+    %   3. Inverse transform: back to source domain
+    %
+    % Syntax:
+    %   sig_out = B.applyFilter(filter, signal)
+    %
+    % Inputs:
+    %   filter_obj - bct.filters.Filter object (defines filter domain)
+    %   signal_in  - bct.Signal object (can be on any domain)
+    %
+    % Returns:
+    %   sig_out - Filtered signal in same domain as input
+    %
+    % Examples:
+    %   % Spatial filtering (Manifold → Lambda → Manifold)
+    %   delta = bct.Signal.createDelta(B.Manifold, 100);
+    %   filt = designer.lambda('gaussian', 'center', 10, 'sigma', 2);
+    %   filtered = B.applyFilter(filt, delta);
+    %   
+    %   % Temporal filtering (Time → Omega → Time)
+    %   timesig = bct.Signal(B.Time, randn(B.Time.N,1), 'noise');
+    %   filt = designer.omega('bandpass', 'low', 5, 'high', 15);
+    %   filtered = B.applyFilter(filt, timesig);
+    %
+    % See also: bct.filters.Filter, bct.Signal, bct.filters.FilterDesigner
+    
+    % Validate inputs
+    if ~isa(filter_obj, 'bct.filters.Filter')
+      error('bct:InvalidFilter', 'filter_obj must be a bct.filters.Filter');
+    end
+    if ~isa(signal_in, 'bct.Signal')
+      error('bct:InvalidSignal', 'signal_in must be a bct.Signal');
+    end
+    
+    % Get source domain from signal
+    source_domain = signal_in.Domain;
+    
+    % Get filter domain
+    filter_domain = filter_obj.Domain;
+    
+    % Determine filtering strategy based on domains
+    if isa(filter_domain, 'bct.Lambda')
+      % Spatial spectral filtering
+      if ~isa(source_domain, 'bct.Manifold')
+        error('bct:DomainMismatch', ...
+          'Lambda filter requires Manifold signal (got %s)', class(source_domain));
+      end
+      
+      % Check transforms initialized
+      if isempty(obj.Manifold.transform) || isempty(obj.Lambda.transform)
+        error('bct:NoTransform', ...
+          'Transforms not initialized. Run computeEigenbasis() first.');
+      end
+      
+      % Forward: Manifold → Lambda (MFT)
+      coeffs = obj.Manifold.transform.forward(signal_in.Data);
+      
+      % Filter: multiply by filter response
+      H = filter_obj.evaluate();
+      filtered_coeffs = coeffs(:) .* H(:);
+      
+      % Inverse: Lambda → Manifold (IMFT.forward, not IMFT.inverse!)
+      data_out = obj.Lambda.transform.forward(filtered_coeffs);
+      
+      % Create output signal
+      label_out = sprintf('%s_filtered', signal_in.Label);
+      sig_out = bct.Signal(obj.Manifold, data_out, label_out);
+      
+    elseif isa(filter_domain, 'bct.Omega')
+      % Temporal frequency filtering
+      if ~isa(source_domain, 'bct.Time')
+        error('bct:DomainMismatch', ...
+          'Omega filter requires Time signal (got %s)', class(source_domain));
+      end
+      
+      % Check transforms initialized
+      if isempty(obj.Time.transform) || isempty(obj.Omega.transform)
+        error('bct:NoTransform', ...
+          'Transforms not initialized for Time/Omega.');
+      end
+      
+      % Forward: Time → Omega (FFT)
+      coeffs = obj.Time.transform.forward(signal_in.Data);
+      
+      % Filter: multiply by filter response
+      H = filter_obj.evaluate();
+      filtered_coeffs = coeffs(:) .* H(:);
+      
+      % Inverse: Omega → Time (IFFT)
+      data_out = obj.Omega.transform.inverse(filtered_coeffs);
+      
+      % Create output signal
+      label_out = sprintf('%s_filtered', signal_in.Label);
+      sig_out = bct.Signal(obj.Time, data_out, label_out);
+      
+    elseif isa(filter_domain, 'bct.Joint')
+      % Joint domain filtering (2D)
+      error('bct:NotImplemented', ...
+        'Joint domain filtering not yet implemented');
+        
+    else
+      error('bct:UnsupportedFilterDomain', ...
+        'Filter domain must be Lambda, Omega, or Joint (got %s)', class(filter_domain));
     end
   end
   

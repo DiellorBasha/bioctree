@@ -104,15 +104,16 @@ classdef Lambda < bct.Domain
         % ---------------------------------------------------------------
         function obj = initializeTransform(obj)
             % Initialize IMFT transform (Lambda → Manifold)
-            % Requires Manifold dual to be set
+            % Requires Manifold dual to be set and eigenvectors computed
+            % Silently returns if prerequisites not met (expected in standard workflow)
             
             if isempty(obj.dual)
-                warning('bct:Lambda:NoDual', 'Cannot initialize transform: dual Manifold domain not set');
+                % Dual not set - transform cannot be created yet
                 return;
             end
             
             if isempty(obj.U)
-                warning('bct:Lambda:NoEigenvectors', 'Cannot initialize transform: eigenvectors not computed');
+                % Eigenvectors not computed - transform cannot be created yet
                 return;
             end
             

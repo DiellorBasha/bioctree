@@ -135,14 +135,15 @@ classdef Manifold < bct.Domain
         function obj = initializeTransform(obj)
             % Initialize MFT transform (Manifold → Lambda)
             % Requires Lambda dual to be set with computed eigenvectors
+            % Silently returns if prerequisites not met (expected in standard workflow)
             
             if isempty(obj.dual)
-                warning('bct:Manifold:NoDual', 'Cannot initialize transform: dual Lambda domain not set');
+                % Dual not set - transform cannot be created yet
                 return;
             end
             
             if isempty(obj.dual.U)
-                warning('bct:Manifold:NoEigenvectors', 'Cannot initialize transform: eigenvectors not computed');
+                % Eigenvectors not computed - transform cannot be created yet
                 return;
             end
             
@@ -154,7 +155,6 @@ classdef Manifold < bct.Domain
 
     methods (Static)
         [L, M, K] = laplacian(V, F, laplacianType);
-        [U, lam, K, M, D, Ls] = meshFourier(mesh, varargin);
         lambda_max = maxLambda(obj, scope);
     end
 end

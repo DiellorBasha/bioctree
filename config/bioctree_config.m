@@ -14,10 +14,13 @@ function cfg = bioctree_config()
 %         package    - +bct package directory path
 %         external   - External dependencies directory
 %         app_code   - Application code directory
-%         test_data  - Test data directory
+%         data       - Data directory
 %         examples   - Examples directory
 %         apps       - Applications directory
 %         scripts    - Scripts directory
+%         mesh       - Standard meshes for Manifold testing
+%                      .fsaverage_lh_pial - Left hemisphere pial surface
+%                      .fsaverage_rh_pial - Right hemisphere pial surface
 %         deps       - Dependency manifest structure
 %
 % See also: bioctree_start
@@ -38,10 +41,16 @@ function cfg = bioctree_config()
     cfg.package   = fullfile(root, paths.package);
     cfg.external  = fullfile(root, paths.external);
     cfg.app_code  = fullfile(root, paths.app_code);
-    cfg.test_data = fullfile(root, paths.test_data);
+    cfg.data      = fullfile(root, paths.data);
     cfg.examples  = fullfile(root, paths.examples);
     cfg.apps      = fullfile(root, paths.apps);
     cfg.scripts   = fullfile(root, paths.scripts);
+    
+    % Standard meshes for testing
+    if isfield(paths, 'standard_meshes')
+        cfg.mesh.fsaverage_lh_pial = fullfile(root, paths.standard_meshes.fsaverage_lh_pial);
+        cfg.mesh.fsaverage_rh_pial = fullfile(root, paths.standard_meshes.fsaverage_rh_pial);
+    end
 
     % Load dependency manifest
     deps_file = fullfile(fileparts(mfilename('fullpath')), 'bioctree_dependencies.json');

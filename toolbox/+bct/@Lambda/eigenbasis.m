@@ -49,7 +49,7 @@ function obj = eigenbasis(obj, MassMatrix, CotangentMatrix, varargin)
 %   B.Lambda.initializeTransform();
 %   B.Manifold.initializeTransform();
 %
-% See also: bct.Manifold.meshFourier, bct.Lambda.initializeTransform
+% See also: bct.Lambda.initializeTransform, bct.Manifold
 
 % Parse inputs
 p = inputParser;

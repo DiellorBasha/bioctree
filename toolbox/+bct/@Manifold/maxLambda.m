@@ -40,7 +40,7 @@ function lmax = maxLambda(obj, scope)
 %   manifold2 = bct.Manifold(struct('V', V, 'F', F));
 %   lmax2 = bct.Manifold.maxLambda(manifold2);  % Uses eigs
 %
-% See also: eigs, meshFourier
+% See also: eigs, bct.Lambda.eigenbasis
 
 % Default scope
 if nargin < 2

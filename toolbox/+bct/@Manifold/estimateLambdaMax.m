@@ -13,7 +13,7 @@ function lambda_max_est = estimateLambdaMax(obj)
 %
 % The estimate is used to initialize the dual Lambda domain.
 % The true maximum will be computed when Lambda eigenvalues are
-% calculated via meshFourier.
+% calculated via bct.Lambda.eigenbasis().
 %
 % Syntax:
 %   lambda_max_est = obj.estimateLambdaMax()
@@ -32,7 +32,7 @@ function lambda_max_est = estimateLambdaMax(obj)
 %   manifold_norm = bct.Manifold(struct('V', V, 'F', F), 'cotangent-normalized');
 %   lmax_est_norm = manifold_norm.estimateLambdaMax();  % Returns 2.0
 %
-% See also: maxLambda, meshFourier
+% See also: maxLambda, bct.Lambda.eigenbasis
 
 if strcmp(obj.LaplacianType, 'cotangent-normalized')
     % For normalized Laplacian: eigenvalues ∈ [0, 2]
