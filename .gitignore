@@ -4,10 +4,10 @@
 
 /data/datasets
 /data/experimental
-/data/mesh/brainstorm
-/data/mesh/freesurfer
+/data/mesh/external/brainstorm
+/data/mesh/external/freesurfer
 /external/.venv
-/external\bioelectromagnetism
+/external/bioelectromagnetism
 /external/gifti-main
 /external/out
 /external/iso2mesh
