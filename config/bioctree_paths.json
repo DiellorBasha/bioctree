@@ -1,0 +1,10 @@
+{
+  "toolbox": "toolbox",
+  "package": "toolbox/+bct",
+  "external": "external",
+  "app_code": "app_code",
+  "test_data": "test-data",
+  "examples": "examples",
+  "apps": "apps",
+  "scripts": "scripts"
+}

@@ -1,16 +1,11 @@
-gspbox/
-test-data/
-figures/
-circstat/
-scripts/
+
 
 ### bct ###
-/data/cache/
-/data/temp/
-/data/bioctree_files/derivatives/
-/data/bioctree_files/processed/
-/data/**/*.h5~
-/data
+
+/data/datasets
+/data/experimental
+/data/mesh/brainstorm
+/data/mesh/freesurfer
 /external/.venv
 /external\bioelectromagnetism
 /external/gifti-main
@@ -19,7 +14,7 @@ scripts/
 /external/meshfix
 /external/toolbox_graph
 /external/gptoolbox
-/app/node_modules/
+
 
 # Test files
 test_*.py

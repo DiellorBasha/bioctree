@@ -1,124 +1,149 @@
 function bioctree_start()
 % BIOCTREE_START Initialize Bioctree toolbox environment
 %
-% This function sets up the Bioctree toolbox for spatiotemporal signal processing
-% and compression of electrophysiological signals on networks (graphs).
-%
-% Features initialized:
-%   - Graph signal processing (GSP) tools
-%   - Compression and subdivision algorithms  
-%   - Time-vertex analysis capabilities
-%   - Brainstorm integration for MEG/EEG data
-%   - GSPBOX foundation for graph operations
+% Main entry point for Bioctree initialization. This function:
+%   - Loads configuration from JSON manifests
+%   - Adds all necessary paths to MATLAB path
+%   - Downloads and validates external dependencies
+%   - Initializes the +bct package
+%   - Validates the environment
+%   - Prints diagnostic information
 %
 % Usage:
-%   bioctree_start()  % Run from the bioctree root directory
+%   bioctree_start()  % Run from anywhere after navigating to bioctree root
+%
+% See also: bioctree_config
 
-fprintf('=== Initializing Bioctree Toolbox ===\n');
+fprintf('╔══════════════════════════════════════════════════════════╗\n');
+fprintf('║          Bioctree Toolbox Initialization                ║\n');
+fprintf('╚══════════════════════════════════════════════════════════╝\n\n');
 
-% Get the root directory of the toolbox
-bioctree_root = fileparts(mfilename('fullpath'));
-if isempty(bioctree_root)
-    bioctree_root = pwd;
+%% 1. Load Configuration
+fprintf('[1/6] Loading configuration...\n');
+try
+    cfg = bioctree_config();
+    fprintf('      ✓ Config loaded from: %s\n', fullfile(cfg.root, 'config'));
+    fprintf('      ✓ Root directory: %s\n', cfg.root);
+catch ME
+    error('bioctree:ConfigFailed', 'Failed to load configuration: %s', ME.message);
 end
 
-fprintf('Bioctree root: %s\n', bioctree_root);
-
-% Add main toolbox to path
-fprintf('Adding Bioctree modules to path...\n');
-addpath(bioctree_root);
-addpath(genpath(fullfile(bioctree_root, 'compression')));
-addpath(genpath(fullfile(bioctree_root, 'io')));
-addpath(genpath(fullfile(bioctree_root, 'plotlib')));
-addpath(genpath(fullfile(bioctree_root, 'toolbox')));
-addpath(genpath(fullfile(bioctree_root, 'workflows')));
-
-% Initialize GSPBOX
-gspbox_path = fullfile(bioctree_root, 'external', 'gspbox');
-if exist(gspbox_path, 'dir')
-    fprintf('Initializing GSPBOX...\n');
-    addpath(genpath(gspbox_path));
+%% 2. Add Paths
+fprintf('\n[2/6] Adding paths to MATLAB...\n');
+try
+    % Add config directory
+    addpath(fullfile(cfg.root, 'config'));
     
+    % Add toolbox (brings +bct package into scope)
+    addpath(cfg.toolbox);
+    fprintf('      ✓ Toolbox: %s\n', cfg.toolbox);
+    
+    % Add external directory
+    if exist(cfg.external, 'dir')
+        addpath(cfg.external);
+        fprintf('      ✓ External: %s\n', cfg.external);
+    end
+    
+    % Add tests directory
+    tests_dir = fullfile(cfg.root, 'tests');
+    if exist(tests_dir, 'dir')
+        addpath(genpath(tests_dir));
+        fprintf('      ✓ Tests: %s\n', tests_dir);
+    end
+    
+    % Add docs directory for reference
+    docs_dir = fullfile(cfg.root, 'docs');
+    if exist(docs_dir, 'dir')
+        addpath(docs_dir);
+        fprintf('      ✓ Docs: %s\n', docs_dir);
+    end
+    
+catch ME
+    error('bioctree:PathSetup', 'Failed to add paths: %s', ME.message);
+end
+
+%% 3. Check and Download Dependencies
+fprintf('\n[3/6] Checking external dependencies...\n');
+deps = fieldnames(cfg.deps);
+missing_deps = {};
+
+for i = 1:numel(deps)
+    dep_name = deps{i};
+    dep_info = cfg.deps.(dep_name);
+    dep_path = fullfile(cfg.external, dep_name);
+    
+    if exist(dep_path, 'dir')
+        fprintf('      ✓ %s: Found\n', dep_name);
+        % Add to path
+        addpath(genpath(dep_path));
+    else
+        fprintf('      ✗ %s: Missing\n', dep_name);
+        missing_deps{end+1} = dep_name; %#ok<AGROW>
+        
+        % Attempt to download
+        fprintf('        Attempting to clone from %s...\n', dep_info.repo);
+        try
+            [status, ~] = system(sprintf('git clone %s "%s"', dep_info.repo, dep_path));
+            if status == 0
+                fprintf('        ✓ Cloned successfully\n');
+                addpath(genpath(dep_path));
+            else
+                fprintf('        ✗ Clone failed\n');
+            end
+        catch
+            fprintf('        ✗ Clone failed (git not available or network issue)\n');
+        end
+    end
+end
+
+% Initialize GSPBOX if present
+gspbox_path = fullfile(cfg.external, 'gspbox');
+if exist(gspbox_path, 'dir')
     try
         gsp_start();
-        fprintf('  ✓ GSPBOX initialized successfully\n');
-    catch ME
-        warning('BIOCTREE:GSPBOXInit', 'Failed to initialize GSPBOX: %s', ME.message);
-        fprintf('  ✗ GSPBOX initialization failed\n');
+        fprintf('      ✓ GSPBOX initialized\n');
+    catch
+        fprintf('      ⚠ GSPBOX found but initialization failed\n');
     end
-else
-    fprintf('GSPBOX not found. Attempting to clone from GitHub...\n');
-    external_dir = fullfile(bioctree_root, 'external');
-    if ~exist(external_dir, 'dir')
-        mkdir(external_dir);
-    end
+end
+
+%% 4. Validate BCT Package
+fprintf('\n[4/6] Validating +bct package...\n');
+if exist('bct.bct', 'class')
+    fprintf('      ✓ bct.bct class available\n');
     
-    % Change to external directory and clone GSPBOX
-    current_dir = pwd;
-    try
-        cd(external_dir);
-        fprintf('  Cloning GSPBOX from https://github.com/epfl-lts2/gspbox.git...\n');
-        [status, cmdout] = system('git clone https://github.com/epfl-lts2/gspbox.git gspbox');
-        
-        if status == 0
-            fprintf('  ✓ GSPBOX cloned successfully\n');
-            
-            % Add to path and initialize
-            addpath(genpath(gspbox_path));
-            try
-                gsp_start();
-                fprintf('  ✓ GSPBOX initialized successfully\n');
-            catch ME
-                warning('BIOCTREE:GSPBOXInit', 'Failed to initialize GSPBOX: %s', ME.message);
-                fprintf('  ✗ GSPBOX initialization failed\n');
-            end
+    % Check for key classes
+    key_classes = {'bct.Domain', 'bct.Lambda', 'bct.Omega', 'bct.Joint', ...
+                   'bct.Manifold', 'bct.Signal', 'bct.Graph'};
+    all_found = true;
+    for i = 1:numel(key_classes)
+        if exist(key_classes{i}, 'class')
+            fprintf('      ✓ %s\n', key_classes{i});
         else
-            warning('BIOCTREE:GSPBOXClone', 'Failed to clone GSPBOX:\n%s', cmdout);
-            fprintf('  ✗ GSPBOX clone failed. Please manually clone:\n');
-            fprintf('    git clone https://github.com/epfl-lts2/gspbox.git external/gspbox\n');
+            fprintf('      ✗ %s (missing)\n', key_classes{i});
+            all_found = false;
         end
-    catch ME
-        warning('BIOCTREE:GSPBOXSetup', 'Error during GSPBOX setup: %s', ME.message);
     end
-    cd(current_dir);
-end
-
-% Initialize gptoolbox
-gptoolbox_path = fullfile(bioctree_root, 'external', 'gptoolbox');
-if exist(gptoolbox_path, 'dir')
-    fprintf('Initializing gptoolbox...\n');
-    addpath(genpath(gptoolbox_path));
-    fprintf('  ✓ gptoolbox added to path\n');
     
-    % Verify key functions are available
-    if exist('cotmatrix', 'file') && exist('massmatrix', 'file')
-        fprintf('  ✓ gptoolbox geometry functions available (cotmatrix, massmatrix)\n');
+    if all_found
+        fprintf('      ✓ All core classes validated\n');
     else
-        warning('BIOCTREE:GPTOOLBOXFunctions', 'gptoolbox functions not found on path');
-        fprintf('  ✗ Some gptoolbox functions may not be available\n');
+        warning('bioctree:MissingClasses', 'Some +bct classes are missing');
     end
 else
-    warning('BIOCTREE:GPTOOLBOXNotFound', 'gptoolbox not found at: %s', gptoolbox_path);
-    fprintf('  ✗ gptoolbox not found. Mesh processing functions (meshFourier) will not work.\n');
-    fprintf('    To install, clone to external/gptoolbox:\n');
-    fprintf('    git clone https://github.com/alecjacobson/gptoolbox.git external/gptoolbox\n');
+    error('bioctree:BCTNotFound', 'bct.bct class not found. Package may be corrupted.');
 end
 
-% Add external utilities
-external_path = fullfile(bioctree_root, 'external');
-if exist(external_path, 'dir')
-    addpath(external_path);
-    fprintf('Added external utilities\n');
-end
+%% 5. Environment Validation
+fprintf('\n[5/6] Validating environment...\n');
 
-% Check MATLAB version and toolboxes
-fprintf('\nSystem check:\n');
+% Check MATLAB version
 matlab_version = version('-release');
 matlab_year = str2double(matlab_version(1:4));
 if matlab_year >= 2020
-    fprintf('  ✓ MATLAB %s (compatible)\n', matlab_version);
+    fprintf('      ✓ MATLAB %s (compatible)\n', matlab_version);
 else
-    fprintf('  ! MATLAB %s (older version, may have compatibility issues)\n', matlab_version);
+    fprintf('      ⚠ MATLAB %s (older version, may have issues)\n', matlab_version);
 end
 
 % Check for recommended toolboxes
@@ -128,75 +153,78 @@ recommended_toolboxes = {
     'Image Processing Toolbox', 'images'
 };
 
+fprintf('      Optional toolboxes:\n');
 for i = 1:size(recommended_toolboxes, 1)
     tb_name = recommended_toolboxes{i, 1};
     tb_dir = recommended_toolboxes{i, 2};
     
     if license('test', tb_dir) && ~isempty(ver(tb_dir))
-        fprintf('  ✓ %s\n', tb_name);
+        fprintf('        ✓ %s\n', tb_name);
     else
-        fprintf('  - %s (optional)\n', tb_name);
+        fprintf('        - %s (not installed)\n', tb_name);
     end
 end
 
-% Initialize Bioctree data management system
-fprintf('\n=== Initializing Bioctree Data System ===\n');
-try
-    bioctree_init('Verbose', false);
-    fprintf('✓ Data system initialized\n');
-    
-    % Display data configuration
-    config = bioctree_config('all');
-    fprintf('Data location: %s\n', config.DataPath);
-catch ME
-    fprintf('⚠ Data system initialization failed: %s\n', ME.message);
-    fprintf('  You can initialize manually with: bioctree_init()\n');
+%% 6. Print Diagnostics
+fprintf('\n[6/6] System diagnostics:\n');
+fprintf('╔══════════════════════════════════════════════════════════╗\n');
+fprintf('║  Configuration Summary                                   ║\n');
+fprintf('╠══════════════════════════════════════════════════════════╣\n');
+fprintf('║  Root:      %-45s ║\n', truncate_path(cfg.root, 45));
+fprintf('║  Toolbox:   %-45s ║\n', truncate_path(cfg.toolbox, 45));
+fprintf('║  Package:   %-45s ║\n', truncate_path(cfg.package, 45));
+fprintf('║  External:  %-45s ║\n', truncate_path(cfg.external, 45));
+fprintf('╠══════════════════════════════════════════════════════════╣\n');
+fprintf('║  Dependencies                                            ║\n');
+fprintf('╠══════════════════════════════════════════════════════════╣\n');
+
+for i = 1:numel(deps)
+    dep_name = deps{i};
+    dep_path = fullfile(cfg.external, dep_name);
+    if exist(dep_path, 'dir')
+        status_str = '✓';
+    else
+        status_str = '✗';
+    end
+    fprintf('║  [%s] %-51s ║\n', status_str, dep_name);
 end
 
-% Ensure BCT class package is on path
-addpath(fullfile(bioctree_root,'toolbox'));  % brings +bct package into scope
-addpath(fullfile(bioctree_root,'workflows'), fullfile(bioctree_root,'io'), ...
-        fullfile(bioctree_root,'plotlib'), fullfile(bioctree_root,'demo'), ...
-        fullfile(bioctree_root,'tests'), fullfile(bioctree_root,'db'));
+fprintf('╚══════════════════════════════════════════════════════════╝\n');
 
-% Verify BCT class availability
-if exist('bct.bct', 'class')
-    fprintf('[bioctree] ✓ BCT class system available\n');
+% Print usage examples
+fprintf('\n╔══════════════════════════════════════════════════════════╗\n');
+fprintf('║  Quick Start Examples                                    ║\n');
+fprintf('╠══════════════════════════════════════════════════════════╣\n');
+fprintf('║  Create BCT object:                                      ║\n');
+fprintf('║    obj = bct.bct()                                       ║\n');
+fprintf('║                                                          ║\n');
+fprintf('║  Create domains:                                         ║\n');
+fprintf('║    lambda = bct.Lambda(manifold)                         ║\n');
+fprintf('║    omega = bct.Omega(time_vector, sampling_rate)         ║\n');
+fprintf('║                                                          ║\n');
+fprintf('║  Create filters:                                         ║\n');
+fprintf('║    filt = bct.filters.FilterDesigner.heat(lambda, tau)   ║\n');
+fprintf('║                                                          ║\n');
+fprintf('║  Run tests:                                              ║\n');
+fprintf('║    cd tests; run_enhanced_bct_tests                      ║\n');
+fprintf('╚══════════════════════════════════════════════════════════╝\n');
+
+if ~isempty(missing_deps)
+    fprintf('\n⚠ Warning: Some dependencies are missing:\n');
+    for i = 1:numel(missing_deps)
+        fprintf('  - %s\n', missing_deps{i});
+    end
+    fprintf('  Run ''bioctree_start'' again or manually clone to external/\n');
+end
+
+fprintf('\n✓ Bioctree initialization complete!\n\n');
+end
+
+function s = truncate_path(path_str, max_len)
+% Truncate path string to max_len characters
+if length(path_str) <= max_len
+    s = path_str;
 else
-    fprintf('[bioctree] ⚠ BCT class system not found\n');
+    s = ['...' path_str(end-max_len+4:end)];
 end
-
-fprintf('[bioctree] Paths added. Data root: %s\n', fullfile(bioctree_root,'data'));
-
-
-% Display available functionality
-fprintf('\n=== Available Functionality ===\n');
-fprintf('BCT Object-Oriented Data Engine:\n');
-fprintf('  • bct.create() - Create new BCT files with schema validation\n');
-fprintf('  • bct.open() - Open existing BCT files with automatic validation\n');
-fprintf('  • Multi-layer signals, time-frequency analysis, hyperslab queries\n');
-fprintf('  • bioctree_config() - Configure data paths and system settings\n');
-fprintf('  • db_data_info() - System status and cleanup operations\n');
-fprintf('\nLegacy I/O Functions (being phased out):\n');
-fprintf('  • outbct() - Export analysis results (use bct.create() + write methods)\n');
-fprintf('  • inbct() - Load data (use bct.open() + read methods)\n');
-
-fprintf('\nCore Analysis Modules:\n');
-fprintf('  • Graph Signal Processing (toolbox/graphs/, toolbox/operators/)\n');
-fprintf('  • Compression algorithms (compression/)\n');
-fprintf('  • Spatiotemporal analysis (toolbox/frequency/, toolbox/simulations/)\n');
-fprintf('  • Brainstorm integration (io/)\n');
-fprintf('  • Visualization tools (plotlib/)\n');
-
-fprintf('\nQuick start with BCT Class:\n');
-fprintf('  • Create: obj = bct.create(''my_dataset'')\n');
-fprintf('  • Write: obj.write_raw(signal_data, sampling_rate)\n');
-fprintf('  • Read: obj = bct.open(''dataset.h5''); data = obj.read_raw()''\n');
-fprintf('  • Try demo: demo_bioctree_hdf5\n');
-fprintf('  • Explore workflows: scripts in workflows/\n');
-fprintf('  • Configure system: bioctree_config()\n');
-fprintf('  • Documentation: see COPILOT_INSTRUCTIONS.md\n');
-
-fprintf('\n=== Bioctree ready for spatiotemporal graph analysis! ===\n\n');
-
 end
