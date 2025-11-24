@@ -13,7 +13,7 @@ classdef Signal < handle
     %   Dimension Validation:
     %       - Manifold/Lambda: Data must be [N×1] or [N×3] (scalar or vector)
     %       - Time/Omega: Data must be [T×1]
-    %       - Joint: Data must match Joint.size() → [M×N] or [M×N×3]
+    %       - Joint: Data must match Joint.N → [M×N] or [M×N×3]
     %
     %   Signal Types by Domain:
     %       Manifold/Lambda:
@@ -209,7 +209,7 @@ classdef Signal < handle
             %       s = bct.Signal(B.Manifold, rand(B.Manifold.N, 1), 'spatial');
             %
             %       % Joint Manifold_Time signal
-            %       sz = B.Joint.size();
+            %       dims = B.Joint.N;
             %       s = bct.Signal(B.Joint, rand(sz(1), sz(2)), 'spatiotemporal');
             
             if nargin > 0
@@ -242,15 +242,15 @@ classdef Signal < handle
             % Validation logic depends on domain type
             if isa(obj.Domain, 'bct.Joint')
                 % Joint domain: data must be [M×N] or [M×N×3]
-                joint_sz = obj.Domain.size();  % [M, N]
-                M = joint_sz(1);
-                N = joint_sz(2);
+                joint_dims = obj.Domain.N;  % [M, N]
+                M = joint_dims(1);
+                N = joint_dims(2);
                 
                 if ismatrix(data)
                     % [M×N] scalar signal on joint domain
                     if sz(1) ~= M || sz(2) ~= N
                         error('Signal:DimensionMismatch', ...
-                            'Data dimensions [%d×%d] must match Joint.size() [%d×%d]', ...
+                            'Data dimensions [%d×%d] must match Joint.N [%d×%d]', ...
                             sz(1), sz(2), M, N);
                     end
                 elseif ndims(data) == 3
@@ -364,7 +364,7 @@ classdef Signal < handle
                 val = obj.Domain.N;
             elseif isa(obj.Domain, 'bct.Joint')
                 % For Joint, return total elements (M*N)
-                sz = obj.Domain.size();
+                sz = obj.Domain.N;
                 val = sz(1) * sz(2);
             else
                 val = size(obj.Data, 1);

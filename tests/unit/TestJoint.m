@@ -183,7 +183,7 @@ classdef TestJoint < matlab.unittest.TestCase
             J = testCase.Joint;
             
             if ismethod(J, 'size')
-                sz = J.size();
+                sz = J.N;
                 testCase.verifyEqual(length(sz), 2, 'Size should be 2D');
                 testCase.verifyGreaterThan(sz(1), 0, 'First dimension should be positive');
                 testCase.verifyGreaterThan(sz(2), 0, 'Second dimension should be positive');
@@ -196,7 +196,7 @@ classdef TestJoint < matlab.unittest.TestCase
             
             if isprop(J, 'N')
                 if ismethod(J, 'size')
-                    sz = J.size();
+                    sz = J.N;
                     expected_N = sz(1) * sz(2);
                     testCase.verifyEqual(J.N, expected_N, 'N should equal grid size product');
                 end
@@ -231,7 +231,7 @@ classdef TestJoint < matlab.unittest.TestCase
                 
                 % Create test data matching grid size
                 if ismethod(J, 'size')
-                    sz = J.size();
+                    sz = J.N;
                     test_data = randn(sz);
                     J.(prop) = test_data;
                     
@@ -246,7 +246,7 @@ classdef TestJoint < matlab.unittest.TestCase
             J = testCase.Joint;
             
             if isprop(J, 'data') && ismethod(J, 'size')
-                sz = J.size();
+                sz = J.N;
                 n_bands = 5;
                 
                 % Create 3D data: [omega, lambda, bands]
@@ -277,7 +277,7 @@ classdef TestJoint < matlab.unittest.TestCase
                 end
                 
                 if ~isempty(X_joint)
-                    testCase.verifyEqual(size(X_joint), J.size(), ...
+                    testCase.verifyEqual(size(X_joint), J.N, ...
                         'Transformed data should match joint grid');
                 end
             end
@@ -291,7 +291,7 @@ classdef TestJoint < matlab.unittest.TestCase
             if ismethod(J, 'inverse') || ismethod(B, 'jointInverse')
                 % Create joint domain data
                 if ismethod(J, 'size')
-                    sz = J.size();
+                    sz = J.N;
                     X_joint = randn(sz);
                     
                     if ismethod(J, 'inverse')
@@ -334,7 +334,7 @@ classdef TestJoint < matlab.unittest.TestCase
             J = testCase.Joint;
             
             if ismethod(J, 'filter') && ismethod(J, 'size')
-                sz = J.size();
+                sz = J.N;
                 
                 % Create filter kernel (2D Gaussian)
                 center_k = sz(2) / 2;

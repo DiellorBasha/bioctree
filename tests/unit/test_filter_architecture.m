@@ -78,7 +78,7 @@ filt_joint = bct.filters.Filter(B.Joint, 'gabor', ...
     'center_x', 5, 'center_y', 10, ...
     'sigma_x', 1, 'sigma_x', 2);
 H_joint = filt_joint.evaluate();
-joint_size = B.Joint.size();
+joint_dims = B.Joint.N;
 assert(size(H_joint, 1) == joint_size(1), 'Joint filter size should match grid');
 assert(size(H_joint, 2) == joint_size(2), 'Joint filter size should match grid');
 fprintf('  ✓ Created joint filter on Joint domain\n\n');

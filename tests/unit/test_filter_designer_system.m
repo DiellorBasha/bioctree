@@ -37,7 +37,7 @@ fprintf('  Frequency range: [%.2f, %.2f] Hz\n', ...
 %% Step 4: Create Joint domain (Lambda × Omega)
 fprintf('\nStep 4: Creating Joint domain...\n');
 B = B.createJoint('Lambda', 'Omega');
-sz = B.Joint.size();
+dims = B.Joint.N;
 fprintf('  Joint domain: %s\n', B.Joint.Domain);
 fprintf('  Grid size: [%d × %d]\n', sz(1), sz(2));
 fprintf('  Total points: %d\n', prod(sz));

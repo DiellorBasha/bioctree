@@ -187,7 +187,7 @@ classdef TestFilter < matlab.unittest.TestCase
             H = F.evaluate();
             
             testCase.verifyNotEmpty(H, 'Filter response should not be empty');
-            testCase.verifyEqual(size(H), B.Joint.size(), ...
+            testCase.verifyEqual(size(H), B.Joint.N, ...
                 'Filter response should match joint grid');
         end
         

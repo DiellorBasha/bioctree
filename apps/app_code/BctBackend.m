@@ -1,4 +1,4 @@
-classdef BctAppBackend
+classdef BctBackend
     % BCTAPPBACKEND Backend logic for BctFilterDesigner app
     %
     % This class contains all custom business logic, data processing,
@@ -119,7 +119,7 @@ classdef BctAppBackend
             
             % Add Joint domain info if available
             if ~isempty(B.Joint)
-                sz = B.Joint.size();
+                dims = B.Joint.N;
                 joint_lines = {
                     ''
                     '--- Joint Domain ---'

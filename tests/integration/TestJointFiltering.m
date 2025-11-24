@@ -87,7 +87,7 @@ classdef TestJointFiltering < matlab.unittest.TestCase
             H = F.evaluate();
             
             B = testCase.Bct;
-            testCase.verifyEqual(size(H), B.Joint.size(), ...
+            testCase.verifyEqual(size(H), B.Joint.N, ...
                 'Filter response should match joint grid');
         end
         

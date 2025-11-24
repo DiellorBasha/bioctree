@@ -53,7 +53,7 @@ properties (SetObservable, AbortSet)
     % Automatically created as Manifold_Time when Time is set
     % Dual Lambda_Omega created automatically with bidirectional link
     % Can also create manually: B.createJoint('Lambda', 'Omega')
-    % Access as: B.Joint.A_grid, B.Joint.B_grid, B.Joint.size(), etc.
+    % Access as: B.Joint.A_grid, B.Joint.B_grid, B.Joint.N, etc.
     Joint bct.Joint = bct.Joint.empty()  % Joint domain for multi-dimensional analysis
     
     % Viewer handle for 3D visualization
@@ -369,7 +369,7 @@ methods
     %   B = B.createJoint('Lambda', 'Omega');
     %   
     %   % Now access joint coordinates:
-    %   [M, N] = B.Joint.size();  % [100, 50]
+    %   [M, N] = B.Joint.N;  % [100, 50]
     %   lambda_grid = B.Joint.A_grid;  % [100×50]
     %   omega_grid = B.Joint.B_grid;   % [100×50]
     %
@@ -425,7 +425,7 @@ methods
     end
     
     fprintf('      Grid size: [%d×%d] = %d points\n', ...
-      obj.Joint.size(), obj.Joint.numel());
+      obj.Joint.N, obj.Joint.numel());
     fprintf('      Units: %s\n', obj.Joint.units);
   end
 end

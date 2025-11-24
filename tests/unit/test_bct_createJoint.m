@@ -33,7 +33,7 @@ try
     
     % Verify properties
     assert(B.Joint.Domain == "Lambda_Omega", 'Joint name should be Lambda_Omega');
-    sz = B.Joint.size();
+    sz = B.Joint.N;
     fprintf('  ✓ Domain: %s\n', B.Joint.Domain);
     fprintf('  ✓ Grid size: [%d×%d]\n', sz(1), sz(2));
     fprintf('  ✓ Units: %s\n', B.Joint.units);
@@ -62,7 +62,7 @@ try
     assert(~isempty(B.Joint), 'Joint should not be empty');
     assert(B.Joint.Domain == "Manifold_Time", 'Joint name should be Manifold_Time');
     fprintf('  ✓ Joint domain: %s\n', B.Joint.Domain);
-    fprintf('  ✓ Grid size: [%d×%d]\n', B.Joint.size());
+    fprintf('  ✓ Grid size: [%d×%d]\n', B.Joint.N);
     
     fprintf('\n');
     
@@ -87,7 +87,7 @@ try
     
     % Verify
     assert(B.Joint.Domain == "Time_Omega", 'Joint name should be Time_Omega');
-    sz = B.Joint.size();
+    sz = B.Joint.N;
     assert(isequal(sz, [200, 200]), 'Size should be [200×200]');
     fprintf('  ✓ Joint domain: %s\n', B.Joint.Domain);
     fprintf('  ✓ Grid size: [%d×%d]\n', sz(1), sz(2));
@@ -116,7 +116,7 @@ try
     % Verify
     assert(B.Joint.Domain == "Lambda_Time", 'Joint name should be Lambda_Time');
     fprintf('  ✓ Joint domain: %s\n', B.Joint.Domain);
-    fprintf('  ✓ Grid size: [%d×%d]\n', B.Joint.size());
+    fprintf('  ✓ Grid size: [%d×%d]\n', B.Joint.N);
     
     fprintf('\n');
     
@@ -199,7 +199,7 @@ try
     time_grid = B.Joint.B_grid;
     
     % Verify grid sizes
-    sz = B.Joint.size();
+    sz = B.Joint.N;
     assert(isequal(size(lambda_grid), sz), 'A_grid size should match');
     assert(isequal(size(time_grid), sz), 'B_grid size should match');
     fprintf('  ✓ Accessed A_grid: [%d×%d]\n', size(lambda_grid));
@@ -234,7 +234,7 @@ try
     B = B.createJoint('Lambda', 'Time');
     
     % Initial size
-    sz1 = B.Joint.size();
+    sz1 = B.Joint.N;
     fprintf('  ✓ Initial joint size: [%d×%d]\n', sz1(1), sz1(2));
     
     % Change Lambda eigenvalues
@@ -244,7 +244,7 @@ try
     B = B.createJoint('Lambda', 'Time');
     
     % New size
-    sz2 = B.Joint.size();
+    sz2 = B.Joint.N;
     fprintf('  ✓ Updated joint size: [%d×%d]\n', sz2(1), sz2(2));
     
     % Verify size changed

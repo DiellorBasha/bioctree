@@ -39,7 +39,7 @@ try
     fprintf('  ✓ B_axis: %d frequency points\n', length(J.B_axis));
     
     % Verify grids
-    sz = J.size();
+    sz = J.N;
     assert(isequal(sz, [B.Lambda.K, 50]), 'Grid size should be [K×50]');
     assert(isequal(size(J.A_grid), sz), 'A_grid size should match');
     assert(isequal(size(J.B_grid), sz), 'B_grid size should match');
@@ -78,7 +78,7 @@ try
     % Verify dimensions
     N = size(V, 1);
     T = 100;
-    sz = J.size();
+    sz = J.N;
     assert(isequal(sz, [N, T]), 'Grid size should be [N×T]');
     fprintf('  ✓ Grid size: [%d×%d] = %d points\n', sz(1), sz(2), J.numel());
     
@@ -102,7 +102,7 @@ try
     
     % Verify
     assert(J.Domain == "Time_Omega", 'Joint name should be Time_Omega');
-    sz = J.size();
+    sz = J.N;
     assert(isequal(sz, [100, 100]), 'Grid size should be [100×100]');
     fprintf('  ✓ Joint domain created: %s\n', J.Domain);
     fprintf('  ✓ Grid size: [%d×%d]\n', sz(1), sz(2));
@@ -199,7 +199,7 @@ try
     J = bct.Joint(lambda, time);
     
     % Initial size
-    sz1 = J.size();
+    sz1 = J.N;
     assert(isequal(sz1, [10, 20]), 'Initial size should be [10×20]');
     fprintf('  ✓ Initial grid size: [%d×%d]\n', sz1(1), sz1(2));
     
@@ -210,7 +210,7 @@ try
     J = J.buildAxis();
     
     % Verify size changed
-    sz2 = J.size();
+    sz2 = J.N;
     assert(isequal(sz2, [5, 20]), 'Size should update to [5×20]');
     fprintf('  ✓ After Lambda change: [%d×%d]\n', sz2(1), sz2(2));
     

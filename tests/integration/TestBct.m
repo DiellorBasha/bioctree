@@ -526,7 +526,7 @@ classdef TestBct < BaseBctTest
                 'Joint.B should be Time');
             
             % Step 7: Verify Joint dimensions
-            sz = B.Joint.size();
+            dims = B.Joint.N;
             testCase.verifyEqual(sz(1), B.Manifold.N, ...
                 'Joint first dimension should match Manifold.N');
             testCase.verifyEqual(sz(2), B.Time.N, ...

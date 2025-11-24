@@ -203,17 +203,11 @@ classdef Joint < bct.Domain
         end
         
         % ---------------------------------------------------------------
-        function sz = size(obj)
-            % Get size of joint domain grid
-            % Returns [M, N] where M = length(A_axis), N = length(B_axis)
-            sz = [length(obj.A_axis), length(obj.B_axis)];
-        end
-        
-        % ---------------------------------------------------------------
         function n = numel(obj)
             % Get total number of elements in joint domain
-            sz = obj.size();
-            n = prod(sz);
+            % N property returns [M, N], so prod gives total elements
+            dims = obj.N;
+            n = prod(dims);
         end
         
         % ---------------------------------------------------------------
@@ -226,7 +220,7 @@ classdef Joint < bct.Domain
         
         % ---------------------------------------------------------------
         function X = reshape2D(obj, x)
-            % Reshape 1D vector to 2D grid [M×N]
+            % Reshape 1D vector to 2D joint grid
             %
             % Syntax:
             %   X = obj.reshape2D(x)
@@ -237,13 +231,13 @@ classdef Joint < bct.Domain
             % Outputs:
             %   X - Matrix of size [M×N]
             
-            sz = obj.size();
-            if length(x) ~= prod(sz)
+            dims = obj.N;
+            if length(x) ~= prod(dims)
                 error('bct:Joint:DimensionMismatch', ...
                     'Input vector length (%d) must match grid size (%d)', ...
-                    length(x), prod(sz));
+                    length(x), prod(dims));
             end
-            X = reshape(x, sz);
+            X = reshape(x, dims);
         end
         
         % ---------------------------------------------------------------
@@ -259,10 +253,10 @@ classdef Joint < bct.Domain
             % Outputs:
             %   x - Vector of length M*N
             
-            sz = obj.size();
-            if ~isequal(size(X), sz)
+            dims = obj.N;
+            if ~isequal(size(X), dims)
                 error('bct:Joint:DimensionMismatch', ...
-                    'Input matrix size must be [%d×%d]', sz(1), sz(2));
+                    'Input matrix size must be [%d×%d]', dims(1), dims(2));
             end
             x = X(:);
         end

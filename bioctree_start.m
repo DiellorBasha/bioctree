@@ -47,10 +47,21 @@ try
     addpath(cfg.toolbox);
     fprintf('      ✓ Toolbox: %s\n', cfg.toolbox);
     
-    % Add external directory
+    % Add specific external subdirectories only
     if exist(cfg.external, 'dir')
-        addpath(genpath(cfg.external));
-        fprintf('      ✓ External: %s\n', cfg.external);
+        % Add gspbox
+        gspbox_path = fullfile(cfg.external, 'gspbox');
+        if exist(gspbox_path, 'dir')
+            addpath(genpath(gspbox_path));
+            fprintf('      ✓ External: %s\n', gspbox_path);
+        end
+        
+        % Add gptoolbox/mesh only
+        gptoolbox_mesh_path = fullfile(cfg.external, 'gptoolbox', 'mesh');
+        if exist(gptoolbox_mesh_path, 'dir')
+            addpath(genpath(gptoolbox_mesh_path));
+            fprintf('      ✓ External: %s\n', gptoolbox_mesh_path);
+        end
     end
     
     % Add data directory

@@ -142,7 +142,7 @@ classdef PerfJointFiltering < matlab.unittest.TestCase
                 'Filter evaluation should be fast (< 1 sec)');
             
             % Verify result
-            testCase.verifyEqual(size(H), B.Joint.size());
+            testCase.verifyEqual(size(H), B.Joint.N);
         end
         
         function testMultipleFilterEvaluations(testCase)
