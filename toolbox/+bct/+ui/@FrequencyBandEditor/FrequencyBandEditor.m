@@ -1,4 +1,4 @@
-classdef FrequencyBandEditor < bct.filters.KernelEditor
+classdef FrequencyBandEditor < bct.ui.KernelEditor
   % FrequencyBandEditor - Interactive frequency band selector for Omega domain
   %
   % Implements KernelEditor for Omega (frequency) domain, providing
@@ -45,7 +45,7 @@ classdef FrequencyBandEditor < bct.filters.KernelEditor
   % Example - Custom band:
   %   editor.setBand(40, 60);  % 40-60 Hz bandpass
   %
-  % See also: bct.filters.KernelEditor, bct.Omega, bct.Time
+  % See also: bct.ui.KernelEditor, bct.Omega, bct.Time
   
   properties
     BandType = 'gaussian'  % 'gaussian', 'butterworth', 'ideal'
@@ -71,7 +71,7 @@ classdef FrequencyBandEditor < bct.filters.KernelEditor
       %   'BandOrder' - Order for Butterworth filter (default: 4)
       
       % Call superclass constructor
-      obj@bct.filters.KernelEditor(omegaDomain, filter, center, width);
+      obj@bct.ui.KernelEditor(omegaDomain, filter, center, width);
       
       % Parse optional parameters
       p = inputParser;

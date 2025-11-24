@@ -1,4 +1,4 @@
-classdef LambdaBandEditor < bct.filters.KernelEditor
+classdef LambdaBandEditor < bct.ui.KernelEditor
   % LambdaBandEditor - Interactive spectral band selector for Lambda domain
   %
   % Implements KernelEditor for Lambda (spectral) domain, providing
@@ -50,7 +50,7 @@ classdef LambdaBandEditor < bct.filters.KernelEditor
 % Note: This operates on Lambda (spectral domain). For spatial patches
 % on the Manifold itself, use ManifoldPatchEditor (requires shift operation).
 %
-% See also: bct.filters.KernelEditor, bct.Lambda, bct.Manifold
+% See also: bct.ui.KernelEditor, bct.Lambda, bct.Manifold
   
   properties
     KernelType = 'gaussian'  % 'gaussian', 'heat', 'mexican_hat'
@@ -75,7 +75,7 @@ classdef LambdaBandEditor < bct.filters.KernelEditor
       %                  'mexican_hat'
       
       % Call superclass constructor
-      obj@bct.filters.KernelEditor(lambdaDomain, filter, center, width);
+      obj@bct.ui.KernelEditor(lambdaDomain, filter, center, width);
       
       % Parse optional parameters
       p = inputParser;
@@ -180,7 +180,7 @@ classdef LambdaBandEditor < bct.filters.KernelEditor
           
         otherwise
           % Use default center/sigma update
-          updateFilter@bct.filters.KernelEditor(obj, kernel);
+          updateFilter@bct.ui.KernelEditor(obj, kernel);
       end
     end
   end

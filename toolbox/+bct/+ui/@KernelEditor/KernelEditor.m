@@ -67,7 +67,7 @@ classdef (Abstract) KernelEditor < handle
   %     end
   %   end
   %
-  % See also: bct.filters.Filter, bct.Domain, bct.Signal
+  % See also: bct.filters.Filter, bct.Domain, bct.Signal, bct.ui
   
   properties
     Center          % Current center position (domain coordinates)

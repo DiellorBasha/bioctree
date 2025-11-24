@@ -38,7 +38,7 @@ timeFilt = bct.filters.Filter(B.Time, 'gaussian', ...
     'sigma', 0.05);     % 50ms window
 
 % Create time window editor
-timeEditor = bct.filters.TimeWindowEditor(B.Time, timeFilt, 1.0, 0.05);
+timeEditor = bct.ui.TimeWindowEditor(B.Time, timeFilt, 1.0, 0.05);
 
 % Simulate time scrubber navigation
 fprintf('  Initial center: %.3f s\n', timeEditor.Center);
@@ -77,7 +77,7 @@ spatialFilt = bct.filters.Filter(B.Lambda, 'gaussian', ...
     'sigma', 10);       % Bandwidth of 10 modes
 
 % Create spectral band editor
-spatialEditor = bct.filters.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
+spatialEditor = bct.ui.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
 
 % Navigate spatial frequencies
 fprintf('  Initial center eigenmode: %.1f\n', spatialEditor.Center);
@@ -119,7 +119,7 @@ freqFilt = bct.filters.Filter(B.Omega, 'gaussian', ...
     'sigma', 2);        % 2 Hz bandwidth
 
 % Create frequency band editor
-freqEditor = bct.filters.FrequencyBandEditor(B.Omega, freqFilt, 10, 2);
+freqEditor = bct.ui.FrequencyBandEditor(B.Omega, freqFilt, 10, 2);
 
 % Use standard frequency band presets
 fprintf('  Standard EEG bands:\n');
@@ -169,7 +169,7 @@ else
         'sigma_x', 10, 'sigma_y', 2);
     
     % Create joint kernel editor (separable)
-    jointEditor = bct.filters.JointKernelEditor(joint, jointFilt, 50, 10, ...
+    jointEditor = bct.ui.JointKernelEditor(joint, jointFilt, 50, 10, ...
         'KernelType', 'separable', 'Center_B', 10, 'Width_B', 2);
     
     fprintf('  Separable joint kernel:\n');
@@ -200,7 +200,7 @@ else
         'v', 0.5, 'sigma_w', 10, 'lambda0', 50, 'sigma_l', 20, 'D', 0);
     
     % Create joint kernel editor (nonseparable)
-    velocityEditor = bct.filters.JointKernelEditor(joint, velocityFilt, 50, 20, ...
+    velocityEditor = bct.ui.JointKernelEditor(joint, velocityFilt, 50, 20, ...
         'KernelType', 'nonseparable', 'Velocity', 0.5, 'Dispersion', 0);
     
     fprintf('  Non-separable velocity kernel:\n');
@@ -266,7 +266,7 @@ for i = 1:length(windowTypes)
     % Create filter and editor for this window type
     filt = bct.filters.Filter(B_window.Time, 'gaussian', ...
         'center', 0, 'sigma', 0.02);
-    editor = bct.filters.TimeWindowEditor(B_window.Time, filt, 0, 0.02, ...
+    editor = bct.ui.TimeWindowEditor(B_window.Time, filt, 0, 0.02, ...
         'WindowType', wType);
     
     % Compute window
@@ -302,12 +302,12 @@ else
         % Create filter and editor
         if strcmp(kType, 'heat')
             filt = bct.filters.Filter(B.Lambda, 'heat', 'tau', 0.01);
-            editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 0, 0.01, ...
+            editor = bct.ui.LambdaBandEditor(B.Lambda, filt, 0, 0.01, ...
                 'KernelType', kType);
         else
             filt = bct.filters.Filter(B.Lambda, 'gaussian', ...
                 'center', 50, 'sigma', 15);
-            editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 50, 15, ...
+            editor = bct.ui.LambdaBandEditor(B.Lambda, filt, 50, 15, ...
                 'KernelType', kType);
         end
         

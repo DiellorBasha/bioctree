@@ -39,7 +39,7 @@ B.Time = bct.Time(0:0.001:10, 1000);  % 10s at 1kHz
 timeFilt = bct.filters.Filter(B.Time, 'gaussian', 'center', 5.0, 'sigma', 0.1);
 
 % Create editor
-editor = bct.filters.TimeWindowEditor(B.Time, timeFilt, 5.0, 0.1);
+editor = bct.ui.TimeWindowEditor(B.Time, timeFilt, 5.0, 0.1);
 
 % GUI callbacks
 editor.setCenter(sliderValue);      % Slider moves window
@@ -62,7 +62,7 @@ B.Lambda = B.Lambda.eigenbasis(B.Manifold.MassMatrix, ...
                                  B.Manifold.CotangentMatrix, 500);
 
 spatialFilt = bct.filters.Filter(B.Lambda, 'gaussian', 'center', 50, 'sigma', 10);
-editor = bct.filters.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
+editor = bct.ui.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
 
 % Presets
 editor.setLowPass(30);           % Smooth spatial patterns (modes 1-30)
@@ -86,7 +86,7 @@ B.Time = bct.Time(0:0.001:10, 1000);
 B.Omega = B.Time.dual;
 
 freqFilt = bct.filters.Filter(B.Omega, 'gaussian', 'center', 10, 'sigma', 2);
-editor = bct.filters.FrequencyBandEditor(B.Omega, freqFilt, 10, 2);
+editor = bct.ui.FrequencyBandEditor(B.Omega, freqFilt, 10, 2);
 
 % Standard EEG/MEG bands
 editor.setDelta();      % 1-4 Hz
@@ -117,7 +117,7 @@ joint = B.createJoint('Lambda', 'Omega');
 filt = bct.filters.Filter(joint, 'gabor', ...
     'center_x', 50, 'center_y', 10, 'sigma_x', 10, 'sigma_y', 2);
 
-editor = bct.filters.JointKernelEditor(joint, filt, 50, 10, ...
+editor = bct.ui.JointKernelEditor(joint, filt, 50, 10, ...
     'KernelType', 'separable', 'Center_B', 10, 'Width_B', 2);
 
 % Independent control
@@ -135,7 +135,7 @@ Control coupling parameters for traveling wave packets:
 filt = bct.filters.Filter(joint, 'velocity_gabor', ...
     'v', 0.5, 'sigma_w', 10, 'lambda0', 50, 'sigma_l', 20, 'D', 0);
 
-editor = bct.filters.JointKernelEditor(joint, filt, 50, 20, ...
+editor = bct.ui.JointKernelEditor(joint, filt, 50, 20, ...
     'KernelType', 'nonseparable', 'Velocity', 0.5, 'Dispersion', 0);
 
 % Coupling parameter control
@@ -226,7 +226,7 @@ end
 To create a custom editor for a new domain or kernel type:
 
 ```matlab
-classdef MyCustomEditor < bct.filters.KernelEditor
+classdef MyCustomEditor < bct.ui.KernelEditor
     properties
         CustomParameter
     end
@@ -234,7 +234,7 @@ classdef MyCustomEditor < bct.filters.KernelEditor
     methods
         function obj = MyCustomEditor(domain, filter, center, width)
             % Call superclass constructor
-            obj@bct.filters.KernelEditor(domain, filter, center, width);
+            obj@bct.ui.KernelEditor(domain, filter, center, width);
             
             % Initialize custom properties
             obj.CustomParameter = someValue;
@@ -252,7 +252,7 @@ classdef MyCustomEditor < bct.filters.KernelEditor
         function updateFilter(obj, kernel)
             % Override if filter needs special parameter handling
             obj.Filter.setParameter('customParam', obj.CustomParameter);
-            updateFilter@bct.filters.KernelEditor(obj, kernel);
+            updateFilter@bct.ui.KernelEditor(obj, kernel);
         end
     end
 end

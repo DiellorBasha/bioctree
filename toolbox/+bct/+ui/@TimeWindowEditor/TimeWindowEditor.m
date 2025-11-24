@@ -1,4 +1,4 @@
-classdef TimeWindowEditor < bct.filters.KernelEditor
+classdef TimeWindowEditor < bct.ui.KernelEditor
   % TimeWindowEditor - Interactive time window editor for temporal signals
   %
   % Implements KernelEditor for Time domain, providing a Gaussian window
@@ -40,7 +40,7 @@ classdef TimeWindowEditor < bct.filters.KernelEditor
   %   editor.shiftForward();   % Right arrow
   %   editor.shiftBackward();  % Left arrow
   %
-  % See also: bct.filters.KernelEditor, bct.Time, bct.filters.Filter
+  % See also: bct.ui.KernelEditor, bct.Time, bct.filters.Filter
   
   properties
     WindowType = 'gaussian'  % 'gaussian', 'hann', 'hamming', 'tukey'
@@ -65,7 +65,7 @@ classdef TimeWindowEditor < bct.filters.KernelEditor
       %                  'hamming', 'tukey'
       
       % Call superclass constructor
-      obj@bct.filters.KernelEditor(timeDomain, filter, center, width);
+      obj@bct.ui.KernelEditor(timeDomain, filter, center, width);
       
       % Parse optional parameters
       p = inputParser;

@@ -1,4 +1,4 @@
-classdef JointKernelEditor < bct.filters.KernelEditor
+classdef JointKernelEditor < bct.ui.KernelEditor
   % JointKernelEditor - Interactive editor for joint domain filters
   %
   % Implements KernelEditor for Joint domains (e.g., Lambda×Omega, Lambda×Time),
@@ -65,7 +65,7 @@ classdef JointKernelEditor < bct.filters.KernelEditor
   %   editor.setVelocity(0.7);      % Change tilt
   %   editor.setDispersion(0.01);   % Add curvature
   %
-  % See also: bct.filters.KernelEditor, bct.Joint, bct.filters.Filter
+  % See also: bct.ui.KernelEditor, bct.Joint, bct.filters.Filter
   
   properties
     Center_B       % Center for domain B (separable kernels)
@@ -108,7 +108,7 @@ classdef JointKernelEditor < bct.filters.KernelEditor
       end
       
       % Call superclass constructor
-      obj@bct.filters.KernelEditor(jointDomain, filter, center, width);
+      obj@bct.ui.KernelEditor(jointDomain, filter, center, width);
       
       % Parse joint-specific parameters
       p = inputParser;
