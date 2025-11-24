@@ -1,64 +1,61 @@
-classdef BctFrontend < matlab.apps.AppBase
+classdef BctFilterDesigner < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
-        UIFigure                 matlab.ui.Figure
-        GridLayout               matlab.ui.container.GridLayout
-        LeftPanel                matlab.ui.container.Panel
-        SignalDropDown           matlab.ui.control.DropDown
-        SignalDropDownLabel      matlab.ui.control.Label
-        SynthesizeButton         matlab.ui.control.Button
-        DesignButton             matlab.ui.control.Button
-        TextArea                 matlab.ui.control.TextArea
-        ResolutionLabel          matlab.ui.control.Label
-        kmodesEditField          matlab.ui.control.NumericEditField
-        kmodesEditFieldLabel     matlab.ui.control.Label
-        FourierButton            matlab.ui.control.Button
-        SpectralLabel            matlab.ui.control.Label
-        LoadButton               matlab.ui.control.Button
-        ScanButton               matlab.ui.control.Button
-        Tree                     matlab.ui.container.Tree
-        DataNode                 matlab.ui.container.TreeNode
-        Node2                    matlab.ui.container.TreeNode
-        Node3                    matlab.ui.container.TreeNode
-        Node4                    matlab.ui.container.TreeNode
-        FilterTypeDropDown       matlab.ui.control.DropDown
-        FilterTypeDropDownLabel  matlab.ui.control.Label
-        FilterDesignLabel        matlab.ui.control.Label
-        CenterPanel              matlab.ui.container.Panel
-        TabGroup                 matlab.ui.container.TabGroup
-        JointTab                 matlab.ui.container.Tab
-        omegaSlider              matlab.ui.control.Slider
-        omegaSliderLabel         matlab.ui.control.Label
-        sigma_kSlider            matlab.ui.control.Slider
-        sigma_kSliderLabel       matlab.ui.control.Label
-        sigma_oSlider            matlab.ui.control.Slider
-        sigma_oSliderLabel       matlab.ui.control.Label
-        k0Slider                 matlab.ui.control.Slider
-        k0SliderLabel            matlab.ui.control.Label
-        UIAxesResponse           matlab.ui.control.UIAxes
-        UIAxesKernel             matlab.ui.control.UIAxes
-        SpatialTab               matlab.ui.container.Tab
-        SigmaEditField           matlab.ui.control.NumericEditField
-        SigmaEditFieldLabel      matlab.ui.control.Label
-        Centerk0EditField        matlab.ui.control.NumericEditField
-        Centerk0EditFieldLabel   matlab.ui.control.Label
-        SpatialparametersLabel   matlab.ui.control.Label
-        ShowlambdaButton         matlab.ui.control.Button
-        UIAxes                   matlab.ui.control.UIAxes
-        TemporalTab              matlab.ui.container.Tab
-        SigmafEditField          matlab.ui.control.NumericEditField
-        SigmafEditFieldLabel     matlab.ui.control.Label
-        Centerf0EditField        matlab.ui.control.NumericEditField
-        Centerf0EditFieldLabel   matlab.ui.control.Label
-        TemporalparametersLabel  matlab.ui.control.Label
-        ShowomegaButton          matlab.ui.control.Button
-        UIAxes_2                 matlab.ui.control.UIAxes
-        MeshPanel                matlab.ui.container.Panel
-        GridLayout2              matlab.ui.container.GridLayout
-        BackButton               matlab.ui.control.Button
-        ForwardButton            matlab.ui.control.Button
-        ShowMeshButton           matlab.ui.control.Button
+        UIFigure                matlab.ui.Figure
+        GridLayout              matlab.ui.container.GridLayout
+        LeftPanel               matlab.ui.container.Panel
+        TextArea                matlab.ui.control.TextArea
+        ResolutionLabel         matlab.ui.control.Label
+        kmodesEditField         matlab.ui.control.NumericEditField
+        kmodesEditFieldLabel    matlab.ui.control.Label
+        FourierButton           matlab.ui.control.Button
+        SpectralLabel           matlab.ui.control.Label
+        LoadButton              matlab.ui.control.Button
+        ScanButton              matlab.ui.control.Button
+        Tree                    matlab.ui.container.Tree
+        DataNode                matlab.ui.container.TreeNode
+        Node2                   matlab.ui.container.TreeNode
+        Node3                   matlab.ui.container.TreeNode
+        Node4                   matlab.ui.container.TreeNode
+        CenterPanel             matlab.ui.container.Panel
+        TabGroup                matlab.ui.container.TabGroup
+        JointTab                matlab.ui.container.Tab
+        FilterDesignPanel       matlab.ui.container.Panel
+        BandwidthSliderLabel    matlab.ui.control.Label
+        BandwidthSlider         matlab.ui.control.Slider
+        FrequencySliderLabel    matlab.ui.control.Label
+        FrequencySlider         matlab.ui.control.Slider
+        kbandwidthSliderLabel   matlab.ui.control.Label
+        kbandwidthSlider        matlab.ui.control.Slider
+        WavenumberSliderLabel   matlab.ui.control.Label
+        WavenumberSlider        matlab.ui.control.Slider
+        SynthesizeButton        matlab.ui.control.Button
+        KernelDropDown          matlab.ui.control.DropDown
+        KernelDropDownLabel     matlab.ui.control.Label
+        UIAxesKernel            matlab.ui.control.UIAxes
+        UIAxesResponse          matlab.ui.control.UIAxes
+        SpatialTab              matlab.ui.container.Tab
+        SigmaEditField          matlab.ui.control.NumericEditField
+        SigmaEditFieldLabel     matlab.ui.control.Label
+        Centerk0EditField       matlab.ui.control.NumericEditField
+        Centerk0EditFieldLabel  matlab.ui.control.Label
+        SpatialparametersLabel  matlab.ui.control.Label
+        ShowlambdaButton        matlab.ui.control.Button
+        UIAxes                  matlab.ui.control.UIAxes
+        MeshPanel               matlab.ui.container.Panel
+        Panel_2                 matlab.ui.container.Panel
+        GridLayout3             matlab.ui.container.GridLayout
+        PlayButton              matlab.ui.control.Button
+        BackButton              matlab.ui.control.Button
+        SignalPanel             matlab.ui.container.Panel
+        ShowMeshButton          matlab.ui.control.Button
+        vDeltaEditField         matlab.ui.control.NumericEditField
+        vDeltaEditFieldLabel    matlab.ui.control.Label
+        SignalDropDown          matlab.ui.control.DropDown
+        SignalDropDownLabel     matlab.ui.control.Label
+        ViewerPanel             matlab.ui.container.Panel
+        GridLayout2             matlab.ui.container.GridLayout
     end
 
     % Properties that correspond to apps with auto-reflow
@@ -71,17 +68,30 @@ classdef BctFrontend < matlab.apps.AppBase
     properties (Access = public)
         BCTObjects struct
         CurrentBCT bct.bct% Description
-FilterDesigner
-CurrentFilter
+        FilterDesigner
+        CurrentFilter
         KronDelta                   % bct.Signal - Kronecker delta on Manifold_Time
         IRSignal                    % bct.Signal - Impulse response after filtering
-    
+        CurrentTimePoint
     end
-    
 
+   
 
     % Callbacks that handle component events
     methods (Access = private)
+
+        % Code that executes after component creation
+        function startupFcn(app)
+                        % Startup sequence: scan workspace and load default BCT
+            
+            % Scan workspace for existing BCT objects
+            BctBackend.scanWorkspace(app);
+            
+            % Load default BCT object if no objects found in workspace
+            if isempty(fieldnames(app.BCTObjects))
+                BctBackend.loadDefaultBCT(app);
+            end
+        end
 
         % Button pushed function: LoadButton
         function LoadButtonPushed(app, event)
@@ -111,8 +121,6 @@ CurrentFilter
 
             % Single high-level update - delegated to backend
             BctBackend.updateUIAfterLoad(app);
-
-            uialert(app.UIFigure, sprintf('Loaded BCT object: %s', varName), 'Success');
 
         end
 
@@ -201,56 +209,117 @@ CurrentFilter
                 return;
             end
             
-            % Create KronDelta signal if it doesn't exist
-            if isempty(app.KronDelta)
-                app.KronDelta = BctBackend.createKronDelta(app, B);
-            end
+            % Progress dialog
+            d = uiprogressdlg(app.UIFigure, 'Message', 'Creating impulse signal...', ...
+                'Title', 'Computing Impulse Response', 'Indeterminate', 'on');
             
-            % Compute impulse response through filter
-            app.IRSignal = BctBackend.impulseResponse(app, B);
-            
-            % Update signal dropdown with new signals
-            BctBackend.updateSignalDropDown(app);
-            
-            % Visualize impulse response on UIAxesResponse
-            BctBackend.visualizeImpulseResponse(app, B, app.UIAxesResponse);
-            
-            % Show IRSignal on the mesh viewer (time point 1)
-            if ~isempty(B.Viewer) && isvalid(B.Viewer)
-                B.showSignal(app.IRSignal, 'TimePoint', 1, 'Parent', app.GridLayout2);
-            else
-                % Create viewer if it doesn't exist
-                BctBackend.attachViewer(app, B);
-                B.showSignal(app.IRSignal, 'TimePoint', 1, 'Parent', app.GridLayout2);
+            try
+                % Create KronDelta signal if it doesn't exist
+                if isempty(app.KronDelta)
+                    app.KronDelta = BctBackend.createKronDelta(app, B);
+                end
+                
+                % Update progress
+                d.Message = 'Applying filter to delta signal...';
+                
+                % Compute impulse response through filter
+                app.IRSignal = BctBackend.impulseResponse(app, B);
+                
+                % Update progress
+                d.Message = 'Updating UI...';
+                
+                % Update signal dropdown with new signals
+         %       BctBackend.updateSignalDropDown(app);
+                
+                % Visualize filter kernel on actual Lambda-Omega eigenmode grid
+                BctBackend.visualizeFilterOnLambdaOmega(app, B, app.UIAxesResponse);
+                
+                % Update progress
+                d.Message = 'Rendering on mesh...';
+                
+                % Show IRSignal on the mesh viewer (time point 1)
+                % Use existing viewer or create if it doesn't exist
+                if isempty(B.Viewer) || ~isvalid(B.Viewer)
+                    BctBackend.attachViewer(app, B);
+                end
+                
+                % Update the existing viewer with the signal (don't create new one)
+                B.Viewer.Children.Color = bct.show.x2rgb(abs(app.IRSignal.Data(:, 1)), 'colormap', 'hot');  % Show first time point
+                
+                close(d);
+                
+            catch ME
+                close(d);
+                uialert(app.UIFigure, ME.message, 'Error Computing Impulse Response');
+                rethrow(ME);
             end
             
             fprintf('[SynthesizeButton] Impulse response computed and visualized\n');
        
 
+      
+
         end
 
-        % Value changed function: omegaSlider
-        function omegaSliderValueChanged(app, event)
+        % Value changed function: FrequencySlider
+        function FrequencySliderValueChanged(app, event)
              BctBackend.updateKernelPreview(app);
             
         end
 
-        % Value changed function: sigma_oSlider
-        function sigma_oSliderValueChanged(app, event)
+        % Value changed function: BandwidthSlider
+        function BandwidthSliderValueChanged(app, event)
              BctBackend.updateKernelPreview(app);
             
         end
 
-        % Value changed function: k0Slider
-        function k0SliderValueChanged(app, event)
+        % Value changed function: WavenumberSlider
+        function WavenumberSliderValueChanged(app, event)
              BctBackend.updateKernelPreview(app);
             
         end
 
-        % Value changed function: sigma_kSlider
-        function sigma_kSliderValueChanged(app, event)
+        % Value changed function: kbandwidthSlider
+        function kbandwidthSliderValueChanged(app, event)
              BctBackend.updateKernelPreview(app);
             
+        end
+
+        % Callback function: not associated with a component
+        function PlayButtonPushed(app, event)
+            if isempty(app.IRSignal)
+                warning('BctBackend:NoIRSignal', 'No impulse response signal to step through.');
+                return;
+            end
+
+            % Use CurrentBCT object and its viewer
+            B = app.CurrentBCT;
+
+            if isempty(B) || isempty(B.Viewer) || ~isvalid(B.Viewer)
+                warning('BctBackend:NoViewer', 'Viewer not available. Create viewer first.');
+                return;
+            end
+
+            % Get number of time points
+            nTimePoints = size(app.IRSignal.Data, 2);
+
+            % Initialize CurrentTimePoint if it doesn't exist
+            if ~isprop(app, 'CurrentTimePoint') || isempty(app.CurrentTimePoint)
+                app.CurrentTimePoint = 1;
+            end
+
+            % Advance to next time point (wrap around at end)
+            app.CurrentTimePoint = app.CurrentTimePoint + 1;
+            if app.CurrentTimePoint > nTimePoints
+                app.CurrentTimePoint = 1;  % Loop back to start
+            end
+            dd=app.IRSignal.Data(:, app.CurrentTimePoint);
+            % Update viewer with current time point
+             app.CurrentBCT.Viewer.Children.Color = bct.show.x2rgb(abs(dd), 'colormap', 'hot');
+            drawnow;
+
+            fprintf('[stepSignal] Time point: %d / %d\n', app.CurrentTimePoint, nTimePoints);
+
         end
 
         % Changes arrangement of the app based on UIFigure width
@@ -279,7 +348,7 @@ CurrentFilter
             else
                 % Change to a 1x3 grid
                 app.GridLayout.RowHeight = {'1x'};
-                app.GridLayout.ColumnWidth = {220, '1x', 529};
+                app.GridLayout.ColumnWidth = {220, '1x', 592};
                 app.LeftPanel.Layout.Row = 1;
                 app.LeftPanel.Layout.Column = 1;
                 app.CenterPanel.Layout.Row = 1;
@@ -299,13 +368,13 @@ CurrentFilter
             % Create UIFigure and hide until all components are created
             app.UIFigure = uifigure('Visible', 'off');
             app.UIFigure.AutoResizeChildren = 'off';
-            app.UIFigure.Position = [100 100 1277 746];
+            app.UIFigure.Position = [100 100 1340 746];
             app.UIFigure.Name = 'MATLAB App';
             app.UIFigure.SizeChangedFcn = createCallbackFcn(app, @updateAppLayout, true);
 
             % Create GridLayout
             app.GridLayout = uigridlayout(app.UIFigure);
-            app.GridLayout.ColumnWidth = {220, '1x', 529};
+            app.GridLayout.ColumnWidth = {220, '1x', 592};
             app.GridLayout.RowHeight = {'1x'};
             app.GridLayout.ColumnSpacing = 0;
             app.GridLayout.RowSpacing = 0;
@@ -316,23 +385,6 @@ CurrentFilter
             app.LeftPanel = uipanel(app.GridLayout);
             app.LeftPanel.Layout.Row = 1;
             app.LeftPanel.Layout.Column = 1;
-
-            % Create FilterDesignLabel
-            app.FilterDesignLabel = uilabel(app.LeftPanel);
-            app.FilterDesignLabel.Position = [27 288 72 22];
-            app.FilterDesignLabel.Text = 'Filter Design';
-
-            % Create FilterTypeDropDownLabel
-            app.FilterTypeDropDownLabel = uilabel(app.LeftPanel);
-            app.FilterTypeDropDownLabel.HorizontalAlignment = 'right';
-            app.FilterTypeDropDownLabel.Position = [24 260 61 22];
-            app.FilterTypeDropDownLabel.Text = 'Filter Type';
-
-            % Create FilterTypeDropDown
-            app.FilterTypeDropDown = uidropdown(app.LeftPanel);
-            app.FilterTypeDropDown.Items = {'Spatial', 'Temporal', 'Joint Separable', 'Joint', 'Dynamic'};
-            app.FilterTypeDropDown.Position = [100 260 100 22];
-            app.FilterTypeDropDown.Value = 'Joint';
 
             % Create Tree
             app.Tree = uitree(app.LeftPanel);
@@ -368,24 +420,24 @@ CurrentFilter
 
             % Create SpectralLabel
             app.SpectralLabel = uilabel(app.LeftPanel);
-            app.SpectralLabel.Position = [27 374 52 22];
+            app.SpectralLabel.Position = [30 149 52 22];
             app.SpectralLabel.Text = 'Spectral ';
 
             % Create FourierButton
             app.FourierButton = uibutton(app.LeftPanel, 'push');
             app.FourierButton.ButtonPushedFcn = createCallbackFcn(app, @FourierButtonPushed, true);
-            app.FourierButton.Position = [92 331 100 22];
+            app.FourierButton.Position = [89 109 100 22];
             app.FourierButton.Text = 'Fourier';
 
             % Create kmodesEditFieldLabel
             app.kmodesEditFieldLabel = uilabel(app.LeftPanel);
             app.kmodesEditFieldLabel.HorizontalAlignment = 'right';
-            app.kmodesEditFieldLabel.Position = [27 351 50 22];
+            app.kmodesEditFieldLabel.Position = [24 129 50 22];
             app.kmodesEditFieldLabel.Text = 'k modes';
 
             % Create kmodesEditField
             app.kmodesEditField = uieditfield(app.LeftPanel, 'numeric');
-            app.kmodesEditField.Position = [92 351 100 22];
+            app.kmodesEditField.Position = [89 129 100 22];
             app.kmodesEditField.Value = 300;
 
             % Create ResolutionLabel
@@ -395,28 +447,7 @@ CurrentFilter
 
             % Create TextArea
             app.TextArea = uitextarea(app.LeftPanel);
-            app.TextArea.Position = [24 416 181 47];
-
-            % Create DesignButton
-            app.DesignButton = uibutton(app.LeftPanel, 'push');
-            app.DesignButton.Position = [105 19 100 22];
-            app.DesignButton.Text = 'Design';
-
-            % Create SynthesizeButton
-            app.SynthesizeButton = uibutton(app.LeftPanel, 'push');
-            app.SynthesizeButton.ButtonPushedFcn = createCallbackFcn(app, @SynthesizeButtonPushed, true);
-            app.SynthesizeButton.Position = [98 230 100 22];
-            app.SynthesizeButton.Text = 'Synthesize';
-
-            % Create SignalDropDownLabel
-            app.SignalDropDownLabel = uilabel(app.LeftPanel);
-            app.SignalDropDownLabel.HorizontalAlignment = 'right';
-            app.SignalDropDownLabel.Position = [39 177 38 22];
-            app.SignalDropDownLabel.Text = 'Signal';
-
-            % Create SignalDropDown
-            app.SignalDropDown = uidropdown(app.LeftPanel);
-            app.SignalDropDown.Position = [92 177 100 22];
+            app.TextArea.Position = [24 219 181 244];
 
             % Create CenterPanel
             app.CenterPanel = uipanel(app.GridLayout);
@@ -431,65 +462,88 @@ CurrentFilter
             app.JointTab = uitab(app.TabGroup);
             app.JointTab.Title = 'Joint';
 
-            % Create UIAxesKernel
-            app.UIAxesKernel = uiaxes(app.JointTab);
-            title(app.UIAxesKernel, 'Title')
-            xlabel(app.UIAxesKernel, 'X')
-            ylabel(app.UIAxesKernel, 'Y')
-            zlabel(app.UIAxesKernel, 'Z')
-            app.UIAxesKernel.Position = [228 493 272 210];
-
             % Create UIAxesResponse
             app.UIAxesResponse = uiaxes(app.JointTab);
             title(app.UIAxesResponse, 'Title')
             xlabel(app.UIAxesResponse, 'Frequency (Hz)')
             ylabel(app.UIAxesResponse, 'Wavenumber (k)')
             zlabel(app.UIAxesResponse, 'Z')
-            app.UIAxesResponse.Position = [20 13 484 443];
+            app.UIAxesResponse.Position = [15 5 484 386];
 
-            % Create k0SliderLabel
-            app.k0SliderLabel = uilabel(app.JointTab);
-            app.k0SliderLabel.HorizontalAlignment = 'right';
-            app.k0SliderLabel.Position = [35 564 25 22];
-            app.k0SliderLabel.Text = 'k0';
+            % Create FilterDesignPanel
+            app.FilterDesignPanel = uipanel(app.JointTab);
+            app.FilterDesignPanel.Title = 'Filter Design';
+            app.FilterDesignPanel.Position = [5 407 508 297];
 
-            % Create k0Slider
-            app.k0Slider = uislider(app.JointTab);
-            app.k0Slider.ValueChangedFcn = createCallbackFcn(app, @k0SliderValueChanged, true);
-            app.k0Slider.Position = [82 573 102 3];
+            % Create UIAxesKernel
+            app.UIAxesKernel = uiaxes(app.FilterDesignPanel);
+            title(app.UIAxesKernel, 'Title')
+            xlabel(app.UIAxesKernel, 'X')
+            ylabel(app.UIAxesKernel, 'Y')
+            zlabel(app.UIAxesKernel, 'Z')
+            app.UIAxesKernel.Position = [216 56 272 210];
 
-            % Create sigma_oSliderLabel
-            app.sigma_oSliderLabel = uilabel(app.JointTab);
-            app.sigma_oSliderLabel.HorizontalAlignment = 'right';
-            app.sigma_oSliderLabel.Position = [12 613 50 22];
-            app.sigma_oSliderLabel.Text = 'sigma_o';
+            % Create KernelDropDownLabel
+            app.KernelDropDownLabel = uilabel(app.FilterDesignPanel);
+            app.KernelDropDownLabel.HorizontalAlignment = 'right';
+            app.KernelDropDownLabel.Position = [15 242 40 22];
+            app.KernelDropDownLabel.Text = 'Kernel';
 
-            % Create sigma_oSlider
-            app.sigma_oSlider = uislider(app.JointTab);
-            app.sigma_oSlider.ValueChangedFcn = createCallbackFcn(app, @sigma_oSliderValueChanged, true);
-            app.sigma_oSlider.Position = [84 622 100 3];
+            % Create KernelDropDown
+            app.KernelDropDown = uidropdown(app.FilterDesignPanel);
+            app.KernelDropDown.Items = {'Gaussian', 'Heat', 'Mexican Hat', 'Gabor', 'Velocity Gabor'};
+            app.KernelDropDown.Position = [70 242 100 22];
+            app.KernelDropDown.Value = 'Gaussian';
 
-            % Create sigma_kSliderLabel
-            app.sigma_kSliderLabel = uilabel(app.JointTab);
-            app.sigma_kSliderLabel.HorizontalAlignment = 'right';
-            app.sigma_kSliderLabel.Position = [10 512 50 22];
-            app.sigma_kSliderLabel.Text = 'sigma_k';
+            % Create SynthesizeButton
+            app.SynthesizeButton = uibutton(app.FilterDesignPanel, 'push');
+            app.SynthesizeButton.ButtonPushedFcn = createCallbackFcn(app, @SynthesizeButtonPushed, true);
+            app.SynthesizeButton.Position = [388 18 100 22];
+            app.SynthesizeButton.Text = 'Synthesize';
 
-            % Create sigma_kSlider
-            app.sigma_kSlider = uislider(app.JointTab);
-            app.sigma_kSlider.ValueChangedFcn = createCallbackFcn(app, @sigma_kSliderValueChanged, true);
-            app.sigma_kSlider.Position = [82 521 106 3];
+            % Create WavenumberSlider
+            app.WavenumberSlider = uislider(app.FilterDesignPanel);
+            app.WavenumberSlider.ValueChangedFcn = createCallbackFcn(app, @WavenumberSliderValueChanged, true);
+            app.WavenumberSlider.Position = [108 199 70 3];
 
-            % Create omegaSliderLabel
-            app.omegaSliderLabel = uilabel(app.JointTab);
-            app.omegaSliderLabel.HorizontalAlignment = 'right';
-            app.omegaSliderLabel.Position = [20 658 42 22];
-            app.omegaSliderLabel.Text = 'omega';
+            % Create WavenumberSliderLabel
+            app.WavenumberSliderLabel = uilabel(app.FilterDesignPanel);
+            app.WavenumberSliderLabel.HorizontalAlignment = 'right';
+            app.WavenumberSliderLabel.Position = [10 190 76 22];
+            app.WavenumberSliderLabel.Text = 'Wavenumber';
 
-            % Create omegaSlider
-            app.omegaSlider = uislider(app.JointTab);
-            app.omegaSlider.ValueChangedFcn = createCallbackFcn(app, @omegaSliderValueChanged, true);
-            app.omegaSlider.Position = [84 667 106 3];
+            % Create kbandwidthSlider
+            app.kbandwidthSlider = uislider(app.FilterDesignPanel);
+            app.kbandwidthSlider.ValueChangedFcn = createCallbackFcn(app, @kbandwidthSliderValueChanged, true);
+            app.kbandwidthSlider.Position = [101 152 74 3];
+
+            % Create kbandwidthSliderLabel
+            app.kbandwidthSliderLabel = uilabel(app.FilterDesignPanel);
+            app.kbandwidthSliderLabel.HorizontalAlignment = 'right';
+            app.kbandwidthSliderLabel.Position = [10 143 69 22];
+            app.kbandwidthSliderLabel.Text = 'k bandwidth';
+
+            % Create FrequencySlider
+            app.FrequencySlider = uislider(app.FilterDesignPanel);
+            app.FrequencySlider.ValueChangedFcn = createCallbackFcn(app, @FrequencySliderValueChanged, true);
+            app.FrequencySlider.Position = [106 99 61 3];
+
+            % Create FrequencySliderLabel
+            app.FrequencySliderLabel = uilabel(app.FilterDesignPanel);
+            app.FrequencySliderLabel.HorizontalAlignment = 'right';
+            app.FrequencySliderLabel.Position = [22 90 62 22];
+            app.FrequencySliderLabel.Text = 'Frequency';
+
+            % Create BandwidthSlider
+            app.BandwidthSlider = uislider(app.FilterDesignPanel);
+            app.BandwidthSlider.ValueChangedFcn = createCallbackFcn(app, @BandwidthSliderValueChanged, true);
+            app.BandwidthSlider.Position = [105 54 74 3];
+
+            % Create BandwidthSliderLabel
+            app.BandwidthSliderLabel = uilabel(app.FilterDesignPanel);
+            app.BandwidthSliderLabel.HorizontalAlignment = 'right';
+            app.BandwidthSliderLabel.Position = [22 45 61 22];
+            app.BandwidthSliderLabel.Text = 'Bandwidth';
 
             % Create SpatialTab
             app.SpatialTab = uitab(app.TabGroup);
@@ -533,75 +587,72 @@ CurrentFilter
             app.SigmaEditField = uieditfield(app.SpatialTab, 'numeric');
             app.SigmaEditField.Position = [145 159 100 22];
 
-            % Create TemporalTab
-            app.TemporalTab = uitab(app.TabGroup);
-            app.TemporalTab.Title = 'Temporal';
-
-            % Create UIAxes_2
-            app.UIAxes_2 = uiaxes(app.TemporalTab);
-            title(app.UIAxes_2, 'Title')
-            xlabel(app.UIAxes_2, 'Frequency (Hz)')
-            ylabel(app.UIAxes_2, 'Wavenumber (k)')
-            zlabel(app.UIAxes_2, 'Z')
-            app.UIAxes_2.Position = [15 303 467 377];
-
-            % Create ShowomegaButton
-            app.ShowomegaButton = uibutton(app.TemporalTab, 'push');
-            app.ShowomegaButton.Position = [110 55 100 22];
-            app.ShowomegaButton.Text = 'Show omega';
-
-            % Create TemporalparametersLabel
-            app.TemporalparametersLabel = uilabel(app.TemporalTab);
-            app.TemporalparametersLabel.Position = [28 138 118 22];
-            app.TemporalparametersLabel.Text = 'Temporal parameters';
-
-            % Create Centerf0EditFieldLabel
-            app.Centerf0EditFieldLabel = uilabel(app.TemporalTab);
-            app.Centerf0EditFieldLabel.HorizontalAlignment = 'right';
-            app.Centerf0EditFieldLabel.Position = [41 107 54 22];
-            app.Centerf0EditFieldLabel.Text = 'Center f0';
-
-            % Create Centerf0EditField
-            app.Centerf0EditField = uieditfield(app.TemporalTab, 'numeric');
-            app.Centerf0EditField.Position = [110 107 100 22];
-
-            % Create SigmafEditFieldLabel
-            app.SigmafEditFieldLabel = uilabel(app.TemporalTab);
-            app.SigmafEditFieldLabel.HorizontalAlignment = 'right';
-            app.SigmafEditFieldLabel.Position = [49 87 46 22];
-            app.SigmafEditFieldLabel.Text = 'Sigma f';
-
-            % Create SigmafEditField
-            app.SigmafEditField = uieditfield(app.TemporalTab, 'numeric');
-            app.SigmafEditField.Position = [110 87 100 22];
-
             % Create MeshPanel
             app.MeshPanel = uipanel(app.GridLayout);
             app.MeshPanel.Layout.Row = 1;
             app.MeshPanel.Layout.Column = 3;
 
+            % Create ViewerPanel
+            app.ViewerPanel = uipanel(app.MeshPanel);
+            app.ViewerPanel.AutoResizeChildren = 'off';
+            app.ViewerPanel.Title = 'Viewer';
+            app.ViewerPanel.Position = [11 353 572 388];
+
             % Create GridLayout2
-            app.GridLayout2 = uigridlayout(app.MeshPanel);
+            app.GridLayout2 = uigridlayout(app.ViewerPanel);
             app.GridLayout2.RowHeight = {'1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x'};
 
+            % Create SignalPanel
+            app.SignalPanel = uipanel(app.MeshPanel);
+            app.SignalPanel.Title = 'Signal';
+            app.SignalPanel.Position = [11 20 564 233];
+
+            % Create SignalDropDownLabel
+            app.SignalDropDownLabel = uilabel(app.SignalPanel);
+            app.SignalDropDownLabel.HorizontalAlignment = 'right';
+            app.SignalDropDownLabel.Position = [13 144 38 22];
+            app.SignalDropDownLabel.Text = 'Signal';
+
+            % Create SignalDropDown
+            app.SignalDropDown = uidropdown(app.SignalPanel);
+            app.SignalDropDown.Position = [66 144 211 22];
+
+            % Create vDeltaEditFieldLabel
+            app.vDeltaEditFieldLabel = uilabel(app.SignalPanel);
+            app.vDeltaEditFieldLabel.HorizontalAlignment = 'right';
+            app.vDeltaEditFieldLabel.Position = [375 33 39 22];
+            app.vDeltaEditFieldLabel.Text = 'vDelta';
+
+            % Create vDeltaEditField
+            app.vDeltaEditField = uieditfield(app.SignalPanel, 'numeric');
+            app.vDeltaEditField.Position = [429 33 100 22];
+
             % Create ShowMeshButton
-            app.ShowMeshButton = uibutton(app.GridLayout2, 'push');
+            app.ShowMeshButton = uibutton(app.SignalPanel, 'push');
             app.ShowMeshButton.ButtonPushedFcn = createCallbackFcn(app, @ShowMeshButtonPushed, true);
-            app.ShowMeshButton.Layout.Row = 12;
-            app.ShowMeshButton.Layout.Column = 1;
+            app.ShowMeshButton.Position = [13 174 270 26];
             app.ShowMeshButton.Text = 'Show Mesh';
 
-            % Create ForwardButton
-            app.ForwardButton = uibutton(app.GridLayout2, 'push');
-            app.ForwardButton.Layout.Row = 11;
-            app.ForwardButton.Layout.Column = 2;
-            app.ForwardButton.Text = 'Forward';
+            % Create Panel_2
+            app.Panel_2 = uipanel(app.MeshPanel);
+            app.Panel_2.AutoResizeChildren = 'off';
+            app.Panel_2.Position = [12 265 564 65];
+
+            % Create GridLayout3
+            app.GridLayout3 = uigridlayout(app.Panel_2);
+            app.GridLayout3.RowHeight = {'1x'};
 
             % Create BackButton
-            app.BackButton = uibutton(app.GridLayout2, 'push');
-            app.BackButton.Layout.Row = 11;
+            app.BackButton = uibutton(app.GridLayout3, 'push');
+            app.BackButton.Layout.Row = 1;
             app.BackButton.Layout.Column = 1;
             app.BackButton.Text = 'Back';
+
+            % Create PlayButton
+            app.PlayButton = uibutton(app.GridLayout3, 'push');
+            app.PlayButton.Layout.Row = 1;
+            app.PlayButton.Layout.Column = 2;
+            app.PlayButton.Text = 'Play';
 
             % Show the figure after all components are created
             app.UIFigure.Visible = 'on';
@@ -612,13 +663,16 @@ CurrentFilter
     methods (Access = public)
 
         % Construct app
-        function app = BctFrontend
+        function app = BctFilterDesigner
 
             % Create UIFigure and components
             createComponents(app)
 
             % Register the app with App Designer
             registerApp(app, app.UIFigure)
+
+            % Execute the startup function
+            runStartupFcn(app, @startupFcn)
 
             if nargout == 0
                 clear app

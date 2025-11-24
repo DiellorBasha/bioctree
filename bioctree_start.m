@@ -107,6 +107,10 @@ try
         addpath(docs_dir);
         fprintf('      ✓ Docs: %s\n', docs_dir);
     end
+
+
+    % Add docs directory for reference
+addpath(genpath('apps'))
     
 catch ME
     error('bioctree:PathSetup', 'Failed to add paths: %s', ME.message);
@@ -268,6 +272,7 @@ if ~isempty(missing_deps)
 end
 
 fprintf('\n✓ Bioctree initialization complete!\n\n');
+B=bct_fsaverage;
 end
 
 function s = truncate_path(path_str, max_len)

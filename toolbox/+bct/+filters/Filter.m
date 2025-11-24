@@ -406,6 +406,12 @@ classdef Filter < handle
           addParameter(p, 'sigma_x', 1, @isnumeric);
           addParameter(p, 'sigma_y', 1, @isnumeric);
           
+        case 'velocity_gabor'
+          addParameter(p, 'v', 0.5, @isnumeric);          % Group velocity (rad/mm/s)
+          addParameter(p, 'sigma_w', 10, @isnumeric);     % Temporal bandwidth (rad/s)
+          addParameter(p, 'lambda0', 50, @isnumeric);     % Center eigenvalue
+          addParameter(p, 'sigma_l', 20, @isnumeric);     % Spatial bandwidth
+          
         case 'separable'
           addParameter(p, 'kernel_x', [], @(x) isa(x, 'function_handle'));
           addParameter(p, 'kernel_y', [], @(x) isa(x, 'function_handle'));

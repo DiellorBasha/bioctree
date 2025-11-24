@@ -86,8 +86,11 @@ else
 end
 
 % Apply colormap if needed
-if isempty(meshColor) || useColorMap
-    % Use Z-coordinate for coloring
+if isempty(meshColor)
+    % No signal data - use uniform mid-gray color
+    meshColor = repmat([0.7 0.7 0.7], size(dataLocations, 1), 1);
+elseif useColorMap
+    % Signal data provided with colormap - use Z-coordinate for coloring
     minVal = min(dataLocations(:,3));
     maxVal = max(dataLocations(:,3));
 

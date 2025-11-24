@@ -17,10 +17,12 @@ function obj = eigenbasis(obj, MassMatrix, CotangentMatrix, varargin)
 %                      Default: min(600, N-1) where N is matrix size
 %
 % Name-Value Parameters:
-%   'sigma'    - Eigenvalue shift for eigs (default: 1e-6)
 %   'tol'      - Convergence tolerance (default: 1e-10)
 %   'maxit'    - Maximum iterations (default: 5000)
-%   'mode'     - Eigenvalue selection: 'smallestabs' (default) or 'sm'
+%
+% Note: This function always uses 'smallestabs' mode to ensure
+% the TRUE lowest eigenvalues are computed, not eigenvalues near a shift.
+% This is critical for obtaining the correct low-frequency spatial basis.
 %
 % Outputs:
 %   obj - Lambda object with updated properties:
@@ -60,10 +62,8 @@ N = size(MassMatrix, 1);
 defaultNumModes = min(600, N - 1);
 
 addOptional(p, 'numModes', defaultNumModes, @(x) isnumeric(x) && isscalar(x) && x > 0);
-addParameter(p, 'sigma', 1e-6, @(x) isnumeric(x) && isscalar(x));
 addParameter(p, 'tol', 1e-10, @(x) isnumeric(x) && isscalar(x));
 addParameter(p, 'maxit', 5000, @(x) isnumeric(x) && isscalar(x));
-addParameter(p, 'mode', 'smallestabs', @(x) ischar(x) || isstring(x));
 
 parse(p, MassMatrix, CotangentMatrix, varargin{:});
 
@@ -87,8 +87,10 @@ opts.maxit = p.Results.maxit;
 % Solve generalized eigenproblem: K*U = M*U*D
 % This is the optimal form for FEM meshes
 % Eigenvalues are with respect to the cotangent Laplacian
+% Using 'smallestabs' ensures we get the TRUE lowest eigenvalues,
+% not just eigenvalues near a shift point.
 try
-    [U, D] = eigs(K, M, numModes, p.Results.sigma, opts);
+    [U, D] = eigs(K, M, numModes, 'smallestabs', opts);
     lam = real(diag(D));
 catch ME
     error('eigenbasis:EigsFailed', ...
@@ -96,23 +98,22 @@ catch ME
 end
 
 % Sort by eigenvalue (eigs with 'smallestabs' may not return sorted)
-if strcmp(p.Results.mode, 'smallestabs')
-    [lam, idx] = sort(lam, 'ascend');
-    U = U(:, idx);
-    D = D(idx, idx);
-end
+[lam, idx] = sort(lam, 'ascend');
+U = U(:, idx);
+D = D(idx, idx);
 
-% Remove DC component (constant mode) and negative eigenvalues
-% DC mode is nearly constant across the mesh (λ ≈ 0)
-% Negative eigenvalues can occur due to numerical issues
-tol_dc = 1e-8;
-mask = lam > tol_dc;
-
-if sum(mask) == 0
-    warning('eigenbasis:NoValidModes', ...
-        'All eigenvalues below threshold. Using all modes.');
-    mask = true(size(lam));
-end
+% Remove exactly ONE DC component (the constant mode)
+% CRITICAL: We must remove ONLY the smallest eigenvalue, not all "near-zero" ones.
+% FEM meshes often have multiple small eigenvalues due to:
+%   - numerical noise
+%   - boundary artifacts
+%   - mesh topology
+% Removing multiple low-frequency modes destroys the smooth spatial basis
+% needed for cortical wave analysis (λ(1), λ(2), λ(3) are essential).
+[~, idx0] = min(abs(lam));  % Find the single smallest eigenvalue
+dc_value = lam(idx0);       % Store for reporting
+mask = true(size(lam));
+mask(idx0) = false;          % Remove exactly one DC mode
 
 % Filter eigenvectors and eigenvalues
 U = U(:, mask);
@@ -127,7 +128,7 @@ obj.lambda = lam;  % Setting lambda automatically updates K and axis via listene
 % Display summary
 fprintf('Lambda.eigenbasis: Computed %d modes (requested %d)\n', obj.K, numModes);
 fprintf('  Eigenvalue range: [%.6f, %.6f]\n', min(lam), max(lam));
-fprintf('  Removed %d modes (DC and negative eigenvalues)\n', numModes - obj.K);
+fprintf('  Removed 1 DC mode (eigenvalue = %.3e)\n', dc_value);
 fprintf('  Lambda.axis updated: %d points\n', length(obj.axis));
 
 end

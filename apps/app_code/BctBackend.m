@@ -129,12 +129,12 @@ classdef BctBackend
             
             % Check for KronDelta signal
             if ~isempty(app.KronDelta) && isa(app.KronDelta, 'bct.Signal')
-                signalNames{end+1} = app.KronDelta.Label;
+                signalNames{end+1} = char(app.KronDelta.Label);
             end
             
             % Check for IRSignal
             if ~isempty(app.IRSignal) && isa(app.IRSignal, 'bct.Signal')
-                signalNames{end+1} = app.IRSignal.Label;
+                signalNames{end+1} = char(app.IRSignal.Label);
             end
             
             % Update dropdown items
@@ -267,18 +267,18 @@ classdef BctBackend
             end
             
             % Spatial sliders (Lambda/wavenumber)
-            app.k0Slider.Limits      = [k_min k_max];
-            app.k0Slider.Value       = k_min + k_range/4;  % 25% of range
+            app.WavenumberSlider.Limits      = [k_min k_max];
+            app.WavenumberSlider.Value       = k_min + k_range/4;  % 25% of range
             
-            app.sigma_kSlider.Limits = [k_range/200  k_range/5];
-            app.sigma_kSlider.Value  = k_range/20;  % 5% of range
+            app.kbandwidthSlider.Limits = [k_range/200  k_range/3.33];  % Max increased by 50%
+            app.kbandwidthSlider.Value  = k_range/20;  % 5% of range
             
             % Temporal sliders (Omega/frequency)
-            app.omegaSlider.Limits      = [omega_min  omega_max];
-            app.omegaSlider.Value       = omega_min + omega_range/2;  % Center
+            app.FrequencySlider.Limits      = [omega_min  omega_max];
+            app.FrequencySlider.Value       = omega_min + omega_range/2;  % Center
             
-            app.sigma_oSlider.Limits    = [omega_range/200   omega_range/5];
-            app.sigma_oSlider.Value     = omega_range/20;  % 5% of range
+            app.BandwidthSlider.Limits    = [omega_range/200   omega_range/3.33];  % Max increased by 50%
+            app.BandwidthSlider.Value     = omega_range/20;  % 5% of range
             
             % After ranges are updated, refresh the kernel preview
             BctBackend.updateKernelPreview(app);
@@ -307,7 +307,7 @@ classdef BctBackend
                 
                 % Get axes from spectral Joint domain
                 k_axis = spectralJoint.axis{1};      % Lambda axis (wavenumber)
-                omega_axis = spectralJoint.axis{2};  % Omega axis (angular frequency)
+                omega_axis = spectralJoint.axis{2};  % Omega axis
                 
                 kmin = min(k_axis);
                 kmax = max(k_axis);
@@ -315,9 +315,17 @@ classdef BctBackend
                 omega_min = min(omega_axis);
                 omega_max = max(omega_axis);
                 
-                % Convert omega to frequency (Hz) for display
-                freq_min = omega_min / (2*pi);
-                freq_max = omega_max / (2*pi);
+                % Check Omega coordinate mode to determine if conversion needed
+                omegaDomain = spectralJoint.B();  % Get Omega domain
+                if omegaDomain.displayCoordinateMode == bct.enum.CoordinateMode.Frequency
+                    % Omega.axis is already in Hz
+                    freq_min = omega_min;
+                    freq_max = omega_max;
+                else
+                    % Omega.axis is in rad/s, convert to Hz for display
+                    freq_min = omega_min / (2*pi);
+                    freq_max = omega_max / (2*pi);
+                end
                 
                 % Get units from component domains
                 k_units = spectralJoint.A_units();
@@ -336,9 +344,16 @@ classdef BctBackend
                 end
                 
                 if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
-                    omega_axis = B.Omega.axis;
-                    freq_min = min(omega_axis) / (2*pi);
-                    freq_max = max(omega_axis) / (2*pi);
+                    % Check Omega coordinate mode
+                    if B.Omega.displayCoordinateMode == bct.enum.CoordinateMode.Frequency
+                        % Omega.axis is already in Hz
+                        freq_min = min(B.Omega.axis);
+                        freq_max = max(B.Omega.axis);
+                    else
+                        % Omega.axis is in rad/s, convert to Hz
+                        freq_min = min(B.Omega.axis) / (2*pi);
+                        freq_max = max(B.Omega.axis) / (2*pi);
+                    end
                 elseif ~isempty(B.Time)
                     freq_min = 0;
                     freq_max = B.Time.fs / 2;  % Nyquist
@@ -456,44 +471,55 @@ classdef BctBackend
             fprintf('[impulseResponse] Impulse response computed [%d×%d]\n', size(ir.Data,1), size(ir.Data,2));
         end
         
-        function visualizeImpulseResponse(app, B, ax)
-            % Visualize impulse response signal on Manifold_Time domain
+        function visualizeFilterOnLambdaOmega(app, B, ax)
+            % Visualize filter kernel evaluated on actual Lambda-Omega eigenmode grid
+            % Shows which specific eigenmodes are being filtered
             %
             % Args:
-            %   ax = handle to uiaxes for visualization
+            %   ax = handle to uiaxes (e.g., app.UIAxesResponse)
             
-            if isempty(app.IRSignal)
-                warning('BctFilterDesigner:NoIR', 'No impulse response to visualize.');
+            if isempty(app.CurrentFilter)
+                warning('BctFilterDesigner:NoFilter', 'No filter to visualize.');
                 return;
             end
             
-            % Get impulse response data [nVertices × nTime]
-            irData = app.IRSignal.data;
+            % Get spectral Joint domain (Lambda × Omega)
+            if strcmp(B.Joint.Domain, 'Manifold_Time')
+                spectralJoint = B.Joint.dual;  % Lambda_Omega
+            else
+                spectralJoint = B.Joint;  % Already Lambda_Omega
+            end
             
-            % Get axes from domain
-            vertexAxis = 1:B.Manifold.N;  % Vertex indices
-            timeAxis = B.Time.axis;       % Time values
+            % Evaluate filter on the ACTUAL Lambda-Omega grid (not preview grid)
+            H = app.CurrentFilter.evaluate();
+            
+            % Get actual axes from spectral Joint domain
+            k_axis = spectralJoint.axis{1};      % Lambda eigenvalues (wavenumber)
+            omega_axis = spectralJoint.axis{2};  % Omega frequencies (angular)
+            
+            % Convert omega to Hz for display
+            freq_axis = omega_axis / (2*pi);
             
             % Visualize as 2D image
             cla(ax);
-            imagesc(ax, timeAxis, vertexAxis, abs(irData));
+            imagesc(ax, freq_axis, k_axis, H);
             axis(ax, 'xy');
             
-            xlabel(ax, 'Time (s)');
-            ylabel(ax, 'Vertex Index');
-            title(ax, sprintf('Impulse Response: %s', app.CurrentFilter.Label));
+            xlabel(ax, 'Frequency (Hz)');
+            ylabel(ax, sprintf('Wavenumber k (%s)', spectralJoint.A_units()));
+            title(ax, sprintf('Filter on Lambda-Omega Grid [%d×%d eigenmodes]', size(H,1), size(H,2)));
             
             colormap(ax, 'turbo');
             colorbar(ax);
             
-            fprintf('[visualizeIR] Impulse response displayed on UIAxesResponse\n');
+            fprintf('[visualizeFilter] Filter evaluated on Lambda-Omega grid [%d×%d]\n', size(H,1), size(H,2));
         end
         
         %% Filter Design
         
         function createDefaultFilter(app)
-            % Create default Joint filter (Lambda × Omega) with separable Gaussian kernels
-            % This is called when BCT is loaded or FilterTypeDropDown changes
+            % Create default Joint filter (Lambda × Omega) with selected kernel type
+            % Uses kernel type from FilterTypeDropDown: Gaussian, Heat, Mexican Hat, or Gabor
             
             B = app.CurrentBCT;
             
@@ -520,38 +546,104 @@ classdef BctBackend
                 spectralJoint = B.Joint;  % Already Lambda_Omega
             end
             
+            % Get selected kernel type from dropdown
+            kernelType = lower(app.KernelDropDown.Value);
+            kernelType = strrep(kernelType, ' ', '_');  % 'Mexican Hat' -> 'mexican_hat'
+            
             % Get default parameters from slider values (if available)
-            if ~isempty(app.k0Slider.Value)
-                k0 = app.k0Slider.Value;
+            if ~isempty(app.WavenumberSlider.Value)
+                k0 = app.WavenumberSlider.Value;
             else
                 k0 = 0.1;  % Default center wavenumber (rad/mm)
             end
             
-            if ~isempty(app.sigma_kSlider.Value)
-                sigma_k = app.sigma_kSlider.Value;
+            if ~isempty(app.kbandwidthSlider.Value)
+                sigma_k = app.kbandwidthSlider.Value;
             else
                 sigma_k = 0.05;  % Default bandwidth
             end
             
-            if ~isempty(app.omegaSlider.Value)
-                omega0 = app.omegaSlider.Value;
+            if ~isempty(app.FrequencySlider.Value)
+                omega0 = app.FrequencySlider.Value;
             else
                 omega0 = 20 * 2*pi;  % Default 20 Hz in rad/s
             end
             
-            if ~isempty(app.sigma_oSlider.Value)
-                sigma_o = app.sigma_oSlider.Value;
+            if ~isempty(app.BandwidthSlider.Value)
+                sigma_o = app.BandwidthSlider.Value;
             else
                 sigma_o = 5 * 2*pi;  % Default 5 Hz bandwidth
             end
             
-            % Create Joint filter using FilterDesigner with Gabor kernel on spectral domain
+            % Create Joint filter based on selected kernel type
             try
-                % Create filter directly on the spectral Joint domain object
-                app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
-                    'center_x', k0, 'sigma_x', sigma_k, ...
-                    'center_y', omega0, 'sigma_y', sigma_o, ...
-                    'label', 'Joint Lambda-Omega Filter');
+                switch kernelType
+                    case 'gabor'
+                        % 2D Gabor (localized Gaussian)
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
+                            'center_x', k0, 'sigma_x', sigma_k, ...
+                            'center_y', omega0, 'sigma_y', sigma_o, ...
+                            'label', sprintf('Gabor Filter (k0=%.2f, ω0=%.1f Hz)', k0, omega0/(2*pi)));
+                        
+                    case 'gaussian'
+                        % 2D Gaussian (separable)
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
+                            'center_x', k0, 'sigma_x', sigma_k, ...
+                            'center_y', omega0, 'sigma_y', sigma_o, ...
+                            'label', sprintf('Gaussian Filter (k0=%.2f, ω0=%.1f Hz)', k0, omega0/(2*pi)));
+                        
+                    case 'heat'
+                        % Heat kernel - typically for spatial domain only
+                        % For joint domain, apply heat on spatial and Gaussian on temporal
+                        tau = sigma_k;  % Use sigma_k slider for tau parameter
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
+                            'center_x', 0, 'sigma_x', 1/tau, ...
+                            'center_y', omega0, 'sigma_y', sigma_o, ...
+                            'label', sprintf('Heat Filter (τ=%.2f, ω0=%.1f Hz)', tau, omega0/(2*pi)));
+                        
+                    case 'mexican_hat'
+                        % Mexican hat wavelet - band-pass with negative sidelobes
+                        scale = sigma_k;  % Use sigma_k slider for scale parameter
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
+                            'center_x', k0, 'sigma_x', scale, ...
+                            'center_y', omega0, 'sigma_y', sigma_o, ...
+                            'label', sprintf('Mexican Hat Filter (scale=%.2f, ω0=%.1f Hz)', scale, omega0/(2*pi)));
+                        
+                    case 'velocity_gabor'
+                        % Velocity-tuned tilted Gabor - traveling wave packets
+                        % Maps UI sliders to velocity_gabor parameters:
+                        % - k0 → lambda0 (center eigenvalue)
+                        % - sigma_k → sigma_l (spatial bandwidth)
+                        % - omega slider → v (group velocity via dispersion)
+                        % - sigma_o → sigma_w (temporal bandwidth)
+                        
+                        lambda0 = k0;           % Center eigenvalue from k0 slider
+                        sigma_l = sigma_k;      % Spatial bandwidth from sigma_k slider
+                        sigma_w = sigma_o;      % Temporal bandwidth from sigma_o slider
+                        
+                        % Compute group velocity from omega slider
+                        % Using dispersion: v = ω / √λ at center
+                        if lambda0 > 0
+                            v = omega0 / sqrt(lambda0);  % Group velocity (rad/mm/s)
+                        else
+                            v = omega0;  % Fallback if lambda0 = 0
+                        end
+                        
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'velocity_gabor', ...
+                            'v', v, 'sigma_w', sigma_w, ...
+                            'lambda0', lambda0, 'sigma_l', sigma_l, ...
+                            'label', sprintf('Velocity Gabor (v=%.2f mm/s, λ0=%.1f)', v, lambda0));
+                        
+                    otherwise
+                        warning('BctFilterDesigner:UnknownKernel', 'Unknown kernel type: %s, defaulting to Gabor', kernelType);
+                        app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
+                            'center_x', k0, 'sigma_x', sigma_k, ...
+                            'center_y', omega0, 'sigma_y', sigma_o, ...
+                            'label', 'Joint Lambda-Omega Filter');
+                end
+                
+                fprintf('[createDefaultFilter] Created %s filter\n', kernelType);
+                
             catch ME
                 warning('BctFilterDesigner:CreateFilter', 'Could not create filter: %s', ME.message);
                 app.CurrentFilter = [];
@@ -567,10 +659,10 @@ classdef BctBackend
             end
             
             % Update filter parameters from slider values
-            app.CurrentFilter.setParameter('center_x', app.k0Slider.Value);
-            app.CurrentFilter.setParameter('sigma_x', app.sigma_kSlider.Value);
-            app.CurrentFilter.setParameter('center_y', app.omegaSlider.Value);
-            app.CurrentFilter.setParameter('sigma_y', app.sigma_oSlider.Value);
+            app.CurrentFilter.setParameter('center_x', app.WavenumberSlider.Value);
+            app.CurrentFilter.setParameter('sigma_x', app.kbandwidthSlider.Value);
+            app.CurrentFilter.setParameter('center_y', app.FrequencySlider.Value);
+            app.CurrentFilter.setParameter('sigma_y', app.BandwidthSlider.Value);
             
             ax = app.UIAxesKernel;
             
@@ -678,6 +770,49 @@ classdef BctBackend
             view(ax, 2);   % 2D heatmap view
             
             colorbar(ax);
+        end
+        
+        function stepSignal(app)
+            % Advance impulse response signal by one time step
+            % Each button press shows the next time point on the mesh viewer
+            %
+            % Args:
+            %   app = BctFilterDesigner app handle
+            %
+            % Uses app.CurrentTimePoint to track position (initialize to 1 if needed)
+            
+            if isempty(app.IRSignal)
+                warning('BctBackend:NoIRSignal', 'No impulse response signal to step through.');
+                return;
+            end
+            
+            % Use CurrentBCT object and its viewer
+            B = app.CurrentBCT;
+            
+            if isempty(B) || isempty(B.Viewer) || ~isvalid(B.Viewer)
+                warning('BctBackend:NoViewer', 'Viewer not available. Create viewer first.');
+                return;
+            end
+            
+            % Get number of time points
+            nTimePoints = size(app.IRSignal.Data, 2);
+            
+            % Initialize CurrentTimePoint if it doesn't exist
+            if ~isprop(app, 'CurrentTimePoint') || isempty(app.CurrentTimePoint)
+                app.CurrentTimePoint = 1;
+            end
+            
+            % Advance to next time point (wrap around at end)
+            app.CurrentTimePoint = app.CurrentTimePoint + 1;
+            if app.CurrentTimePoint > nTimePoints
+                app.CurrentTimePoint = 1;  % Loop back to start
+            end
+            dd=app.IRSignal.Data(:, app.CurrentTimePoint);
+            % Update viewer with current time point
+            B.Viewer.Children.Color = bct.show.x2rgb(abs(dd), 'colormap', 'hot');
+            drawnow;
+            
+            fprintf('[stepSignal] Time point: %d / %d\n', app.CurrentTimePoint, nTimePoints);
         end
         
     end
