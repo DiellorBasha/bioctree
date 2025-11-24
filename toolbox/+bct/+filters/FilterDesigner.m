@@ -215,8 +215,8 @@ classdef FilterDesigner < handle
         
         % Check if Joint already exists with these domains
         if ~isempty(obj.BCT.Joint) && ...
-            strcmp(obj.BCT.Joint.A.name, domA_name) && ...
-            strcmp(obj.BCT.Joint.B.name, domB_name)
+            strcmp(obj.BCT.Joint.A().name, domA_name) && ...
+            strcmp(obj.BCT.Joint.B().name, domB_name)
           joint = obj.BCT.Joint;
         else
           % Create new Joint domain

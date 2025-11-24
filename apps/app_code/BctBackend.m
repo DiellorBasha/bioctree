@@ -1,5 +1,5 @@
 classdef BctBackend
-    % BCTAPPBACKEND Backend logic for BctFilterDesigner app
+    % BctBackend Backend logic for BctFilterDesigner app
     %
     % This class contains all custom business logic, data processing,
     % and visualization functions used by the BctFilterDesigner.mlapp GUI.
@@ -9,13 +9,59 @@ classdef BctBackend
     %   - Backend (.m): All custom logic, reusable and testable
     %
     % Usage from app callbacks:
-    %   BctAppBackend.scanWorkspace(app);
-    %   BctAppBackend.updateUIAfterLoad(app);
+    %   BctBackend.scanWorkspace(app);
+    %   BctBackend.updateUIAfterLoad(app);
     %   etc.
     
     methods (Static)
         
         %% Workspace Management
+        
+        function loadDefaultBCT(app)
+            % Load default BCT object (fsaverage right hemisphere) on app startup
+            % Creates a BCT object with computed eigenbasis ready for filtering
+            
+            try
+                % Load default fsaverage mesh
+                B = bct_fsaverage('rh');
+                
+                % Compute eigenbasis (required for filters to work)
+                fprintf('[loadDefaultBCT] Computing eigenbasis...\n');
+                B = B.computeEigenbasis(100);  % 100 eigenmodes
+                fprintf('[loadDefaultBCT] Eigenbasis computed: %d modes\n', B.Lambda.K);
+                
+                % Add Time domain to create Joint Manifold_Time and dual Lambda_Omega
+                fprintf('[loadDefaultBCT] Creating Time domain...\n');
+                B.Time = bct.Time(100, 10);  % 100 samples, 10 Hz sampling rate
+                fprintf('[loadDefaultBCT] Time domain created, Joint: %s\n', B.Joint.Domain);
+                
+                % Store in BCTObjects struct
+                app.BCTObjects = struct();
+                app.BCTObjects.fsaverage_rh = B;
+                
+                % Set as current BCT
+                app.CurrentBCT = B;
+                
+                % Initialize FilterDesigner
+                app.FilterDesigner = bct.filters.FilterDesigner(app.CurrentBCT);
+                
+                % Create default filter
+                BctBackend.createDefaultFilter(app);
+                
+                % Update UI to reflect loaded object
+                BctBackend.updateUIAfterLoad(app);
+                
+                % Update workspace tree
+                node = uitreenode(app.DataNode);
+                node.Text = 'fsaverage_rh';
+                node.NodeData = 'fsaverage_rh';
+                expand(app.Tree);
+                
+            catch ME
+                warning('BctFilterDesigner:LoadDefault', ...
+                    'Could not load default BCT object: %s', ME.message);
+            end
+        end
         
         function scanWorkspace(app)
             % Scan MATLAB base workspace for bct.bct objects
@@ -64,13 +110,46 @@ classdef BctBackend
             B = app.CurrentBCT;
             
             % Update kernel slider ranges based on domain axes
-            BctAppBackend.updateKernelSliders(app, B);
+            BctBackend.updateKernelSliders(app, B);
             
             % Update text area
-            BctAppBackend.updateTextArea(app, B);
+            BctBackend.updateTextArea(app, B);
             
             % Update the joint axes
-            BctAppBackend.updateJointAxes(app, B, app.UIAxesResponse);
+            BctBackend.updateJointAxes(app, B, app.UIAxesResponse);
+            
+            % Update signal dropdown
+            BctBackend.updateSignalDropDown(app);
+        end
+        
+        function updateSignalDropDown(app)
+            % Populate SignalDropDown with available Signal objects
+            
+            signalNames = {};
+            
+            % Check for KronDelta signal
+            if ~isempty(app.KronDelta) && isa(app.KronDelta, 'bct.Signal')
+                signalNames{end+1} = app.KronDelta.Label;
+            end
+            
+            % Check for IRSignal
+            if ~isempty(app.IRSignal) && isa(app.IRSignal, 'bct.Signal')
+                signalNames{end+1} = app.IRSignal.Label;
+            end
+            
+            % Update dropdown items
+            if isempty(signalNames)
+                app.SignalDropDown.Items = {'No signals available'};
+                app.SignalDropDown.Enable = 'off';
+            else
+                app.SignalDropDown.Items = signalNames;
+                app.SignalDropDown.Enable = 'on';
+                
+                % Select first item by default
+                if ~isempty(signalNames)
+                    app.SignalDropDown.Value = signalNames{1};
+                end
+            end
         end
         
         function updateTextArea(app, B)
@@ -98,17 +177,22 @@ classdef BctBackend
             
             % Build temporal info
             temporal_lines = {''};
-            if ~isempty(B.Time)
+            if ~isempty(B.Time) && ~isempty(B.Time.axis)
+                % Calculate duration from Time.N and Time.axis
+                nTime = B.Time.N;
+                dt = B.Time.axis(2) - B.Time.axis(1);
+                T_duration = (nTime - 1) * dt;
+                
                 temporal_lines = {
                     ''
                     '--- Temporal (Time) ---'
-                    sprintf('Samples: %d', B.Time.N)
+                    sprintf('Samples: %d', nTime)
                     sprintf('Sampling rate: %.1f Hz', B.Time.fs)
-                    sprintf('Duration: %.2f s', B.Time.T/B.Time.fs)
+                    sprintf('Duration: %.2f s', T_duration)
                 };
                 
                 % Omega is automatically created as Time's dual
-                if ~isempty(B.Omega)
+                if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
                     temporal_lines{end+1} = sprintf('Omega: %d frequencies', length(B.Omega.axis));
                     temporal_lines{end+1} = sprintf('Nyquist: %.1f Hz', max(B.Omega.axis)/(2*pi));
                 end
@@ -124,7 +208,7 @@ classdef BctBackend
                     ''
                     '--- Joint Domain ---'
                     sprintf('Type: %s', B.Joint.Domain)
-                    sprintf('Grid: [%d×%d]', sz(1), sz(2))
+                    sprintf('Grid: [%d×%d]', dims(1), dims(2))
                     sprintf('Units: %s', B.Joint.units)
                 };
                 lines = [lines; joint_lines];
@@ -134,47 +218,75 @@ classdef BctBackend
         end
         
         function updateKernelSliders(app, B)
-            % Update kernel parameter slider ranges based on domain axes
+            % Update kernel parameter slider ranges based on Joint.dual (spectral) domain axes
+            % This ensures sliders match the actual Lambda_Omega domain where filters are evaluated
             
-            % Lambda is automatically created as Manifold's dual
-            % Lambda.axis is always available (estimated or computed)
-            if ~isempty(B.Lambda) && ~isempty(B.Lambda.axis)
-                k_max = max(B.Lambda.axis);  % Wavenumber (rad/mm)
+            % Get spectral Joint domain (Lambda × Omega)
+            if ~isempty(B.Joint) && ~isempty(B.Joint.dual)
+                spectralJoint = B.Joint.dual;  % Lambda_Omega
+                
+                % Get Lambda axis (wavenumber)
+                k_axis = spectralJoint.axis{1};
+                k_min = min(k_axis);
+                k_max = max(k_axis);
+                k_range = k_max - k_min;
+                
+                % Get Omega axis (angular frequency)
+                omega_axis = spectralJoint.axis{2};
+                omega_min = min(omega_axis);
+                omega_max = max(omega_axis);
+                omega_range = omega_max - omega_min;
+                
             else
-                k_max = 10;  % fallback
+                % Fallback if Joint.dual not available
+                if ~isempty(B.Lambda) && ~isempty(B.Lambda.axis)
+                    k_axis = B.Lambda.axis;
+                    k_min = min(k_axis);
+                    k_max = max(k_axis);
+                    k_range = k_max - k_min;
+                else
+                    k_min = 0;
+                    k_max = 10;
+                    k_range = 10;
+                end
+                
+                if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
+                    omega_axis = B.Omega.axis;
+                    omega_min = min(omega_axis);
+                    omega_max = max(omega_axis);
+                    omega_range = omega_max - omega_min;
+                elseif ~isempty(B.Time)
+                    omega_max = 2*pi * (B.Time.fs/2);
+                    omega_min = 0;
+                    omega_range = omega_max;
+                else
+                    omega_max = 2*pi*50;
+                    omega_min = 0;
+                    omega_range = omega_max;
+                end
             end
             
-            % Spatial sliders
-            app.k0Slider.Limits      = [0 k_max];
-            app.k0Slider.Value       = k_max/4;
+            % Spatial sliders (Lambda/wavenumber)
+            app.k0Slider.Limits      = [k_min k_max];
+            app.k0Slider.Value       = k_min + k_range/4;  % 25% of range
             
-            app.sigma_kSlider.Limits = [k_max/200  k_max/5];
-            app.sigma_kSlider.Value  = k_max/20;
+            app.sigma_kSlider.Limits = [k_range/200  k_range/5];
+            app.sigma_kSlider.Value  = k_range/20;  % 5% of range
             
-            % Temporal sliders
-            % Omega is automatically created as Time's dual
-            if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
-                omega_max = max(abs(B.Omega.axis));  % Max angular frequency (rad/s)
-            elseif ~isempty(B.Time)
-                nyquist = B.Time.fs/2;
-                omega_max = 2*pi*nyquist;  % Convert to rad/s
-            else
-                omega_max = 2*pi*50;  % fallback
-            end
+            % Temporal sliders (Omega/frequency)
+            app.omegaSlider.Limits      = [omega_min  omega_max];
+            app.omegaSlider.Value       = omega_min + omega_range/2;  % Center
             
-            app.omegaSlider.Limits      = [-omega_max  omega_max];
-            app.omegaSlider.Value       = 0;
-            
-            app.sigma_oSlider.Limits    = [omega_max/200   omega_max/5];
-            app.sigma_oSlider.Value     = omega_max/20;
+            app.sigma_oSlider.Limits    = [omega_range/200   omega_range/5];
+            app.sigma_oSlider.Value     = omega_range/20;  % 5% of range
             
             % After ranges are updated, refresh the kernel preview
-            BctAppBackend.updateKernelPreview(app);
+            BctBackend.updateKernelPreview(app);
         end
         
         function updateJointAxes(app, B, ax)
-            % Automatically configure the joint spectral axes
-            % Default: wavenumber k (rad/mm) vs frequency f (Hz)
+            % Automatically configure the joint spectral axes using Joint.dual domain
+            % Uses the spectral Lambda_Omega domain for accurate axis ranges
             %
             % Args:
             %   B  = bct.bct object
@@ -184,34 +296,68 @@ classdef BctBackend
                 ax = app.UIAxesResponse;   % default joint axes
             end
             
-            % Spatial resolution (wavenumber)
-            if ~isempty(B.Lambda) && ~isempty(B.Lambda.axis)
-                kmax = max(B.Lambda.axis);  % Max wavenumber (rad/mm)
+            % Get spectral Joint domain (Lambda × Omega)
+            if ~isempty(B.Joint) && ~isempty(B.Joint.dual)
+                % Use Joint.dual if it's the spectral domain
+                if strcmp(B.Joint.Domain, 'Manifold_Time')
+                    spectralJoint = B.Joint.dual;  % Lambda_Omega
+                else
+                    spectralJoint = B.Joint;  % Already Lambda_Omega
+                end
+                
+                % Get axes from spectral Joint domain
+                k_axis = spectralJoint.axis{1};      % Lambda axis (wavenumber)
+                omega_axis = spectralJoint.axis{2};  % Omega axis (angular frequency)
+                
+                kmin = min(k_axis);
+                kmax = max(k_axis);
+                
+                omega_min = min(omega_axis);
+                omega_max = max(omega_axis);
+                
+                % Convert omega to frequency (Hz) for display
+                freq_min = omega_min / (2*pi);
+                freq_max = omega_max / (2*pi);
+                
+                % Get units from component domains
+                k_units = spectralJoint.A_units();
+                
             else
-                kmax = 10;  % fallback
-            end
-            
-            % Temporal resolution
-            if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
-                omega_max = max(B.Omega.axis);  % Max angular frequency (rad/s)
-                nyq = omega_max / (2*pi);       % Convert to Hz
-            elseif ~isempty(B.Time)
-                fs = B.Time.fs;        % sampling frequency
-                nyq = fs / 2;          % Nyquist (Hz)
-            else
-                nyq = 25;  % fallback
+                % Fallback if Joint not available - use individual domains
+                if ~isempty(B.Lambda) && ~isempty(B.Lambda.axis)
+                    k_axis = B.Lambda.axis;
+                    kmin = min(k_axis);
+                    kmax = max(k_axis);
+                    k_units = B.Lambda.units;
+                else
+                    kmin = 0;
+                    kmax = 10;
+                    k_units = '1/mm';
+                end
+                
+                if ~isempty(B.Omega) && ~isempty(B.Omega.axis)
+                    omega_axis = B.Omega.axis;
+                    freq_min = min(omega_axis) / (2*pi);
+                    freq_max = max(omega_axis) / (2*pi);
+                elseif ~isempty(B.Time)
+                    freq_min = 0;
+                    freq_max = B.Time.fs / 2;  % Nyquist
+                else
+                    freq_min = 0;
+                    freq_max = 25;
+                end
             end
             
             % Set axes limits
-            ax.XLim = [0 nyq];       % frequency axis (Hz)
-            ax.YLim = [0 kmax];      % wavenumber axis (rad/mm)
+            ax.XLim = [freq_min freq_max];  % frequency axis (Hz)
+            ax.YLim = [kmin kmax];          % wavenumber axis
             
             % Set labels
             ax.XLabel.String = 'Frequency (Hz)';
-            ax.YLabel.String = 'Wavenumber k (rad/mm)';
+            ax.YLabel.String = sprintf('Wavenumber k (%s)', k_units);
             
             % Set title
-            ax.Title.String = 'Joint Spectrum (k vs f)';
+            ax.Title.String = 'Joint Spectral Domain (Lambda × Omega)';
             
             % Grid & formatting
             ax.XGrid = 'on';
@@ -244,71 +390,103 @@ classdef BctBackend
             numRows = numel(parent.RowHeight);
             numCols = numel(parent.ColumnWidth);
             
-            % Fill entire grid
-            viewer.Layout.Row = [1 numRows];
+            % Fill top 10 rows and all columns
+            viewer.Layout.Row = [1 min(10, numRows)];
             viewer.Layout.Column = [1 numCols];
             
             drawnow;
         end
         
-        %% Joint Domain Helpers
+        %% Signal Processing
         
-        function [L, O] = buildJointGrid(app, lambda_values)
-            % Build joint (lambda × omega) grid using Joint class
-            % Uses B.Joint if available, otherwise creates Lambda×Omega joint
+        function delta = createKronDelta(~, B)
+            % Create Kronecker delta signal on Manifold_Time domain
+            % Places impulse at center vertex and initial time
             
-            B = app.CurrentBCT;
-            
-            % Check if Joint domain already exists
-            if ~isempty(B.Joint)
-                % Use existing Joint domain
-                L = B.Joint.A_grid;  % Lambda grid
-                O = B.Joint.B_grid;  % Omega grid
-            else
-                % Create Joint domain from Lambda and Omega
-                if isempty(B.Lambda) || isempty(B.Omega)
-                    error('BctFilterDesigner:NoLambdaOmega', ...
-                        'Lambda and Omega domains must exist. Assign Time to BCT first.');
-                end
-                
-                % Create Joint domain
-                B = B.createJoint('Lambda', 'Omega');
-                app.CurrentBCT = B;  % Update stored reference
-                
-                % Get grids from newly created Joint
-                L = B.Joint.A_grid;  % Lambda grid
-                O = B.Joint.B_grid;  % Omega grid
+            if isempty(B.Joint) || ~strcmp(B.Joint.Domain, 'Manifold_Time')
+                error('BctFilterDesigner:NoManifoldTime', ...
+                    'Joint domain must be Manifold_Time to create delta signal.');
             end
+            
+            % Get domain dimensions
+            nVertices = B.Manifold.N;
+            nTime = B.Time.N;
+            
+            % Create zero data on Manifold_Time grid
+            data = zeros(nVertices, nTime);
+            
+            % Place Kronecker delta at center vertex, first time point
+            centerVertex = round(nVertices / 2);
+            data(centerVertex, 1) = 1.0;
+            
+            % Create Signal object on Manifold_Time domain
+            delta = bct.Signal(B.Joint, data);
+            delta.Label = 'Kronecker Delta';
+            
+            fprintf('[createKronDelta] Delta created at vertex %d, time 1\n', centerVertex);
         end
         
-        function [L, W, f] = buildFullJointGrid(app, lam)
-            % Build full joint grid using Joint class
-            % Uses B.Joint if available, otherwise creates Lambda×Omega joint
+        function ir = impulseResponse(app, B)
+            % Compute impulse response by filtering KronDelta signal
+            % Uses Bct orchestrator to handle Joint domain filtering
+            % Workflow: Manifold_Time → Lambda_Omega → apply filter → Manifold_Time
+            %
+            % Returns:
+            %   ir = bct.Signal on Manifold_Time domain (filtered impulse response)
             
-            B = app.CurrentBCT;
-            
-            % Check if Joint domain already exists
-            if ~isempty(B.Joint)
-                % Use existing Joint domain
-                L = B.Joint.A_grid;  % Lambda grid (eigenvalues)
-                W = B.Joint.B_grid;  % Omega grid (angular frequency)
-                f = W / (2*pi);      % Convert to Hz
-            else
-                % Create Joint domain from Lambda and Omega
-                if isempty(B.Lambda) || isempty(B.Omega)
-                    error('BctFilterDesigner:NoLambdaOmega', ...
-                        'Lambda and Omega domains must exist.');
-                end
-                
-                % Create Joint domain
-                B = B.createJoint('Lambda', 'Omega');
-                app.CurrentBCT = B;  % Update stored reference
-                
-                % Get grids from newly created Joint
-                L = B.Joint.A_grid;  % Lambda grid
-                W = B.Joint.B_grid;  % Omega grid (angular frequency)
-                f = W / (2*pi);      % Convert to Hz
+            if isempty(app.KronDelta)
+                error('BctFilterDesigner:NoDelta', 'KronDelta signal not created.');
             end
+            
+            if isempty(app.CurrentFilter)
+                error('BctFilterDesigner:NoFilter', 'No filter available.');
+            end
+            
+            % Use Bct orchestrator to apply filter
+            % This handles:
+            %   1. Forward transform: Manifold_Time → Lambda_Omega (via Joint.transform.forward)
+            %   2. Apply filter: multiply by H in spectral domain
+            %   3. Inverse transform: Lambda_Omega → Manifold_Time (via Joint.dual.transform.inverse)
+            fprintf('[impulseResponse] Applying filter to delta signal...\n');
+            ir = B.applyFilter(app.CurrentFilter, app.KronDelta);
+            
+            % Update label
+            ir.Label = 'Impulse Response';
+            
+            fprintf('[impulseResponse] Impulse response computed [%d×%d]\n', size(ir.Data,1), size(ir.Data,2));
+        end
+        
+        function visualizeImpulseResponse(app, B, ax)
+            % Visualize impulse response signal on Manifold_Time domain
+            %
+            % Args:
+            %   ax = handle to uiaxes for visualization
+            
+            if isempty(app.IRSignal)
+                warning('BctFilterDesigner:NoIR', 'No impulse response to visualize.');
+                return;
+            end
+            
+            % Get impulse response data [nVertices × nTime]
+            irData = app.IRSignal.data;
+            
+            % Get axes from domain
+            vertexAxis = 1:B.Manifold.N;  % Vertex indices
+            timeAxis = B.Time.axis;       % Time values
+            
+            % Visualize as 2D image
+            cla(ax);
+            imagesc(ax, timeAxis, vertexAxis, abs(irData));
+            axis(ax, 'xy');
+            
+            xlabel(ax, 'Time (s)');
+            ylabel(ax, 'Vertex Index');
+            title(ax, sprintf('Impulse Response: %s', app.CurrentFilter.Label));
+            
+            colormap(ax, 'turbo');
+            colorbar(ax);
+            
+            fprintf('[visualizeIR] Impulse response displayed on UIAxesResponse\n');
         end
         
         %% Filter Design
@@ -328,6 +506,18 @@ classdef BctBackend
                     warning('BctFilterDesigner:CreateJoint', 'Could not create Joint domain: %s', ME.message);
                     return;
                 end
+            end
+            
+            % Get spectral Joint domain (Lambda × Omega) for filter creation
+            % Filters should be defined on the spectral domain
+            if strcmp(B.Joint.Domain, 'Manifold_Time')
+                if isempty(B.Joint.dual)
+                    warning('BctFilterDesigner:NoDual', 'Joint dual not available');
+                    return;
+                end
+                spectralJoint = B.Joint.dual;  % Lambda_Omega
+            else
+                spectralJoint = B.Joint;  % Already Lambda_Omega
             end
             
             % Get default parameters from slider values (if available)
@@ -355,9 +545,10 @@ classdef BctBackend
                 sigma_o = 5 * 2*pi;  % Default 5 Hz bandwidth
             end
             
-            % Create Joint filter using FilterDesigner with Gabor kernel
+            % Create Joint filter using FilterDesigner with Gabor kernel on spectral domain
             try
-                app.CurrentFilter = app.FilterDesigner.joint('gabor', ...
+                % Create filter directly on the spectral Joint domain object
+                app.CurrentFilter = bct.filters.Filter(spectralJoint, 'gabor', ...
                     'center_x', k0, 'sigma_x', sigma_k, ...
                     'center_y', omega0, 'sigma_y', sigma_o, ...
                     'label', 'Joint Lambda-Omega Filter');
@@ -375,31 +566,91 @@ classdef BctBackend
                 return;  % No filter to preview
             end
             
+            % Update filter parameters from slider values
+            app.CurrentFilter.setParameter('center_x', app.k0Slider.Value);
+            app.CurrentFilter.setParameter('sigma_x', app.sigma_kSlider.Value);
+            app.CurrentFilter.setParameter('center_y', app.omegaSlider.Value);
+            app.CurrentFilter.setParameter('sigma_y', app.sigma_oSlider.Value);
+            
             ax = app.UIAxesKernel;
             
-            % Build preview grid (finer than domain grid for smooth visualization)
-            k_axis = app.CurrentBCT.Lambda.axis;  % Wavenumber axis
-            omega_axis = app.CurrentBCT.Omega.axis;  % Angular frequency axis
+            % Use Joint domain axes directly (Lambda × Omega)
+            B = app.CurrentBCT;
             
+            if isempty(B.Joint)
+                warning('BctBackend:NoJoint', 'Joint domain not available for kernel preview');
+                return;
+            end
+            
+            % Get the spectral Joint domain (Lambda × Omega)
+            % If Joint is Manifold_Time, use its dual (Lambda_Omega)
+            if strcmp(B.Joint.Domain, 'Manifold_Time')
+                if isempty(B.Joint.dual)
+                    warning('BctBackend:NoDual', 'Joint domain dual not available for kernel preview');
+                    return;
+                end
+                spectralJoint = B.Joint.dual;  % Lambda_Omega
+            else
+                spectralJoint = B.Joint;  % Already Lambda_Omega
+            end
+            
+            % Get axes from spectral Joint domain (Lambda × Omega)
+            % New architecture: axis is a cell array {axis1, axis2}
+            k_axis = spectralJoint.axis{1};      % Lambda axis (wavenumber)
+            omega_axis = spectralJoint.axis{2};  % Omega axis (angular frequency)
+            
+            % Get component domains and their display properties
+            domainA = spectralJoint.A();  % First component (Lambda)
+            domainB = spectralJoint.B();  % Second component (Omega)
+            
+            % Get display coordinate mode and units
+            k_units = domainA.units;
+            omega_units = domainB.units;
+            
+            % Determine if we need to convert angular frequency to Hz
+            if isprop(domainB, 'displayCoordinateMode')
+                displayMode = domainB.displayCoordinateMode;
+            else
+                displayMode = 'AngularFrequency';  % Default for Omega
+            end
+            
+            % Create fine grid for smooth visualization
             k = linspace(min(k_axis), max(k_axis), 200);
             w = linspace(min(omega_axis), max(omega_axis), 200);
             
-            [W, K] = ndgrid(w, k);
+            % Convert to display coordinates if needed
+            if strcmp(displayMode, 'Frequency')
+                % Already in Hz, no conversion needed
+                f = w;
+                freq_units = omega_units;  % Should be 'Hz'
+            else
+                % Convert from angular frequency (rad/s) to Hz
+                f = w / (2*pi);
+                freq_units = 'Hz';
+            end
+            
+            [K, ~] = meshgrid(k, f);
+            [~, W_grid] = meshgrid(k, w);
             
             % Evaluate using Filter's kernel function directly
             kernel_fh = app.CurrentFilter.KernelFunction;
             params = app.CurrentFilter.Parameters;
             
-            F = kernel_fh(K, W, ...
+            H = kernel_fh(K, W_grid, ...
                 params.center_x, params.center_y, ...
                 params.sigma_x, params.sigma_y);
             
-            % Plot
+            % Plot with Frequency on X-axis, Wavenumber on Y-axis
             cla(ax);
-            imagesc(ax, k, w/(2*pi), F);
-            axis(ax,'xy');
-            xlabel(ax, 'Wavenumber k (rad/mm)');
-            ylabel(ax, 'Frequency (Hz)');
+            imagesc(ax, f, k, H');
+            axis(ax, 'xy');
+            
+            % Set axis limits to match data ranges
+            ax.XLim = [min(f) max(f)];
+            ax.YLim = [min(k) max(k)];
+            
+            xlabel(ax, sprintf('Frequency (%s)', freq_units));
+            ylabel(ax, sprintf('Wavenumber k (%s)', k_units));
             title(ax, sprintf('Kernel: %s | k_0=%.3f, \\sigma_k=%.3f', ...
                 app.CurrentFilter.KernelName, params.center_x, params.sigma_x));
             colormap(ax, 'turbo');

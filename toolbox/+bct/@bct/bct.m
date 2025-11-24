@@ -313,6 +313,49 @@ methods
     obj.Manifold.initializeTransform();
     obj.Lambda.initializeTransform();
     
+    % Update Joint domain if it exists
+    % Since Joint stores components by reference, the Lambda update is already reflected
+    % We just need to rebuild axes and reinitialize transforms
+    if ~isempty(obj.Joint)
+      % Check if Lambda is in the Joint domain (either as first or second component)
+      hasLambda = (obj.Joint.A() == obj.Lambda) || (obj.Joint.B() == obj.Lambda);
+      
+      if hasLambda
+        % Rebuild axis from updated component (Lambda has new eigenvalues)
+        obj.Joint = obj.Joint.buildAxis();
+        fprintf('[bct] Rebuilt Joint domain axes after Lambda eigenbasis update\n');
+      end
+      
+      % Update dual Joint domain if it exists and contains Lambda
+      if ~isempty(obj.Joint.dual)
+        hasDualLambda = (obj.Joint.dual.A() == obj.Lambda) || (obj.Joint.dual.B() == obj.Lambda);
+        
+        if hasDualLambda
+          % Rebuild dual Joint axes
+          obj.Joint.dual = obj.Joint.dual.buildAxis();
+          fprintf('[bct] Rebuilt Joint.dual domain axes after Lambda eigenbasis update\n');
+        end
+        
+        % Initialize or update Joint.dual transform (e.g., Lambda_Omega)
+        % Only if both constituent domains have transforms
+        dualA = obj.Joint.dual.A();
+        dualB = obj.Joint.dual.B();
+        if ~isempty(dualA.transform) && ~isempty(dualB.transform)
+          obj.Joint.dual = obj.Joint.dual.setTransformType('Separable');
+          fprintf('[bct] Initialized Joint.dual separable transform\n');
+        end
+      end
+      
+      % Initialize or update Joint transform (e.g., Manifold_Time)
+      % Only if both constituent domains have transforms
+      jointA = obj.Joint.A();
+      jointB = obj.Joint.B();
+      if ~isempty(jointA.transform) && ~isempty(jointB.transform)
+        obj.Joint = obj.Joint.setTransformType('Separable');
+        fprintf('[bct] Initialized Joint separable transform\n');
+      end
+    end
+    
     % Verify transforms were created
     if isempty(obj.Manifold.transform)
       warning('bct:NoMFT', 'Manifold transform (MFT) was not initialized');
@@ -867,9 +910,39 @@ methods
       sig_out = bct.Signal(obj.Time, data_out, label_out);
       
     elseif isa(filter_domain, 'bct.Joint')
-      % Joint domain filtering (2D)
-      error('bct:NotImplemented', ...
-        'Joint domain filtering not yet implemented');
+      % Joint domain filtering (spatiotemporal)
+      if ~isa(source_domain, 'bct.Joint')
+        error('bct:DomainMismatch', ...
+          'Joint filter requires Joint signal (got %s)', class(source_domain));
+      end
+      
+      % Check that domains are dual pairs
+      if source_domain.dual ~= filter_domain
+        error('bct:DomainMismatch', ...
+          'Signal domain and filter domain must be dual pairs');
+      end
+      
+      % Check transforms initialized
+      if isempty(source_domain.transform) || isempty(filter_domain.transform)
+        error('bct:NoTransform', ...
+          'Joint transforms not initialized.');
+      end
+      
+      % Forward: Manifold_Time → Lambda_Omega 
+      % Use source domain's transform (NOT filter domain's transform)
+      coeffs = source_domain.transform.forward(signal_in.Data);
+      
+      % Filter: multiply by filter response in spectral domain
+      H = filter_obj.evaluate();
+      filtered_coeffs = coeffs .* H;  % Element-wise multiplication
+      
+      % Inverse: Lambda_Omega → Manifold_Time
+      % Use source domain's transform inverse (NOT filter domain's transform)
+      data_out = source_domain.transform.inverse(filtered_coeffs);
+      
+      % Create output signal in source domain
+      label_out = sprintf('%s_filtered', signal_in.Label);
+      sig_out = bct.Signal(source_domain, data_out, label_out);
         
     else
       error('bct:UnsupportedFilterDomain', ...

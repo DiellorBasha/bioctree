@@ -1,13 +1,14 @@
-classdef BctFilterDesignerCode < matlab.apps.AppBase
+classdef BctFrontend < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
         UIFigure                 matlab.ui.Figure
         GridLayout               matlab.ui.container.GridLayout
         LeftPanel                matlab.ui.container.Panel
+        SignalDropDown           matlab.ui.control.DropDown
+        SignalDropDownLabel      matlab.ui.control.Label
         SynthesizeButton         matlab.ui.control.Button
         DesignButton             matlab.ui.control.Button
-        ShowMeshButton           matlab.ui.control.Button
         TextArea                 matlab.ui.control.TextArea
         ResolutionLabel          matlab.ui.control.Label
         kmodesEditField          matlab.ui.control.NumericEditField
@@ -55,6 +56,9 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
         UIAxes_2                 matlab.ui.control.UIAxes
         MeshPanel                matlab.ui.container.Panel
         GridLayout2              matlab.ui.container.GridLayout
+        BackButton               matlab.ui.control.Button
+        ForwardButton            matlab.ui.control.Button
+        ShowMeshButton           matlab.ui.control.Button
     end
 
     % Properties that correspond to apps with auto-reflow
@@ -64,201 +68,193 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
     end
 
     
-    properties (Access = private)
+    properties (Access = public)
         BCTObjects struct
-        CurrentBCT bct.bct          % Current BCT object
-        FilterDesigner              % bct.filters.FilterDesigner instance
-        CurrentFilter               % bct.filters.Filter instance
+        CurrentBCT bct.bct% Description
+FilterDesigner
+CurrentFilter
+        KronDelta                   % bct.Signal - Kronecker delta on Manifold_Time
+        IRSignal                    % bct.Signal - Impulse response after filtering
+    
     end
     
-    % All custom methods moved to BctAppBackend.m
-    % This keeps the .mlapp file small and git-friendly
-    methods (Access = private)
-        % No custom methods - all logic delegated to BctAppBackend
-    end
-    
+
 
     % Callbacks that handle component events
     methods (Access = private)
 
         % Button pushed function: LoadButton
-        function LoadButtonPushed(app, ~)
-    node = app.Tree.SelectedNodes;
+        function LoadButtonPushed(app, event)
 
-    if isempty(node)
-        uialert(app.UIFigure, 'Please select a BCT object.', 'No Selection');
-        return;
-    end
+            node = app.Tree.SelectedNodes;
 
-    varName = node.NodeData;
+            if isempty(node)
+                uialert(app.UIFigure, 'Please select a BCT object.', 'No Selection');
+                return;
+            end
 
-    if isempty(varName) || ~isfield(app.BCTObjects, varName)
-        uialert(app.UIFigure, 'Selected node is invalid.', 'Invalid Selection');
-        return;
-    end
+            varName = node.NodeData;
 
-    % Load object
-    app.CurrentBCT = app.BCTObjects.(varName);
-    
-    % Initialize FilterDesigner for this BCT object
-    app.FilterDesigner = bct.filters.FilterDesigner(app.CurrentBCT);
-    
-    % Create default Joint filter (Lambda × Omega) - delegated to backend
-    BctAppBackend.createDefaultFilter(app);
+            if isempty(varName) || ~isfield(app.BCTObjects, varName)
+                uialert(app.UIFigure, 'Selected node is invalid.', 'Invalid Selection');
+                return;
+            end
 
-    % Single high-level update - delegated to backend
-    BctAppBackend.updateUIAfterLoad(app);
+            % Load object
+            app.CurrentBCT = app.BCTObjects.(varName);
 
-    uialert(app.UIFigure, sprintf('Loaded BCT object: %s', varName), 'Success');
+            % Initialize FilterDesigner for this BCT object
+            app.FilterDesigner = bct.filters.FilterDesigner(app.CurrentBCT);
+
+            % Create default Joint filter (Lambda × Omega) - delegated to backend
+            BctBackend.createDefaultFilter(app);
+
+            % Single high-level update - delegated to backend
+            BctBackend.updateUIAfterLoad(app);
+
+            uialert(app.UIFigure, sprintf('Loaded BCT object: %s', varName), 'Success');
+
         end
 
         % Button pushed function: ScanButton
-        function ScanButtonPushed(app, ~)
-             BctAppBackend.scanWorkspace(app);
+        function ScanButtonPushed(app, event)
+             BctBackend.scanWorkspace(app);
         end
 
         % Button pushed function: ShowMeshButton
-        function ShowMeshButtonPushed(app, ~)
-            BctAppBackend.attachViewer(app, app.CurrentBCT);
+        function ShowMeshButtonPushed(app, event)
+            BctBackend.attachViewer(app, app.CurrentBCT);
         end
 
-        % Button pushed function: FourierButton (Eigenbasis)
-        function FourierButtonPushed(app, ~)
-    % Ensure a BCT object is loaded
-    if isempty(app.CurrentBCT)
-        uialert(app.UIFigure, 'Please load a BCT object first.', 'No BCT object');
-        return;
-    end
+        % Button pushed function: FourierButton
+        function FourierButtonPushed(app, event)
 
-    B = app.CurrentBCT;
+            % Ensure a BCT object is loaded
+            if isempty(app.CurrentBCT)
+                uialert(app.UIFigure, 'Please load a BCT object first.', 'No BCT object');
+                return;
+            end
 
-    % Read k from UI
-    k = app.kmodesEditField.Value;
+            B = app.CurrentBCT;
 
-    % Validate k
-    if ~isscalar(k) || k <= 0 || k > B.Manifold.N
-        uialert(app.UIFigure, ...
-            sprintf('k must be between 1 and %d.', B.Manifold.N), ...
-            'Invalid eigenmode count');
-        return;
-    end
+            % Read k from UI
+            k = app.kmodesEditField.Value;
 
-    % Progress dialog
-    msg = sprintf('Computing eigenbasis (%d modes) for Lambda domain... Please wait.', k);
-    d = uiprogressdlg(app.UIFigure, 'Message', msg, ...
-        'Title', 'Computing Eigenbasis', 'Indeterminate', 'on');
+            % Validate k
+            if ~isscalar(k) || k <= 0 || k > B.Manifold.N
+                uialert(app.UIFigure, ...
+                    sprintf('k must be between 1 and %d.', B.Manifold.N), ...
+                    'Invalid eigenmode count');
+                return;
+            end
 
-    % Compute eigenbasis - fills Lambda.lambda and Lambda.U
-    % Lambda already exists as Manifold's dual, this computes actual eigendecomposition
-    try
-        B = B.computeEigenbasis(k);
-        app.CurrentBCT = B;  % Update stored reference
-    catch ME
-        close(d);
-        uialert(app.UIFigure, ME.message, 'Eigenbasis Computation Error');
-        return;
-    end
+            % Progress dialog
+            msg = sprintf('Computing %d Laplace-Beltrami modes... Please wait.', k);
+            d = uiprogressdlg(app.UIFigure, 'Message', msg, ...
+                'Title', 'Computing Fourier Modes', 'Indeterminate', 'on');
 
-    close(d);
+            % Compute eigenbasis using Bct orchestration
+            try
+                B = B.computeEigenbasis(k);
+                app.CurrentBCT = B;  % Update reference
+            catch ME
+                close(d);
+                uialert(app.UIFigure, ME.message, 'Eigenbasis Error');
+                return;
+            end
 
-    % Update UI (text area, axes, etc.) - delegated to backend
-    BctAppBackend.updateUIAfterLoad(app);
+            close(d);
 
-    % Now that actual eigenvalues exist → update slider ranges - delegated to backend
-    BctAppBackend.updateKernelSliders(app, B);
+            % Update UI (text area, axes, etc.)
+            BctBackend.updateUIAfterLoad(app);
 
-    uialert(app.UIFigure, ...
-        sprintf('Successfully computed %d eigenmodes for Lambda domain.', k), ...
-        'Done');
+            % Now that eigenvalues exist → update slider ranges
+            BctBackend.updateKernelSliders(app, B);
+
+            uialert(app.UIFigure, ...
+                sprintf('Successfully computed %d eigenmodes.', k), ...
+                'Done');
+
         end
 
         % Button pushed function: SynthesizeButton
-        function SynthesizeButtonPushed(app, ~)
-    % Synthesize and visualize filter response using Filter.evaluate()
-    
-    B = app.CurrentBCT;
+        function SynthesizeButtonPushed(app, event)
+         
+            % Compute impulse response by filtering KronDelta signal
+            % Transforms delta from Manifold_Time → Lambda_Omega → apply filter → Manifold_Time
+            
+            B = app.CurrentBCT;
+            
+            % Verify Joint domain exists
+            if isempty(B.Joint)
+                uialert(app.UIFigure, ...
+                    'Joint domain not available. Assign Time domain to BCT first.', ...
+                    'No Joint Domain');
+                return;
+            end
+            
+            % Verify filter exists
+            if isempty(app.CurrentFilter)
+                uialert(app.UIFigure, ...
+                    'No filter available. Filter should be created on app load.', ...
+                    'No Filter');
+                return;
+            end
+            
+            % Create KronDelta signal if it doesn't exist
+            if isempty(app.KronDelta)
+                app.KronDelta = BctBackend.createKronDelta(app, B);
+            end
+            
+            % Compute impulse response through filter
+            app.IRSignal = BctBackend.impulseResponse(app, B);
+            
+            % Update signal dropdown with new signals
+            BctBackend.updateSignalDropDown(app);
+            
+            % Visualize impulse response on UIAxesResponse
+            BctBackend.visualizeImpulseResponse(app, B, app.UIAxesResponse);
+            
+            % Show IRSignal on the mesh viewer (time point 1)
+            if ~isempty(B.Viewer) && isvalid(B.Viewer)
+                B.showSignal(app.IRSignal, 'TimePoint', 1, 'Parent', app.GridLayout2);
+            else
+                % Create viewer if it doesn't exist
+                BctBackend.attachViewer(app, B);
+                B.showSignal(app.IRSignal, 'TimePoint', 1, 'Parent', app.GridLayout2);
+            end
+            
+            fprintf('[SynthesizeButton] Impulse response computed and visualized\n');
+       
 
-    % Check if filter exists
-    if isempty(app.CurrentFilter)
-        uialert(app.UIFigure, 'No filter created. Load BCT object first.', 'No Filter');
-        return;
-    end
-
-    % Lambda always exists as Manifold's dual
-    % Check if eigenbasis has been computed (Lambda.lambda filled)
-    if isempty(B.Lambda) || isempty(B.Lambda.lambda)
-        uialert(app.UIFigure, 'Compute eigenbasis first (Eigenbasis button)', 'Eigenbasis Not Computed');
-        return;
-    end
-    
-    % Check if Omega exists (Time's dual)
-    if isempty(B.Omega)
-        uialert(app.UIFigure, 'Assign Time domain to BCT first (Omega is created automatically)', 'No Omega Domain');
-        return;
-    end
-
-    % Ensure Joint domain exists
-    if isempty(B.Joint)
-        B = B.createJoint('Lambda', 'Omega');
-        app.CurrentBCT = B;
-    end
-
-    % Evaluate filter on Joint domain
-    % Filter.evaluate() uses the domain's axis/grid automatically
-    try
-        F = app.CurrentFilter.evaluate();
-    catch ME
-        uialert(app.UIFigure, sprintf('Filter evaluation failed: %s', ME.message), 'Error');
-        return;
-    end
-
-    % Get grids for visualization
-    LambdaGrid = B.Joint.A_grid;  % Wavenumber grid (k = sqrt(λ))
-    OmegaGrid = B.Joint.B_grid;   % Angular frequency grid (rad/s)
-    freq_grid = OmegaGrid / (2*pi);  % Convert to Hz
-
-    % Visualize in Joint UIAxes - delegated to backend
-    BctAppBackend.visualizeJointFilter(app, freq_grid, LambdaGrid, F);
         end
 
         % Value changed function: omegaSlider
-        function omegaSliderValueChanged(app, ~)
-            % Update Filter center frequency (omega0)
-            if ~isempty(app.CurrentFilter)
-                app.CurrentFilter.setParameter('center_y', app.omegaSlider.Value);
-            end
-            BctAppBackend.updateKernelPreview(app);
+        function omegaSliderValueChanged(app, event)
+             BctBackend.updateKernelPreview(app);
+            
         end
 
         % Value changed function: sigma_oSlider
-        function sigma_oSliderValueChanged(app, ~)
-            % Update Filter frequency bandwidth (sigma_omega)
-            if ~isempty(app.CurrentFilter)
-                app.CurrentFilter.setParameter('sigma_y', app.sigma_oSlider.Value);
-            end
-            BctAppBackend.updateKernelPreview(app);
+        function sigma_oSliderValueChanged(app, event)
+             BctBackend.updateKernelPreview(app);
+            
         end
 
         % Value changed function: k0Slider
-        function k0SliderValueChanged(app, ~)
-            % Update Filter center wavenumber (k0)
-            if ~isempty(app.CurrentFilter)
-                app.CurrentFilter.setParameter('center_x', app.k0Slider.Value);
-            end
-            BctAppBackend.updateKernelPreview(app);
+        function k0SliderValueChanged(app, event)
+             BctBackend.updateKernelPreview(app);
+            
         end
 
         % Value changed function: sigma_kSlider
-        function sigma_kSliderValueChanged(app, ~)
-            % Update Filter wavenumber bandwidth (sigma_k)
-            if ~isempty(app.CurrentFilter)
-                app.CurrentFilter.setParameter('sigma_x', app.sigma_kSlider.Value);
-            end
-            BctAppBackend.updateKernelPreview(app);
+        function sigma_kSliderValueChanged(app, event)
+             BctBackend.updateKernelPreview(app);
+            
         end
 
         % Changes arrangement of the app based on UIFigure width
-        function updateAppLayout(app, ~)
+        function updateAppLayout(app, event)
             currentFigureWidth = app.UIFigure.Position(3);
             if(currentFigureWidth <= app.onePanelWidth)
                 % Change to a 3x1 grid
@@ -323,19 +319,19 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
 
             % Create FilterDesignLabel
             app.FilterDesignLabel = uilabel(app.LeftPanel);
-            app.FilterDesignLabel.Position = [26 259 72 22];
+            app.FilterDesignLabel.Position = [27 288 72 22];
             app.FilterDesignLabel.Text = 'Filter Design';
 
             % Create FilterTypeDropDownLabel
             app.FilterTypeDropDownLabel = uilabel(app.LeftPanel);
             app.FilterTypeDropDownLabel.HorizontalAlignment = 'right';
-            app.FilterTypeDropDownLabel.Position = [21 230 61 22];
+            app.FilterTypeDropDownLabel.Position = [24 260 61 22];
             app.FilterTypeDropDownLabel.Text = 'Filter Type';
 
             % Create FilterTypeDropDown
             app.FilterTypeDropDown = uidropdown(app.LeftPanel);
             app.FilterTypeDropDown.Items = {'Spatial', 'Temporal', 'Joint Separable', 'Joint', 'Dynamic'};
-            app.FilterTypeDropDown.Position = [97 230 100 22];
+            app.FilterTypeDropDown.Position = [100 260 100 22];
             app.FilterTypeDropDown.Value = 'Joint';
 
             % Create Tree
@@ -372,14 +368,14 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
 
             % Create SpectralLabel
             app.SpectralLabel = uilabel(app.LeftPanel);
-            app.SpectralLabel.Position = [27 374 88 22];
-            app.SpectralLabel.Text = 'Lambda Domain';
+            app.SpectralLabel.Position = [27 374 52 22];
+            app.SpectralLabel.Text = 'Spectral ';
 
-            % Create FourierButton (Eigenbasis)
+            % Create FourierButton
             app.FourierButton = uibutton(app.LeftPanel, 'push');
             app.FourierButton.ButtonPushedFcn = createCallbackFcn(app, @FourierButtonPushed, true);
             app.FourierButton.Position = [92 331 100 22];
-            app.FourierButton.Text = 'Eigenbasis';
+            app.FourierButton.Text = 'Fourier';
 
             % Create kmodesEditFieldLabel
             app.kmodesEditFieldLabel = uilabel(app.LeftPanel);
@@ -401,12 +397,6 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
             app.TextArea = uitextarea(app.LeftPanel);
             app.TextArea.Position = [24 416 181 47];
 
-            % Create ShowMeshButton
-            app.ShowMeshButton = uibutton(app.LeftPanel, 'push');
-            app.ShowMeshButton.ButtonPushedFcn = createCallbackFcn(app, @ShowMeshButtonPushed, true);
-            app.ShowMeshButton.Position = [92 297 100 22];
-            app.ShowMeshButton.Text = 'Show Mesh';
-
             % Create DesignButton
             app.DesignButton = uibutton(app.LeftPanel, 'push');
             app.DesignButton.Position = [105 19 100 22];
@@ -415,8 +405,18 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
             % Create SynthesizeButton
             app.SynthesizeButton = uibutton(app.LeftPanel, 'push');
             app.SynthesizeButton.ButtonPushedFcn = createCallbackFcn(app, @SynthesizeButtonPushed, true);
-            app.SynthesizeButton.Position = [97 177 100 22];
+            app.SynthesizeButton.Position = [98 230 100 22];
             app.SynthesizeButton.Text = 'Synthesize';
+
+            % Create SignalDropDownLabel
+            app.SignalDropDownLabel = uilabel(app.LeftPanel);
+            app.SignalDropDownLabel.HorizontalAlignment = 'right';
+            app.SignalDropDownLabel.Position = [39 177 38 22];
+            app.SignalDropDownLabel.Text = 'Signal';
+
+            % Create SignalDropDown
+            app.SignalDropDown = uidropdown(app.LeftPanel);
+            app.SignalDropDown.Position = [92 177 100 22];
 
             % Create CenterPanel
             app.CenterPanel = uipanel(app.GridLayout);
@@ -584,6 +584,25 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
             app.GridLayout2 = uigridlayout(app.MeshPanel);
             app.GridLayout2.RowHeight = {'1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x'};
 
+            % Create ShowMeshButton
+            app.ShowMeshButton = uibutton(app.GridLayout2, 'push');
+            app.ShowMeshButton.ButtonPushedFcn = createCallbackFcn(app, @ShowMeshButtonPushed, true);
+            app.ShowMeshButton.Layout.Row = 12;
+            app.ShowMeshButton.Layout.Column = 1;
+            app.ShowMeshButton.Text = 'Show Mesh';
+
+            % Create ForwardButton
+            app.ForwardButton = uibutton(app.GridLayout2, 'push');
+            app.ForwardButton.Layout.Row = 11;
+            app.ForwardButton.Layout.Column = 2;
+            app.ForwardButton.Text = 'Forward';
+
+            % Create BackButton
+            app.BackButton = uibutton(app.GridLayout2, 'push');
+            app.BackButton.Layout.Row = 11;
+            app.BackButton.Layout.Column = 1;
+            app.BackButton.Text = 'Back';
+
             % Show the figure after all components are created
             app.UIFigure.Visible = 'on';
         end
@@ -593,7 +612,7 @@ classdef BctFilterDesignerCode < matlab.apps.AppBase
     methods (Access = public)
 
         % Construct app
-        function app = BctFilterDesigner
+        function app = BctFrontend
 
             % Create UIFigure and components
             createComponents(app)

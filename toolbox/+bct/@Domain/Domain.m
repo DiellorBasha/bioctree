@@ -36,15 +36,14 @@ classdef (Abstract) Domain < handle
             %GET.N Get dimension of domain
             % For Manifold: returns number of vertices
             % For single domains (Time, Lambda, Omega): returns length of axis
-            % For Joint domains: returns [M, N] where M=A.N, N=B.N
+            % For Joint domains: returns [M, N] where M=axis{1}.N, N=axis{2}.N
             
             % Special case: Joint domain returns [M, N] from constituent domains
             if isa(obj, 'bct.Joint')
-                % Access constituent domain dimensions directly via axis
-                % to avoid recursive calls to get.N
-                M = length(obj.A_axis);
-                N = length(obj.B_axis);
-                n = [M, N];
+                % New architecture: axis is cell array {axis1, axis2}
+                n1 = length(obj.axis{1});
+                n2 = length(obj.axis{2});
+                n = [n1, n2];
                 return;
             end
             

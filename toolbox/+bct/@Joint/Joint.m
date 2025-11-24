@@ -6,80 +6,69 @@ classdef Joint < bct.Domain
     % the dual relationship architecture: if constituent domains have duals, the
     % Joint domain also has a dual constructed from those duals.
     %
+    % ARCHITECTURE:
+    %   - Stores component domains BY REFERENCE (no duplication)
+    %   - Derives all properties dynamically from components
+    %   - Automatically constructs dual Joint from component duals
+    %   - Supports both separable and non-separable transforms
+    %
     % Dual Relationships:
     %   Manifold_Time ↔ Lambda_Omega   (spatiotemporal ↔ spectral-frequency)
     %   Lambda_Time   ↔ Manifold_Omega (spectral-temporal ↔ spatial-frequency)
     %   Manifold_Omega ↔ Lambda_Time   (spatial-frequency ↔ spectral-temporal)
     %
     % Properties:
-    %   Domain       - String describing the joint domain (e.g., "Lambda_Omega")
-    %   A            - First domain object (e.g., Lambda)
-    %   B            - Second domain object (e.g., Omega)
-    %   A_axis       - Canonical axis of first domain [M×1]
-    %   B_axis       - Canonical axis of second domain [N×1]
-    %   A_grid       - Meshgrid of A coordinates [M×N]
-    %   B_grid       - Meshgrid of B coordinates [M×N]
-    %   A_name       - Name of first domain
-    %   B_name       - Name of second domain
-    %   A_units      - Units of first domain
-    %   B_units      - Units of second domain
-    %   transformType- 'Separable' or 'NonSeparable' (default: 'Separable')
-    %   dual         - Dual Joint domain (automatically created from constituent duals)
-    %   transform    - Transform to/from dual domain (type determined by transformType)
+    %   components   - Cell array {Domain1, Domain2} storing references
+    %   separable    - Logical: true = separable, false = non-separable
+    %   Domain       - String describing joint domain (e.g., "Lambda_Omega")
+    %   N            - [N1, N2] resolution of component domains
+    %   axis         - Cell array {axis1, axis2} preserving structure
+    %   units        - Combined units string (e.g., "lambda-omega")
+    %   dual         - Dual Joint domain (auto-created from component duals)
+    %   transform    - JointSeparable or JointNonSeparable object
     %
-    % Transform Types:
-    %   'Separable': Composes 1D transforms from constituent domains
-    %                Forward: Apply A transform → B transform
-    %                Inverse: Apply B inverse → A inverse
-    %                Created automatically if both domains have transforms
-    %
-    %   'NonSeparable': Uses full 2D joint basis matrix Φ
-    %                   Forward: X_hat = reshape(Φ' * X(:), sizeOut)
-    %                   Inverse: X = reshape(Φ * X_hat(:), sizeIn)
-    %                   Requires explicit basis matrix and size specification
-    %                   Use setTransformType('NonSeparable', Phi, sizeOut)
+    % Derived Properties (computed on demand):
+    %   A            - First component domain (components{1})
+    %   B            - Second component domain (components{2})
+    %   A_axis       - First domain axis (components{1}.axis)
+    %   B_axis       - Second domain axis (components{2}.axis)
+    %   A_grid       - Meshgrid of first domain coordinates
+    %   B_grid       - Meshgrid of second domain coordinates
     %
     % Example:
-    %   % Create Lambda-Omega joint domain for space-time frequency analysis
+    %   % Create Lambda-Omega joint domain
     %   J_spectral = bct.Joint(B.Lambda, B.Omega);
     %   % Dual automatically created: J_spectral.dual = Manifold_Time
     %   
-    %   % Create Manifold-Time joint domain for spatiotemporal signals
-    %   J_spatial = bct.Joint(B.Manifold, B.Time);
-    %   % Dual automatically created: J_spatial.dual = Lambda_Omega
-    %
-    %   % Access dual domain
-    %   J_dual = J_spectral.dual;  % Manifold_Time joint domain
+    %   % Access component domains by reference
+    %   k_axis = J_spectral.components{1}.axis;  % Lambda axis
+    %   omega_axis = J_spectral.components{2}.axis;  % Omega axis
     %
     % See also: bct.Domain, bct.Manifold, bct.Lambda, bct.Time, bct.Omega
 
-    properties
+    properties (SetAccess = private)
+        components      % cell array: {Domain1, Domain2}
+        separable       % logical: true = separable, false = non-separable
+        TransformType   % string: 'Separable' or 'NonSeparable'
         Domain          % joint domain name (e.g., "Lambda_Omega")
-        A               % first domain object
-        B               % second domain object
-        A_axis          % canonical axis of first domain [M×1]
-        B_axis          % canonical axis of second domain [N×1]
-        A_grid          % meshgrid of A [M×N]
-        B_grid          % meshgrid of B [M×N]
-        A_name          % name of first domain
-        B_name          % name of second domain
-        A_units         % units of first domain
-        B_units         % units of second domain
-        transformType   % 'Separable' or 'NonSeparable' (default: 'Separable')
-        % Note: dual and transform inherited from bct.Domain base class
+        % Note: N, axis, units, dual, transform inherited from bct.Domain base class
     end
 
     methods
         % ---------------------------------------------------------------
-        function obj = Joint(domainA, domainB)
+        function obj = Joint(domainA, domainB, varargin)
             % JOINT Constructor for Joint domain
             %
             % Syntax:
             %   obj = bct.Joint(domainA, domainB)
+            %   obj = bct.Joint(domainA, domainB, 'Separable')
+            %   obj = bct.Joint(domainA, domainB, 'NonSeparable', Phi)
             %
             % Inputs:
-            %   domainA - First BCT domain (Lambda, Manifold, Time, or Omega)
-            %   domainB - Second BCT domain (Lambda, Manifold, Time, or Omega)
+            %   domainA   - First BCT domain (Lambda, Manifold, Time, or Omega)
+            %   domainB   - Second BCT domain (Lambda, Manifold, Time, or Omega)
+            %   type      - (Optional) 'Separable' (default) or 'NonSeparable'
+            %   Phi       - (Optional) Basis matrix for non-separable transform
             %
             % Outputs:
             %   obj - Joint domain object with combined coordinates
@@ -92,99 +81,159 @@ classdef Joint < bct.Domain
                 error('bct:Joint:InvalidDomain', 'Second argument must be a bct.Domain object');
             end
             
-            % Extract domain names and units BEFORE calling superclass
-            A_name_temp = domainA.name;
-            B_name_temp = domainB.name;
-            A_units_temp = domainA.units;
-            B_units_temp = domainB.units;
+            % Parse optional arguments
+            p = inputParser;
+            addOptional(p, 'TransformType', 'Separable', @(x) ismember(x, {'Separable', 'NonSeparable'}));
+            addOptional(p, 'Phi', [], @ismatrix);
+            addOptional(p, 'CreateDual', true, @islogical);  % Flag to prevent infinite recursion
+            parse(p, varargin{:});
             
-            % Create joint domain name
-            jointName = sprintf("%s_%s", A_name_temp, B_name_temp);
-            jointUnits = sprintf("%s × %s", A_units_temp, B_units_temp);
+            % Extract domain names and units
+            A_name = domainA.name;
+            B_name = domainB.name;
+            A_units = domainA.units;
+            B_units = domainB.units;
             
-            % Call parent constructor FIRST (before setting object properties)
+            % Create joint domain name and units
+            jointName = sprintf("%s_%s", A_name, B_name);
+            jointUnits = sprintf("%s-%s", A_units, B_units);
+            
+            % Call parent constructor
             obj@bct.Domain(jointName, jointUnits);
             
-            % Now set object properties
-            obj.A_name = A_name_temp;
-            obj.B_name = B_name_temp;
-            obj.A_units = A_units_temp;
-            obj.B_units = B_units_temp;
+            % Store component domains BY REFERENCE (no copying)
+            obj.components = {domainA, domainB};
             
-            % Store domain references
-            obj.A = domainA;
-            obj.B = domainB;
+            % Set separability
+            obj.separable = strcmp(p.Results.TransformType, 'Separable');
             
-            % Extract axes from domains
-            obj.A_axis = domainA.axis;
-            obj.B_axis = domainB.axis;
+            % Store transform type
+            obj.TransformType = p.Results.TransformType;
             
-            % Validate axes are vectors
-            if ~isvector(obj.A_axis) || ~isvector(obj.B_axis)
-                error('bct:Joint:InvalidAxis', 'Domain axes must be vectors');
-            end
+            % Store domain name
+            obj.Domain = jointName;
             
-            % Ensure column vectors
-            obj.A_axis = obj.A_axis(:);
-            obj.B_axis = obj.B_axis(:);
-            
-            % Create meshgrids for joint coordinates
-            [obj.A_grid, obj.B_grid] = meshgrid(obj.A_axis, obj.B_axis);
-            % Note: meshgrid returns [length(B) × length(A)] arrays
-            % Transpose to get [length(A) × length(B)] for consistency
-            obj.A_grid = obj.A_grid';
-            obj.B_grid = obj.B_grid';
-            
-            % Set joint axis as linearized grids (for compatibility)
-            obj.axis = [obj.A_grid(:), obj.B_grid(:)];
+            % Construct joint axis as cell array {axis1, axis2}
+            % This preserves structure better than flattening
+            obj.axis = {domainA.axis(:), domainB.axis(:)};
             
             % Set resolution and coordinate modes
             obj.resolutionMode = bct.enum.ResolutionMode.Full;
-            obj.displayCoordinateMode = bct.enum.CoordinateMode.Vertex; % Generic
+            obj.displayCoordinateMode = bct.enum.CoordinateMode.Vertex;
             
-            % Store domain names as metadata
-            obj.Domain = jointName;
-            obj.metadata.A_name = obj.A_name;
-            obj.metadata.B_name = obj.B_name;
-            obj.metadata.A_units = obj.A_units;
-            obj.metadata.B_units = obj.B_units;
-            obj.metadata.shape = [length(obj.A_axis), length(obj.B_axis)];
+            % Store metadata
+            obj.metadata.A_name = A_name;
+            obj.metadata.B_name = B_name;
+            obj.metadata.A_units = A_units;
+            obj.metadata.B_units = B_units;
+            obj.metadata.shape = [domainA.N, domainB.N];
             
-            % Set default transform type
-            obj.transformType = 'Separable';
-            
-            % Create separable joint transform if both domains have transforms
-            if ~isempty(domainA.transform) && ~isempty(domainB.transform)
-                obj.transform = bct.factory.transforms.JointSeparable(domainA, domainB);
+            % Automatically create dual Joint domain if both components have duals
+            % Only if CreateDual flag is true (prevents infinite recursion)
+            if p.Results.CreateDual && ~isempty(domainA.dual) && ~isempty(domainB.dual)
+                % Create dual Joint (e.g., Manifold_Time → Lambda_Omega)
+                % Pass CreateDual=false to prevent recursive dual creation
+                dualJoint = bct.Joint(domainA.dual, domainB.dual, ...
+                    p.Results.TransformType, p.Results.Phi, 'CreateDual', false);
+                
+                % Set bidirectional dual relationship
+                obj.dual = dualJoint;
+                dualJoint.dual = obj;
             end
             
-            % Note: dual property is inherited from bct.Domain
-            % It will be set externally by BCT.createJoint() or via createDual()
+            % Create transform if separable and both domains have transforms
+            if obj.separable
+                if ~isempty(domainA.transform) && ~isempty(domainB.transform)
+                    obj.transform = bct.factory.transforms.JointSeparable(domainA, domainB);
+                end
+            else
+                % Non-separable transform requires explicit basis matrix
+                if ~isempty(p.Results.Phi)
+                    sizeIn = [domainA.N, domainB.N];
+                    sizeOut = sizeIn;  % Default to square transform
+                    obj.transform = bct.factory.transforms.JointNonSeparable(...
+                        domainA, domainB, p.Results.Phi, sizeIn, sizeOut);
+                end
+            end
+        end
+        
+        % ---------------------------------------------------------------
+        % Convenience methods for accessing component domains
+        % ---------------------------------------------------------------
+        
+        function domain = A(obj)
+            % Get first component domain
+            domain = obj.components{1};
+        end
+        
+        function domain = B(obj)
+            % Get second component domain
+            domain = obj.components{2};
+        end
+        
+        function ax = A_axis(obj)
+            % Get first domain axis (for backward compatibility)
+            % New code should use obj.axis{1}
+            ax = obj.axis{1};
+        end
+        
+        function ax = B_axis(obj)
+            % Get second domain axis (for backward compatibility)
+            % New code should use obj.axis{2}
+            ax = obj.axis{2};
+        end
+        
+        function name = A_name(obj)
+            % Get first domain name (for backward compatibility)
+            name = obj.components{1}.name;
+        end
+        
+        function name = B_name(obj)
+            % Get second domain name (for backward compatibility)
+            name = obj.components{2}.name;
+        end
+        
+        function units_str = A_units(obj)
+            % Get first domain units (for backward compatibility)
+            units_str = obj.components{1}.units;
+        end
+        
+        function units_str = B_units(obj)
+            % Get second domain units (for backward compatibility)
+            units_str = obj.components{2}.units;
+        end
+        
+        function grid = A_grid(obj)
+            % Get meshgrid of first domain coordinates
+            % Computed on demand from axis
+            [grid, ~] = meshgrid(obj.axis{1}, obj.axis{2});
+            grid = grid';  % Transpose for [N1×N2] orientation
+        end
+        
+        function grid = B_grid(obj)
+            % Get meshgrid of second domain coordinates
+            % Computed on demand from axis
+            [~, grid] = meshgrid(obj.axis{1}, obj.axis{2});
+            grid = grid';  % Transpose for [N1×N2] orientation
         end
 
         % ---------------------------------------------------------------
         function obj = buildAxis(obj, varargin)
             % Rebuild joint axis from constituent domain axes
+            % Updates axis cell array to reflect current component domain axes
             
-            % Update axes from constituent domains (in case they changed)
-            obj.A_axis = obj.A.axis(:);
-            obj.B_axis = obj.B.axis(:);
-            obj.A_units = obj.A.units;
-            obj.B_units = obj.B.units;
+            % Update axis from components (in case they changed)
+            obj.axis = {obj.components{1}.axis(:), obj.components{2}.axis(:)};
             
-            % Recreate meshgrids
-            [obj.A_grid, obj.B_grid] = meshgrid(obj.A_axis, obj.B_axis);
-            obj.A_grid = obj.A_grid';
-            obj.B_grid = obj.B_grid';
-            
-            % Update joint axis
-            obj.axis = [obj.A_grid(:), obj.B_grid(:)];
-            
-            % Update units
-            obj.units = sprintf("%s × %s", obj.A_units, obj.B_units);
+            % Update units from components
+            obj.units = sprintf("%s-%s", obj.components{1}.units, obj.components{2}.units);
             
             % Update metadata
-            obj.metadata.shape = [length(obj.A_axis), length(obj.B_axis)];
+            obj.metadata.shape = [obj.components{1}.N, obj.components{2}.N];
+            obj.metadata.A_name = obj.components{1}.name;
+            obj.metadata.B_name = obj.components{2}.name;
+            obj.metadata.A_units = obj.components{1}.units;
+            obj.metadata.B_units = obj.components{2}.units;
         end
 
         % ---------------------------------------------------------------
@@ -295,8 +344,9 @@ classdef Joint < bct.Domain
                     'transformType must be ''Separable'' or ''NonSeparable''');
             end
             
-            % Set transform type
-            obj.transformType = transformType;
+            % Set transform type and separability flag
+            obj.TransformType = transformType;
+            obj.separable = strcmp(transformType, 'Separable');
             
             % Create appropriate transform
             switch transformType
@@ -410,16 +460,16 @@ classdef Joint < bct.Domain
             % Custom display for Joint domain
             fprintf('  <a href="matlab:helpPopup bct.Joint">bct.Joint</a> domain: %s\n', obj.Domain);
             fprintf('\n');
-            fprintf('    First domain (A):  %s [%s]\n', obj.A_name, obj.A_units);
+            fprintf('    First domain (A):  %s [%s]\n', obj.A_name(), obj.A_units());
             fprintf('      A_axis: [%d×1] from %.4g to %.4g\n', ...
-                length(obj.A_axis), min(obj.A_axis), max(obj.A_axis));
+                length(obj.A_axis()), min(obj.A_axis()), max(obj.A_axis()));
             fprintf('\n');
-            fprintf('    Second domain (B): %s [%s]\n', obj.B_name, obj.B_units);
+            fprintf('    Second domain (B): %s [%s]\n', obj.B_name(), obj.B_units());
             fprintf('      B_axis: [%d×1] from %.4g to %.4g\n', ...
-                length(obj.B_axis), min(obj.B_axis), max(obj.B_axis));
+                length(obj.B_axis()), min(obj.B_axis()), max(obj.B_axis()));
             fprintf('\n');
             fprintf('    Joint grid size: [%d×%d] = %d points\n', ...
-                length(obj.A_axis), length(obj.B_axis), obj.numel());
+                length(obj.A_axis()), length(obj.B_axis()), obj.numel());
             fprintf('    Joint units: %s\n', obj.units);
             
             % Show dual domain if it exists
@@ -430,7 +480,11 @@ classdef Joint < bct.Domain
             end
             
             % Show transform type and status
-            fprintf('    Transform type: %s\n', obj.transformType);
+            if obj.separable
+                fprintf('    Transform type: Separable\n');
+            else
+                fprintf('    Transform type: Non-separable\n');
+            end
             if ~isempty(obj.transform)
                 fprintf('    Transform: %s\n', class(obj.transform));
             else

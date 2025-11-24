@@ -52,11 +52,28 @@ classdef JointSeparable < bct.factory.transforms.TransformBase
             obj.Domain1 = domain1;
             obj.Domain2 = domain2;
 
-            % Extract 1D transform handles from component domains
-            spatialFwd  = domain1.transform.forward;
-            spatialInv  = domain1.transform.inverse;
-            temporalFwd = domain2.transform.forward;
-            temporalInv = domain2.transform.inverse;
+            % Extract 1D transform handles from component domains.
+            % 
+            % CRITICAL ARCHITECTURAL PRINCIPLE:
+            % This transform is created for the SIGNAL's domain (e.g., Manifold_Time).
+            % The signal domain transform handles BOTH directions:
+            %   - Forward: Manifold_Time → Lambda_Omega (for filtering)
+            %   - Inverse: Lambda_Omega → Manifold_Time (reconstruction)
+            %
+            % For Manifold_Time Joint:
+            %   domain1 = Manifold (has MFT)
+            %   domain2 = Time (has FFT)
+            %   Forward: MFT.forward (M→L), FFT.forward (T→O)
+            %   Inverse: MFT.inverse (L→M), FFT.inverse (O→T)
+            %
+            % We use domain.transform.forward and domain.transform.inverse
+            % directly - these are the CORRECT transforms for bidirectional use.
+            
+            spatialFwd  = domain1.transform.forward;   % e.g., MFT.forward: M→L
+            temporalFwd = domain2.transform.forward;   % e.g., FFT.forward: T→O
+            
+            spatialInv  = domain1.transform.inverse;   % e.g., MFT.inverse: L→M
+            temporalInv = domain2.transform.inverse;   % e.g., FFT.inverse: O→T
 
             % Define joint forward transform
             % Apply spatial transform to each time slice (column),
@@ -92,21 +109,32 @@ function X_hat = local_forward(X, spatialFwd, temporalFwd)
     %   temporalFwd- Function handle for temporal forward transform
     %
     % Output:
-    %   X_hat      - [N×T] transformed signal on dual joint domain
+    %   X_hat      - [K×T_freq] transformed signal on dual joint domain
+    %               K may be < N (eigenmode projection)
     
     [N, T] = size(X);
     
     % Step 1: Apply spatial transform to each time slice (column)
     %         X(v,t) → X_lambda(k,t) for each t
-    X_lambda = zeros(N, T);
-    for t = 1:T
+    % First transform determines output size (K may be < N)
+    firstCol = spatialFwd(X(:, 1));
+    K = length(firstCol);  % Number of spatial modes (may be < N)
+    
+    X_lambda = zeros(K, T);
+    X_lambda(:, 1) = firstCol;
+    for t = 2:T
         X_lambda(:, t) = spatialFwd(X(:, t));
     end
     
     % Step 2: Apply temporal transform to each spatial mode (row)
     %         X_lambda(k,t) → X_hat(k,f) for each k
-    X_hat = zeros(N, T);
-    for k = 1:N
+    % Temporal transform may also change size
+    firstRow = temporalFwd(X_lambda(1, :).');
+    T_freq = length(firstRow);  % Number of frequency bins
+    
+    X_hat = zeros(K, T_freq);
+    X_hat(1, :) = firstRow.';
+    for k = 2:K
         % Extract row, apply temporal transform, restore as row
         X_hat(k, :) = temporalFwd(X_lambda(k, :).').';
     end
@@ -119,27 +147,39 @@ function X = local_inverse(X_hat, spatialInv, temporalInv)
     %   X = local_inverse(X_hat, spatialInv, temporalInv)
     %
     % Input:
-    %   X_hat      - [N×T] signal on dual joint domain
+    %   X_hat      - [K×T_freq] signal on dual joint domain
+    %                K = number of eigenmodes (may be < N)
     %   spatialInv - Function handle for spatial inverse transform
     %   temporalInv- Function handle for temporal inverse transform
     %
     % Output:
     %   X          - [N×T] reconstructed signal on original joint domain
+    %               N = number of vertices (spatial dimension restored)
     
-    [N, T] = size(X_hat);
+    [K, T_freq] = size(X_hat);
     
     % Step 1: Apply temporal inverse to each row
     %         X_hat(k,f) → X_lambda(k,t) for each k
-    X_lambda = zeros(N, T);
-    for k = 1:N
+    % First temporal inverse determines output time dimension
+    firstRow = temporalInv(X_hat(1, :).');
+    T = length(firstRow);  % Number of time samples
+    
+    X_lambda = zeros(K, T);
+    X_lambda(1, :) = firstRow.';
+    for k = 2:K
         % Extract row, apply temporal inverse, restore as row
         X_lambda(k, :) = temporalInv(X_hat(k, :).').';
     end
     
     % Step 2: Apply spatial inverse to each time slice (column)
     %         X_lambda(k,t) → X(v,t) for each t
+    % Spatial inverse restores full vertex dimension N
+    firstCol = spatialInv(X_lambda(:, 1));
+    N = length(firstCol);  % Number of vertices (restored from K modes)
+    
     X = zeros(N, T);
-    for t = 1:T
+    X(:, 1) = firstCol;
+    for t = 2:T
         X(:, t) = spatialInv(X_lambda(:, t));
     end
 end
