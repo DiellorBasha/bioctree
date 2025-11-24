@@ -396,9 +396,24 @@ classdef Filter < handle
         case 'mexican_hat'
           addParameter(p, 'scale', 1, @isnumeric);
           
+        case 'laplacian_gaussian'
+          addParameter(p, 'center', 0, @isnumeric);
+          addParameter(p, 'sigma', 1, @isnumeric);
+          
         case 'bandpass'
           addParameter(p, 'low', 0, @isnumeric);
           addParameter(p, 'high', Inf, @isnumeric);
+          addParameter(p, 'taper', false, @islogical);    % Hann tapering
+          
+        case 'lowpass'
+          addParameter(p, 'cutoff', Inf, @isnumeric);
+          
+        case 'highpass'
+          addParameter(p, 'cutoff', 0, @isnumeric);
+          
+        case 'delta'
+          addParameter(p, 'x0', 0, @isnumeric);           % Impulse location
+          addParameter(p, 'tol', eps, @isnumeric);        % Tolerance for continuous domains
           
         case 'gabor'
           addParameter(p, 'center_x', 0, @isnumeric);
