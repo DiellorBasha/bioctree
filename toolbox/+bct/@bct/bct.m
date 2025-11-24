@@ -950,6 +950,129 @@ methods
     end
   end
   
+  function sig_out = applyChebyshevFilter(obj, filter_obj, signal_in, varargin)
+    % applyChebyshevFilter - Fast spatial filtering via Chebyshev polynomial approximation
+    %
+    % Syntax:
+    %   sig_out = B.applyChebyshevFilter(filter, signal)
+    %   sig_out = B.applyChebyshevFilter(filter, signal, 'order', 30)
+    %
+    % Fast 1D filtering on Manifold domain using Chebyshev polynomial approximation
+    % of the filter kernel. This avoids full eigendecomposition by using graph 
+    % structure directly via the GSPBox gsp_filter_analysis function.
+    %
+    % Workflow:
+    %   1. Convert Manifold to GSPBox graph structure
+    %   2. Extract kernel function handle from Filter object
+    %   3. Apply Chebyshev approximation via gsp_filter_analysis
+    %   4. Return filtered signal in Manifold domain
+    %
+    % Inputs:
+    %   filter_obj - bct.filters.Filter object (must be defined on Lambda domain)
+    %   signal_in  - bct.Signal object (must be defined on Manifold domain)
+    %
+    % Name-Value Parameters:
+    %   'order'   - Chebyshev polynomial order (default: 30)
+    %   'method'  - Computation method: 'cheby', 'exact', 'lanczos' (default: 'cheby')
+    %   'verbose' - Verbosity level 0-1 (default: 0)
+    %
+    % Returns:
+    %   sig_out - Filtered signal in Manifold domain
+    %
+    % Requirements:
+    %   - Filter must be 1D kernel on Lambda domain (spatial filtering)
+    %   - Signal must be on Manifold domain
+    %   - GSPBox must be available (external/gspbox)
+    %   - Manifold must have valid Laplacian and adjacency
+    %
+    % Examples:
+    %   % Heat diffusion filtering (fast approximation)
+    %   filt = bct.filters.Filter(B.Lambda, 'heat', 'tau', 0.1);
+    %   mask = bct.filters.Filter(B.Manifold, 'delta', 'x0', 100);
+    %   sig = bct.Signal.fromMask(mask);
+    %   sig_filtered = B.applyChebyshevFilter(filt, sig, 'order', 50);
+    %
+    %   % Gaussian lowpass (fast approximation)
+    %   filt = bct.filters.Filter(B.Lambda, 'gaussian', 'center', 0, 'sigma', 20);
+    %   sig_filtered = B.applyChebyshevFilter(filt, sig);
+    %
+    % See also: gsp_filter_analysis, bct.io.convert.manifoldToGspGraph, applyFilter
+    
+    % Parse optional parameters
+    p = inputParser;
+    addParameter(p, 'order', 30, @(x) isnumeric(x) && isscalar(x) && x > 0);
+    addParameter(p, 'method', 'cheby', @(x) ischar(x) || isstring(x));
+    addParameter(p, 'verbose', 0, @(x) isnumeric(x) && isscalar(x));
+    parse(p, varargin{:});
+    
+    cheby_order = p.Results.order;
+    method = char(p.Results.method);
+    verbose = p.Results.verbose;
+    
+    % Validate filter domain (must be Lambda for spatial filtering)
+    if ~isa(filter_obj.Domain, 'bct.Lambda')
+      error('bct:InvalidFilterDomain', ...
+        'Filter must be defined on Lambda domain (spectral). Got: %s', ...
+        class(filter_obj.Domain));
+    end
+    
+    % Validate signal domain (must be Manifold)
+    if ~isa(signal_in.Domain, 'bct.Manifold')
+      error('bct:InvalidSignalDomain', ...
+        'Signal must be defined on Manifold domain. Got: %s', ...
+        class(signal_in.Domain));
+    end
+    
+    % Check that domains are compatible (same BCT instance)
+    if signal_in.Domain ~= obj.Manifold
+      error('bct:DomainMismatch', ...
+        'Signal Manifold domain must match BCT Manifold domain');
+    end
+    
+    % Convert Manifold to GSPBox graph structure
+    G = bct.io.convert.manifoldToGspGraph(obj.Manifold);
+    
+    % Extract kernel function handle from Filter object
+    % The kernel function is stored in Filter.KernelFunction
+    kernel_fh = filter_obj.KernelFunction;
+    
+    % Prepare GSPBox filter structure
+    % GSPBox expects a function handle that takes eigenvalues as input
+    gsp_filter = struct();
+    gsp_filter.g = kernel_fh;
+    
+    % Get filter parameters to pass to kernel function
+    param_values = struct2cell(filter_obj.Parameters);
+    
+    % Create wrapper function that applies parameters
+    gsp_filter.g = @(x) kernel_fh(x, param_values{:});
+    
+    % Prepare gsp_filter_analysis parameters
+    gsp_param = struct();
+    gsp_param.method = method;
+    gsp_param.order = cheby_order;
+    gsp_param.verbose = verbose;
+    
+    % Apply Chebyshev filtering via GSPBox
+    % gsp_filter_analysis expects: (G, filter_cell, signal, param)
+    try
+      coeffs = gsp_filter_analysis(G, {gsp_filter}, signal_in.Data, gsp_param);
+    catch ME
+      error('bct:ChebyshevFilterFailed', ...
+        'GSPBox filtering failed: %s\nEnsure GSPBox is on path and Manifold has valid Laplacian.', ...
+        ME.message);
+    end
+    
+    % Create output signal in Manifold domain
+    label_out = sprintf('%s_cheby_filtered', signal_in.Label);
+    sig_out = bct.Signal(obj.Manifold, coeffs, label_out);
+    
+    % Store filter reference if signal has Mask property
+    if isprop(sig_out, 'Mask')
+      sig_out.Mask = filter_obj;
+    end
+  end
+  
   function sig = synthesizeFilteredSignal(this, filter_obj, input_sig)
     % synthesizeFilteredSignal - Modern signal synthesis using filter and domain transforms
     %

@@ -28,14 +28,19 @@ end
 
 % Get adjacency matrix
 % Get weighted adjacency matrix from cotangent weights
-W = M.weightedAdjacency();
+K = M.CotangentMatrix;
+W = max(0, -K);      % flip sign, zero negative entries
+W = W - diag(diag(W)); 
+W = max(W,W');       % enforce symmetry
+
+
 if isempty(W)
     error('bct:MissingData', 'Cannot create GSP graph: adjacency matrix is empty');
 end
 
 % Convert to weighted adjacency (double precision for GSPBox)
 W = double(W);
-V = M.V;
+V = M.Vertices;
 
 
 % Try to estimate lmax if GSPBox is available
