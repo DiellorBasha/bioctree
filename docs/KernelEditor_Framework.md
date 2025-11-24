@@ -13,9 +13,10 @@ bct.filters.KernelEditor (Abstract Base Class)
 └── Abstract: computeKernel()
 
 Concrete Implementations:
-├── TimeWindowEditor      → Time domain (temporal windowing)
-├── LambdaBandEditor      → Lambda domain (spectral frequency bands)
-└── FrequencyBandEditor   → Omega domain (temporal frequency bands)
+├── TimeWindowEditor       → Time domain (temporal windowing)
+├── LambdaBandEditor       → Lambda domain (spectral frequency bands)
+├── FrequencyBandEditor    → Omega domain (temporal frequency bands)
+└── JointKernelEditor      → Joint domains (separable & nonseparable kernels)
 ```
 
 ## Design Principles
@@ -100,6 +101,72 @@ editor.setBand(40, 60);  % 40-60 Hz bandpass
 ```
 
 **Band Types**: `'gaussian'`, `'butterworth'`, `'ideal'`
+
+### 4. Joint Kernel Editor (JointKernelEditor)
+
+**Problem**: Control spatiotemporal filters on joint domains (Lambda×Omega, Lambda×Time)
+
+**Supports Two Modes**:
+
+#### A. Separable Kernels
+Independent control of kernels on each domain:
+
+```matlab
+% Setup
+joint = B.createJoint('Lambda', 'Omega');
+filt = bct.filters.Filter(joint, 'gabor', ...
+    'center_x', 50, 'center_y', 10, 'sigma_x', 10, 'sigma_y', 2);
+
+editor = bct.filters.JointKernelEditor(joint, filt, 50, 10, ...
+    'KernelType', 'separable', 'Center_B', 10, 'Width_B', 2);
+
+% Independent control
+editor.setCenter(60);         % Lambda (domain A) center
+editor.setCenter_B(12);       % Omega (domain B) center
+editor.shiftForward();        % Shift in Lambda
+editor.shiftForward_B();      % Shift in Omega
+```
+
+#### B. Non-separable Kernels (Velocity + Dispersion)
+Control coupling parameters for traveling wave packets:
+
+```matlab
+% Velocity-tuned Gabor with dispersion
+filt = bct.filters.Filter(joint, 'velocity_gabor', ...
+    'v', 0.5, 'sigma_w', 10, 'lambda0', 50, 'sigma_l', 20, 'D', 0);
+
+editor = bct.filters.JointKernelEditor(joint, filt, 50, 20, ...
+    'KernelType', 'nonseparable', 'Velocity', 0.5, 'Dispersion', 0);
+
+% Coupling parameter control
+editor.setVelocity(0.7);      % Change ridge tilt (ω ∝ v√λ)
+editor.setDispersion(0.01);   % Add curvature (ω ∝ Dλ)
+editor.setCenter(60);         % Shift spatial center λ₀
+
+% Dispersion relation: ω = v√λ + Dλ
+% - v controls tilt (group velocity)
+% - D controls curvature (dispersion)
+```
+
+**Kernel Form**:
+```
+K(λ,ω) = exp[-((ω - (v√λ + Dλ))² / (2σ_w²))] · exp[-((λ - λ₀)² / (2σ_λ²))]
+
+Parameters:
+  v  - Velocity (scalar, controls tilt)
+  D  - Dispersion (scalar, controls curvature)  
+  λ₀ - Spatial center
+  σ_λ - Spatial bandwidth
+  σ_w - Temporal bandwidth
+```
+
+**Additional Methods**:
+- `shiftForward_B()`, `shiftBackward_B()` - Navigate domain B (separable)
+- `expand_B()`, `contract_B()` - Adjust width in domain B (separable)
+- `setVelocity(v)` - Set velocity parameter (nonseparable)
+- `setDispersion(D)` - Set dispersion coefficient (nonseparable)
+- `shiftVelocity(δ)` - Adjust velocity incrementally (nonseparable)
+- `shiftDispersion(δ)` - Adjust dispersion incrementally (nonseparable)
 
 ## GUI Integration Pattern
 

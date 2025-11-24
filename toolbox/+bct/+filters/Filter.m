@@ -411,6 +411,7 @@ classdef Filter < handle
           addParameter(p, 'sigma_w', 10, @isnumeric);     % Temporal bandwidth (rad/s)
           addParameter(p, 'lambda0', 50, @isnumeric);     % Center eigenvalue
           addParameter(p, 'sigma_l', 20, @isnumeric);     % Spatial bandwidth
+          addParameter(p, 'D', 0, @isnumeric);            % Dispersion coefficient (curvature)
           
         case 'separable'
           addParameter(p, 'kernel_x', [], @(x) isa(x, 'function_handle'));

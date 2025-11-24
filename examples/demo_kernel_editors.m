@@ -8,6 +8,7 @@
 %   1. Time scrubber for temporal signals
 %   2. Spectral band selector for Lambda domain (eigenvalue bands)
 %   3. Frequency band selector for spectral analysis
+%   4. Joint kernel editor for spatiotemporal filtering (separable/nonseparable)
 %
 % The abstract KernelEditor class provides:
 %   - Navigation (shiftForward/shiftBackward)
@@ -148,10 +149,83 @@ freqKernel = freqEditor.computeKernel();
 fprintf('  Frequency kernel: %d points, peak = %.4f\n', ...
     length(freqKernel), max(freqKernel));
 
-%% Example 4: Event Listeners (GUI Integration)
+%% Example 4: Joint Kernel Editor - Separable
+% Use case: Independent control of spatial and temporal filtering
+
+fprintf('\n=== Example 4a: Joint Kernel Editor (Separable) ===\n');
+
+% Ensure we have Lambda and Omega domains
+if isempty(B.Lambda) || B.Lambda.K < 100
+    fprintf('  Skipping (eigenbasis not computed)\n');
+elseif isempty(B.Omega)
+    fprintf('  Skipping (Omega domain not initialized)\n');
+else
+    % Create joint domain
+    joint = B.createJoint('Lambda', 'Omega');
+    
+    % Create separable Gabor filter
+    jointFilt = bct.filters.Filter(joint, 'gabor', ...
+        'center_x', 50, 'center_y', 10, ...
+        'sigma_x', 10, 'sigma_y', 2);
+    
+    % Create joint kernel editor (separable)
+    jointEditor = bct.filters.JointKernelEditor(joint, jointFilt, 50, 10, ...
+        'KernelType', 'separable', 'Center_B', 10, 'Width_B', 2);
+    
+    fprintf('  Separable joint kernel:\n');
+    fprintf('    Domain A (Lambda): center=%.1f, width=%.1f\n', ...
+        jointEditor.Center, jointEditor.Width);
+    fprintf('    Domain B (Omega): center=%.1f, width=%.1f\n', ...
+        jointEditor.Center_B, jointEditor.Width_B);
+    
+    % Independent navigation
+    jointEditor.shiftForward();      % Shift in Lambda
+    jointEditor.shiftForward_B();    % Shift in Omega
+    fprintf('  After independent shifts: Lambda center=%.1f, Omega center=%.1f\n', ...
+        jointEditor.Center, jointEditor.Center_B);
+end
+
+%% Example 4b: Joint Kernel Editor - Non-separable (Velocity + Dispersion)
+% Use case: Control coupling parameters for traveling wave packets
+
+fprintf('\n=== Example 4b: Joint Kernel Editor (Non-separable) ===\n');
+
+if isempty(B.Lambda) || B.Lambda.K < 100
+    fprintf('  Skipping (eigenbasis not computed)\n');
+elseif isempty(B.Omega)
+    fprintf('  Skipping (Omega domain not initialized)\n');
+else
+    % Create velocity-tuned Gabor filter
+    velocityFilt = bct.filters.Filter(joint, 'velocity_gabor', ...
+        'v', 0.5, 'sigma_w', 10, 'lambda0', 50, 'sigma_l', 20, 'D', 0);
+    
+    % Create joint kernel editor (nonseparable)
+    velocityEditor = bct.filters.JointKernelEditor(joint, velocityFilt, 50, 20, ...
+        'KernelType', 'nonseparable', 'Velocity', 0.5, 'Dispersion', 0);
+    
+    fprintf('  Non-separable velocity kernel:\n');
+    fprintf('    Spatial center (lambda0): %.1f\n', velocityEditor.Center);
+    fprintf('    Spatial width (sigma_l): %.1f\n', velocityEditor.Width);
+    fprintf('    Velocity (v): %.2f rad/mm/s\n', velocityEditor.Velocity);
+    fprintf('    Dispersion (D): %.4f\n', velocityEditor.Dispersion);
+    
+    % Adjust velocity (changes ridge tilt)
+    velocityEditor.setVelocity(0.7);
+    fprintf('  After velocity increase: v = %.2f\n', velocityEditor.Velocity);
+    
+    % Add dispersion (creates curved ridge)
+    velocityEditor.setDispersion(0.01);
+    fprintf('  After adding dispersion: D = %.4f\n', velocityEditor.Dispersion);
+    
+    % Adjust spatial center
+    velocityEditor.setCenter(60);
+    fprintf('  After spatial shift: lambda0 = %.1f\n', velocityEditor.Center);
+end
+
+%% Example 5: Event Listeners (GUI Integration)
 % Demonstrate how to connect KernelEditor to GUI callbacks
 
-fprintf('\n=== Example 4: Event Listener Integration ===\n');
+fprintf('\n=== Example 5: Event Listener Integration ===\n');
 
 % Create a simple callback that responds to kernel changes
 callbackCount = 0;
@@ -174,7 +248,7 @@ timeEditor.setCenter(1.5);
 timeEditor.expand();
 timeEditor.shiftForward(5);
 
-%% Example 5: Different Window Types (TimeWindowEditor)
+%% Example 6: Different Window Types (TimeWindowEditor)
 % Demonstrate various window functions
 
 fprintf('\n=== Example 5: Window Type Comparison ===\n');
@@ -210,7 +284,7 @@ end
 
 fprintf('  Window types displayed: gaussian, hann, hamming, tukey\n');
 
-%% Example 6: Lambda Kernel Types (LambdaBandEditor)
+%% Example 7: Lambda Kernel Types (LambdaBandEditor)
 % Demonstrate different spectral kernels
 
 fprintf('\n=== Example 6: Lambda Kernel Type Comparison ===\n');
@@ -261,8 +335,11 @@ fprintf('  ✓ Navigation methods (shift, expand, contract)\n');
 fprintf('  ✓ Event system for GUI integration\n');
 fprintf('  ✓ Multiple kernel types per domain\n');
 fprintf('  ✓ Preset configurations (frequency bands, spatial modes)\n');
+fprintf('  ✓ Joint kernel support (separable and nonseparable)\n');
+fprintf('  ✓ Coupling parameter control (velocity, dispersion)\n');
 fprintf('\nUse cases:\n');
 fprintf('  • Time scrubbers for signal navigation\n');
 fprintf('  • Spectral band selection on Lambda domain (eigenvalue spectrum)\n');
 fprintf('  • Frequency band analysis (delta, theta, alpha, etc.)\n');
 fprintf('  • Interactive filter design in GUIs\n');
+fprintf('  • Spatiotemporal filtering with velocity/dispersion control\n');
