@@ -14,7 +14,7 @@ bct.filters.KernelEditor (Abstract Base Class)
 
 Concrete Implementations:
 ├── TimeWindowEditor      → Time domain (temporal windowing)
-├── SpatialPatchEditor    → Lambda domain (spatial frequency bands)
+├── LambdaBandEditor      → Lambda domain (spectral frequency bands)
 └── FrequencyBandEditor   → Omega domain (temporal frequency bands)
 ```
 
@@ -50,9 +50,9 @@ editor.contract();                  % '-' key narrows window
 
 **Window Types**: `'gaussian'`, `'hann'`, `'hamming'`, `'tukey'`
 
-### 2. Spatial Patch Selector (SpatialPatchEditor)
+### 2. Spectral Band Selector (LambdaBandEditor)
 
-**Problem**: Select regions of cortical mesh in spectral space
+**Problem**: Select spectral frequency bands on Lambda (eigenvalue) domain
 
 ```matlab
 % Setup (requires eigenbasis)
@@ -61,7 +61,7 @@ B.Lambda = B.Lambda.eigenbasis(B.Manifold.MassMatrix, ...
                                  B.Manifold.CotangentMatrix, 500);
 
 spatialFilt = bct.filters.Filter(B.Lambda, 'gaussian', 'center', 50, 'sigma', 10);
-editor = bct.filters.SpatialPatchEditor(B.Lambda, spatialFilt, 50, 10);
+editor = bct.filters.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
 
 % Presets
 editor.setLowPass(30);           % Smooth spatial patterns (modes 1-30)
@@ -228,11 +228,11 @@ end
 See `examples/demo_kernel_editors.m` for comprehensive demonstrations including:
 
 - Time scrubber for signal navigation
-- Spatial patch selection on cortical mesh
+- Spectral band selection on Lambda domain (eigenvalue spectrum)
 - Frequency band analysis with standard EEG bands
 - Event listener integration for GUIs
 - Window type comparison (Gaussian, Hann, Hamming, Tukey)
-- Spatial kernel comparison (Gaussian, Heat, Mexican Hat)
+- Lambda kernel comparison (Gaussian, Heat, Mexican Hat)
 
 ## Benefits
 

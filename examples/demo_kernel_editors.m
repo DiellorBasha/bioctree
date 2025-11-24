@@ -6,7 +6,7 @@
 %
 % Use Cases:
 %   1. Time scrubber for temporal signals
-%   2. Spatial patch selector for cortical regions
+%   2. Spectral band selector for Lambda domain (eigenvalue bands)
 %   3. Frequency band selector for spectral analysis
 %
 % The abstract KernelEditor class provides:
@@ -56,10 +56,10 @@ window = timeEditor.computeKernel();
 fprintf('  Window kernel computed: %d samples, max = %.4f\n', ...
     length(window), max(window));
 
-%% Example 2: Spatial Patch Editor (Lambda Domain)
-% Use case: Select spatial frequency bands on cortical mesh
+%% Example 2: Lambda Band Editor (Lambda Domain)
+% Use case: Select spectral frequency bands on eigenvalue spectrum
 
-fprintf('\n=== Example 2: Spatial Patch Editor ===\n');
+fprintf('\n=== Example 2: Lambda Band Editor ===\n');
 
 % Load mesh
 data = load('data/mesh/fsaverage_rh_pial.mat');
@@ -75,8 +75,8 @@ spatialFilt = bct.filters.Filter(B.Lambda, 'gaussian', ...
     'center', 50, ...   % Eigenmode 50
     'sigma', 10);       % Bandwidth of 10 modes
 
-% Create spatial patch editor
-spatialEditor = bct.filters.SpatialPatchEditor(B.Lambda, spatialFilt, 50, 10);
+% Create spectral band editor
+spatialEditor = bct.filters.LambdaBandEditor(B.Lambda, spatialFilt, 50, 10);
 
 % Navigate spatial frequencies
 fprintf('  Initial center eigenmode: %.1f\n', spatialEditor.Center);
@@ -210,10 +210,10 @@ end
 
 fprintf('  Window types displayed: gaussian, hann, hamming, tukey\n');
 
-%% Example 6: Spatial Kernel Types (SpatialPatchEditor)
-% Demonstrate different spatial kernels
+%% Example 6: Lambda Kernel Types (LambdaBandEditor)
+% Demonstrate different spectral kernels
 
-fprintf('\n=== Example 6: Spatial Kernel Type Comparison ===\n');
+fprintf('\n=== Example 6: Lambda Kernel Type Comparison ===\n');
 
 % Ensure Lambda domain exists
 if isempty(B.Lambda) || B.Lambda.K < 100
@@ -228,12 +228,12 @@ else
         % Create filter and editor
         if strcmp(kType, 'heat')
             filt = bct.filters.Filter(B.Lambda, 'heat', 'tau', 0.01);
-            editor = bct.filters.SpatialPatchEditor(B.Lambda, filt, 0, 0.01, ...
+            editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 0, 0.01, ...
                 'KernelType', kType);
         else
             filt = bct.filters.Filter(B.Lambda, 'gaussian', ...
                 'center', 50, 'sigma', 15);
-            editor = bct.filters.SpatialPatchEditor(B.Lambda, filt, 50, 15, ...
+            editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 50, 15, ...
                 'KernelType', kType);
         end
         
@@ -263,6 +263,6 @@ fprintf('  ✓ Multiple kernel types per domain\n');
 fprintf('  ✓ Preset configurations (frequency bands, spatial modes)\n');
 fprintf('\nUse cases:\n');
 fprintf('  • Time scrubbers for signal navigation\n');
-fprintf('  • Spatial patch selection on cortical mesh\n');
+fprintf('  • Spectral band selection on Lambda domain (eigenvalue spectrum)\n');
 fprintf('  • Frequency band analysis (delta, theta, alpha, etc.)\n');
 fprintf('  • Interactive filter design in GUIs\n');

@@ -1,12 +1,12 @@
-classdef SpatialPatchEditor < bct.filters.KernelEditor
-  % SpatialPatchEditor - Interactive spatial region selector for Lambda domain
+classdef LambdaBandEditor < bct.filters.KernelEditor
+  % LambdaBandEditor - Interactive spectral band selector for Lambda domain
   %
-  % Implements KernelEditor for Lambda (spectral spatial) domain, providing
-  % a bandpass kernel for selecting spatial frequency bands. Useful for
-  % defining regions of interest on the cortical mesh in spectral space.
+  % Implements KernelEditor for Lambda (spectral) domain, providing
+  % a bandpass kernel for selecting spatial frequency bands. Operates on
+  % the eigenvalue spectrum (λ₁, λ₂, ..., λₖ), not on the Manifold itself.
   %
-  % The patch is defined as a Gaussian bandpass centered at a specific
-  % eigenmode number with adjustable bandwidth.
+  % The spectral band is defined as a Gaussian bandpass centered at a specific
+  % eigenmode with adjustable bandwidth in eigenvalue space.
   %
   % Properties (inherited):
   %   Center - Center eigenmode index
@@ -22,7 +22,7 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
   %   setCenter(k)    - Jump to specific eigenmode
   %   setWidth(w)     - Set bandwidth
   %
-  % Example - Spatial frequency band selector:
+  % Example - Spectral band selector for Lambda domain:
   %   B = bct.bct.fromMesh(V, F);
   %   B.Lambda = B.Lambda.eigenbasis(B.Manifold.MassMatrix, ...
   %                                    B.Manifold.CotangentMatrix, 500);
@@ -32,7 +32,7 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
   %       'center', 50, 'sigma', 10);
   %   
   %   % Create editor for interactive control
-  %   editor = bct.filters.SpatialPatchEditor(B.Lambda, filt, 50, 10);
+  %   editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 50, 10);
   %   
   %   % GUI slider callback:
   %   editor.setCenter(sliderValue);  % Update frequency band
@@ -41,25 +41,28 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
   %   editor.setCenter(20);
   %   editor.setWidth(5);
   %
-  % Example - Heat kernel for diffusion:
-  %   % Heat kernel variant using tau parameter
-  %   filt = bct.filters.Filter(B.Lambda, 'heat', 'tau', 0.1);
-  %   editor = bct.filters.SpatialPatchEditor(B.Lambda, filt, 0, 0.1, ...
-  %       'KernelType', 'heat');
-  %
-  % See also: bct.filters.KernelEditor, bct.Lambda, bct.Manifold
+% Example - Heat kernel for diffusion:
+%   % Heat kernel variant using tau parameter
+%   filt = bct.filters.Filter(B.Lambda, 'heat', 'tau', 0.1);
+%   editor = bct.filters.LambdaBandEditor(B.Lambda, filt, 0, 0.1, ...
+%       'KernelType', 'heat');
+%
+% Note: This operates on Lambda (spectral domain). For spatial patches
+% on the Manifold itself, use ManifoldPatchEditor (requires shift operation).
+%
+% See also: bct.filters.KernelEditor, bct.Lambda, bct.Manifold
   
   properties
     KernelType = 'gaussian'  % 'gaussian', 'heat', 'mexican_hat'
   end
   
   methods
-    function obj = SpatialPatchEditor(lambdaDomain, filter, center, width, varargin)
+    function obj = LambdaBandEditor(lambdaDomain, filter, center, width, varargin)
       % Constructor
       %
       % Syntax:
-      %   editor = SpatialPatchEditor(lambdaDomain, filter, center, width)
-      %   editor = SpatialPatchEditor(..., 'KernelType', 'heat')
+      %   editor = LambdaBandEditor(lambdaDomain, filter, center, width)
+      %   editor = LambdaBandEditor(..., 'KernelType', 'heat')
       %
       % Inputs:
       %   lambdaDomain - bct.Lambda domain object
@@ -84,7 +87,7 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
     end
     
     function kernel = computeKernel(obj)
-      % Compute spatial patch kernel on Lambda domain
+      % Compute spectral band kernel on Lambda (eigenvalue) domain
       %
       % Returns:
       %   kernel - [K×1] kernel values on eigenvalue axis
@@ -111,7 +114,7 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
                    exp(-normalized_lambda.^2 / 2);
           
         otherwise
-          error('SpatialPatchEditor:UnknownKernelType', ...
+          error('LambdaBandEditor:UnknownKernelType', ...
             'Unknown kernel type: %s', obj.KernelType);
       end
       
@@ -120,10 +123,10 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
     end
     
     function setLowPass(obj, cutoff)
-      % Configure as low-pass filter (smooth spatial patterns)
+      % Configure as low-pass filter (smooth patterns on manifold)
       %
       % Syntax:
-      %   editor.setLowPass(30)  % Keep modes 1-30
+      %   editor.setLowPass(30)  % Keep eigenmodes 1-30 (low spatial frequencies)
       %
       % Inputs:
       %   cutoff - Eigenmode cutoff (low spatial frequencies)
@@ -134,10 +137,10 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
     end
     
     function setHighPass(obj, cutoff)
-      % Configure as high-pass filter (detailed spatial patterns)
+      % Configure as high-pass filter (detailed patterns on manifold)
       %
       % Syntax:
-      %   editor.setHighPass(100)  % Keep modes > 100
+      %   editor.setHighPass(100)  % Keep eigenmodes > 100 (high spatial frequencies)
       %
       % Inputs:
       %   cutoff - Eigenmode cutoff (high spatial frequencies)
@@ -166,7 +169,7 @@ classdef SpatialPatchEditor < bct.filters.KernelEditor
   
   methods (Access = protected)
     function updateFilter(obj, kernel)
-      % Update filter with spatial patch parameters
+      % Update filter with spectral band parameters
       %
       % Overrides base class to handle heat kernel tau parameter
       
