@@ -5,7 +5,7 @@ function sm = manifoldToSurfaceMesh(M)
 %   sm = bct.io.convert.manifoldToSurfaceMesh(M)
 %
 % Inputs:
-%   M - bct.Manifold object (must be of type "mesh")
+%   M - bct.Manifold object
 %
 % Outputs:
 %   sm - MATLAB surfaceMesh object for visualization and analysis
@@ -22,16 +22,12 @@ if ~isa(M, 'bct.Manifold')
     error('bct:InvalidInput', 'Input must be a bct.Manifold object');
 end
 
-if M.Type ~= "mesh"
-    error('bct:InvalidManifoldType', 'Manifold must be of type "mesh", got "%s"', M.Type);
-end
-
 % Check for required data
-if isempty(M.V) || isempty(M.F)
-    error('bct:MissingData', 'Manifold must have both vertices (V) and faces (F)');
+if isempty(M.Vertices) || isempty(M.Faces)
+    error('bct:MissingData', 'Manifold must have both Vertices and Faces');
 end
 
 % Create surfaceMesh object
-sm = surfaceMesh(M.V, M.F);
+sm = surfaceMesh(M.Vertices, M.Faces);
 
 end

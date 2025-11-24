@@ -464,6 +464,112 @@ methods
     this.Viewer = bct.show.mesh(this, varargin{:});
   end
   
+  function showSignal(this, signal, varargin)
+    % showSignal - Display a signal on the mesh
+    %
+    % Syntax:
+    %   B.showSignal(signal)
+    %   B.showSignal(signal, 'TimePoint', t)
+    %   B.showSignal(signal, 'Parent', parentContainer)
+    %   B.showSignal(signal, 'ColorMap', 'turbo')
+    %
+    % Displays a signal defined on the Manifold domain or Joint Manifold-Time
+    % domain on the mesh. For Joint domain signals, you can specify which
+    % time point to display.
+    %
+    % Inputs:
+    %   signal - bct.Signal object with domain:
+    %            - Manifold: displays scalar field [N×1]
+    %            - Joint (Manifold×Time): displays time slice [N×1] at TimePoint
+    %
+    % Name-Value Parameters:
+    %   'TimePoint'  - Time point to display (default: 1) for Joint signals
+    %   'Parent'     - Parent container for the viewer (e.g., uipanel)
+    %   'ColorMap'   - Colormap to use (default: 'parula')
+    %   'Title'      - Figure title
+    %
+    % Example:
+    %   % Display signal on Manifold
+    %   S = bct.Signal(B.Manifold, randn(B.Manifold.N, 1), 'test');
+    %   B.showSignal(S);
+    %
+    %   % Display time point 50 of spatiotemporal signal
+    %   S_st = bct.Signal(B.Joint, randn(B.Joint.N), 'spatiotemporal');
+    %   B.showSignal(S_st, 'TimePoint', 50);
+    %
+    % See also: showMesh, showAnimation, bct.Signal
+    
+    % Validate signal
+    if ~isa(signal, 'bct.Signal')
+        error('bct:InvalidSignal', 'Input must be a bct.Signal object');
+    end
+    
+    % Parse additional arguments
+    p = inputParser;
+    addParameter(p, 'TimePoint', 1, @(x) isnumeric(x) && x > 0);
+    addParameter(p, 'Parent', [], @(x) isempty(x) || isgraphics(x));
+    addParameter(p, 'ColorMap', 'parula', @(x) ischar(x) || isstring(x) || isnumeric(x));
+    addParameter(p, 'Title', '', @(x) ischar(x) || isstring(x));
+    parse(p, varargin{:});
+    
+    % Extract signal data based on domain
+    if isa(signal.Domain, 'bct.Joint')
+        % Joint domain signal - extract time slice
+        timePoint = p.Results.TimePoint;
+        
+        if isa(signal.Domain.A, 'bct.Manifold')
+            % Manifold is first domain [N × T]
+            if size(signal.Data, 2) < timePoint
+                error('bct:InvalidTimePoint', ...
+                    'Time point %d out of range (1-%d)', timePoint, size(signal.Data, 2));
+            end
+            signalData = signal.Data(:, timePoint);
+        else
+            error('bct:UnsupportedJoint', ...
+                'Can only visualize Joint signals with Manifold as first domain');
+        end
+        
+        % Set default title if not provided
+        if isempty(p.Results.Title)
+            titleStr = sprintf('%s (t=%d)', signal.Label, timePoint);
+        else
+            titleStr = p.Results.Title;
+        end
+        
+    elseif isa(signal.Domain, 'bct.Manifold')
+        % Signal on Manifold domain [N × 1]
+        signalData = signal.Data;
+        if size(signalData, 2) > 1
+            signalData = signalData(:, 1);
+        end
+        
+        % Set default title
+        if isempty(p.Results.Title)
+            titleStr = signal.Label;
+        else
+            titleStr = p.Results.Title;
+        end
+        
+    else
+        error('bct:UnsupportedDomain', ...
+            'Can only visualize signals on Manifold or Joint (Manifold×Time) domains');
+    end
+    
+    % Build visualizer arguments
+    vizArgs = {'SignalData', signalData, 'ColorMap', p.Results.ColorMap};
+    
+    if ~isempty(p.Results.Parent)
+        vizArgs = [vizArgs, {'Parent', p.Results.Parent}];
+    end
+    
+    if ~isempty(titleStr)
+        vizArgs = [vizArgs, {'Title', titleStr}];
+    end
+    
+    % Create visualization
+    this.Viewer = bct.show.visualizer(this, vizArgs{:});
+  end
+  
   function initializeAxes(this)
     % initializeAxes - DEPRECATED: Use domain.axis properties instead
     %

@@ -205,7 +205,7 @@ if isa(B, 'bct.bct')
     % Extract signal data if requested
     if ~isempty(customSignalData)
         % Custom signal data provided
-        signalData = processSignalData(customSignalData, B.Manifold.N, timePoint);
+        signalData = processSignalData(customSignalData, B.Manifold.N, timePoint, color);
         
     elseif ~isempty(signalIdx) && ~isempty(B.Signals)
         % Extract signal from Bct
@@ -216,22 +216,42 @@ if isa(B, 'bct.bct')
         
         sig = B.Signals(signalIdx);
         
-        % Extract time point if time-varying
-        if sig.IsDynamic
+        % Extract spatial data based on signal domain
+        if isa(sig.Domain, 'bct.Joint')
+            % Joint domain signal (e.g., Manifold-Time)
+            % Extract spatial component for specified time point
             if isempty(timePoint)
                 timePoint = 1;  % Default to first time point
             end
-            if timePoint > sig.T
-                error('bct:visualizer:InvalidTimePoint', ...
-                    'Time point %d out of range (1-%d)', timePoint, sig.T);
+            
+            % Check if Joint is Manifold × Time (spatial-temporal)
+            if isa(sig.Domain.A, 'bct.Manifold') || isa(sig.Domain.B, 'bct.Time')
+                % Data is [N × T], extract time slice
+                if size(sig.Data, 2) < timePoint
+                    error('bct:visualizer:InvalidTimePoint', ...
+                        'Time point %d out of range (1-%d)', timePoint, size(sig.Data, 2));
+                end
+                signalData = sig.Data(:, timePoint);
+            else
+                error('bct:visualizer:UnsupportedJoint', ...
+                    'Can only visualize Joint signals with Manifold as first domain');
             end
-            signalData = sig.Data(:, timePoint);
-        else
+            
+        elseif isa(sig.Domain, 'bct.Manifold')
+            % Signal defined on Manifold domain [N × 1]
             signalData = sig.Data;
+            if size(signalData, 2) > 1
+                % Take first column if multi-column
+                signalData = signalData(:, 1);
+            end
+            
+        else
+            error('bct:visualizer:UnsupportedDomain', ...
+                'Can only visualize signals on Manifold or Joint (Manifold×Time) domains');
         end
         
         % Convert signal to RGB colors using colormap
-        signalData = processSignalData(signalData, B.Manifold.N, 1);
+        signalData = processSignalData(signalData, B.Manifold.N, 1, color);
     end
     
     % Set vertex colors on surfaceMesh
@@ -243,7 +263,7 @@ end
 end
 
 %--------------------------------------------------------------------------
-function rgbColors = processSignalData(signalData, expectedN, timePoint)
+function rgbColors = processSignalData(signalData, expectedN, timePoint, colormap_data)
 %PROCESSSIGNALDATA Convert signal data to RGB colors
 %   Handles scalar data [Nx1] or time-varying data [NxT]
 
@@ -267,7 +287,7 @@ if size(signalData, 2) == 3
     return;
 end
 
-% Convert scalar to RGB using current colormap
+% Convert scalar to RGB using provided colormap
 % Normalize to [0, 1]
 minVal = min(signalData);
 maxVal = max(signalData);
@@ -278,8 +298,13 @@ else
     normalized = 0.5 * ones(size(signalData));
 end
 
-% Use parula colormap by default
-cmap = parula(256);
+% Use provided colormap or default to parula
+if nargin >= 4 && ~isempty(colormap_data)
+    cmap = colormap_data;
+else
+    cmap = parula(256);
+end
+
 colorIndices = round(normalized * (size(cmap, 1) - 1)) + 1;
 rgbColors = cmap(colorIndices, :);
 end
