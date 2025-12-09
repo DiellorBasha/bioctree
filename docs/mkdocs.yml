@@ -1,0 +1,169 @@
+site_name: Bioctree Documentation
+site_url: https://diellorbasha.github.io/bioctree
+site_description: "Documentation for the Bioctree spatiotemporal-spectral analysis system"
+site_author: "Diellor Basha"
+
+# ---------------------------------------------------------
+#  THEME CONFIGURATION (Material for MkDocs)
+# ---------------------------------------------------------
+theme:
+  name: material
+  logo: images/bioctree_logo.png
+  custom_dir: overrides
+
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - navigation.path
+    - header.autohide
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - content.tabs.link
+    - content.tooltips
+    - search.suggest
+    - search.highlight
+    - search.share
+    - announce.dismiss
+
+# ---------------------------------------------------------
+#  MARKDOWN EXTENSIONS
+# ---------------------------------------------------------
+markdown_extensions:
+  - admonition
+  - smarty
+  - toc:
+      permalink: true
+  - meta
+  - tables
+  - footnotes
+  - def_list
+  - attr_list
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.keys
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DiellorBasha/bioctree
+      name: Bioctree on GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/bioctree
+      name: Bioctree on PyPI
+  generator: false
+
+# Repository information
+repo_name: DiellorBasha/bioctree
+repo_url: https://github.com/DiellorBasha/bioctree
+edit_uri: edit/main/docs/docs/
+
+# ---------------------------------------------------------
+#  NAVIGATION STRUCTURE (edit as needed)
+# ---------------------------------------------------------
+nav:
+  - Home: index.md
+  - Getting Started:
+      - getting-started/index.md
+      - Introduction: getting-started/introduction.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+
+  - Concepts:
+      - concepts/index.md
+      - Overview: concepts/overview.md
+      - Manifolds: concepts/manifolds.md
+      - Laplace-Beltrami Operator: concepts/laplace-beltrami.md
+      - Graph Structure: concepts/graph-structure.md
+      - Joint Spectral Domain: concepts/joint-spectrum.md
+      - Wave Packets: concepts/wave-packets.md
+      - Dispersion & Velocity Kernels: concepts/dispersion.md
+
+  - Filters:
+      - filters/index.md
+      - Spatial Filters: filters/spatial.md
+      - Temporal Filters: filters/temporal.md
+      - Joint Filters (λ–ω): filters/joint-filters.md
+      - Wave Packet Filters: filters/wavepacket-filters.md
+
+  - Tutorials:
+      - tutorials/index.md
+      - Load a Mesh: tutorials/load-mesh.md
+      - Compute Eigenbasis: tutorials/eigenbasis.md
+      - Apply Spatial Filters: tutorials/spatial-filters.md
+      - Build a Wave Packet: tutorials/wavepacket.md
+      - Detect Traveling Waves: tutorials/detect-waves.md
+
+  - API Reference:
+      - api/index.md
+      - MATLAB API Overview: api/matlab/overview.md
+      - Bct Class: api/matlab/bct.md
+      - Manifold Class: api/matlab/manifold.md
+      - JointDomain Class: api/matlab/joint-domain.md
+      - Filter API: api/matlab/filters.md
+      - HDF5 Specification: api/hdf5/specification.md
+      - HDF5 File I/O: api/hdf5/io.md
+
+  - Examples:
+      - Example Gallery: examples/index.md
+      - Wave Packet Examples: examples/wavepackets.md
+      - Time–Frequency Analysis: examples/time-frequency.md
+      - Spatiotemporal Filters: examples/spatiotemporal.md
+
+  - About:
+      - Changelog: about/changelog.md
+      - Contributing: about/contributing.md
+      - License: about/license.md
+
+plugins:
+  - search
