@@ -1,4 +1,4 @@
-classdef BctFilterDesigner < matlab.apps.AppBase
+classdef BctFrontend < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
@@ -6,11 +6,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         GridLayout              matlab.ui.container.GridLayout
         LeftPanel               matlab.ui.container.Panel
         TextArea                matlab.ui.control.TextArea
-        ResolutionLabel         matlab.ui.control.Label
-        kmodesEditField         matlab.ui.control.NumericEditField
-        kmodesEditFieldLabel    matlab.ui.control.Label
-        FourierButton           matlab.ui.control.Button
-        SpectralLabel           matlab.ui.control.Label
+        Label                   matlab.ui.control.Label
         LoadButton              matlab.ui.control.Button
         ScanButton              matlab.ui.control.Button
         Tree                    matlab.ui.container.Tree
@@ -21,7 +17,13 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         CenterPanel             matlab.ui.container.Panel
         TabGroup                matlab.ui.container.TabGroup
         JointTab                matlab.ui.container.Tab
+        ViewerPanel             matlab.ui.container.Panel
+        GridLayout2             matlab.ui.container.GridLayout
+        PlayButton              matlab.ui.control.Button
+        BackButton              matlab.ui.control.Button
         FilterDesignPanel       matlab.ui.container.Panel
+        VelocitySpinner         matlab.ui.control.Spinner
+        VelocitySpinnerLabel    matlab.ui.control.Label
         BandwidthSliderLabel    matlab.ui.control.Label
         BandwidthSlider         matlab.ui.control.Slider
         FrequencySliderLabel    matlab.ui.control.Label
@@ -34,7 +36,6 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         KernelDropDown          matlab.ui.control.DropDown
         KernelDropDownLabel     matlab.ui.control.Label
         UIAxesKernel            matlab.ui.control.UIAxes
-        UIAxesResponse          matlab.ui.control.UIAxes
         SpatialTab              matlab.ui.container.Tab
         SigmaEditField          matlab.ui.control.NumericEditField
         SigmaEditFieldLabel     matlab.ui.control.Label
@@ -44,18 +45,16 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         ShowlambdaButton        matlab.ui.control.Button
         UIAxes                  matlab.ui.control.UIAxes
         MeshPanel               matlab.ui.container.Panel
-        Panel_2                 matlab.ui.container.Panel
-        GridLayout3             matlab.ui.container.GridLayout
-        PlayButton              matlab.ui.control.Button
-        BackButton              matlab.ui.control.Button
-        SignalPanel             matlab.ui.container.Panel
-        ShowMeshButton          matlab.ui.control.Button
+        SaveButton              matlab.ui.control.Button
         vDeltaEditField         matlab.ui.control.NumericEditField
         vDeltaEditFieldLabel    matlab.ui.control.Label
         SignalDropDown          matlab.ui.control.DropDown
         SignalDropDownLabel     matlab.ui.control.Label
-        ViewerPanel             matlab.ui.container.Panel
-        GridLayout2             matlab.ui.container.GridLayout
+        kmodesEditField         matlab.ui.control.NumericEditField
+        kmodesEditFieldLabel    matlab.ui.control.Label
+        FourierButton           matlab.ui.control.Button
+        EigenbasisLabel         matlab.ui.control.Label
+        UIAxesResponse          matlab.ui.control.UIAxes
     end
 
     % Properties that correspond to apps with auto-reflow
@@ -68,11 +67,17 @@ classdef BctFilterDesigner < matlab.apps.AppBase
     properties (Access = public)
         BCTObjects struct
         CurrentBCT bct.bct% Description
+        SignalObjects struct 
         FilterDesigner
         CurrentFilter
         KronDelta                   % bct.Signal - Kronecker delta on Manifold_Time
         IRSignal                    % bct.Signal - Impulse response after filtering
         CurrentTimePoint
+        
+        % Wave packet FFT method properties
+        CurrentKernelFFT            % Velocity kernel in Lambda-Omega (FFT domain)
+        CurrentOmegaAxis            % Omega axis (rad/s, FFT order)
+        CurrentLambdaAxis           % Lambda axis (eigenvalues)
     end
 
    
@@ -83,10 +88,11 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         % Code that executes after component creation
         function startupFcn(app)
                         % Startup sequence: scan workspace and load default BCT
-            
+             % Initialize structures
+            app.SignalObjects = struct();
             % Scan workspace for existing BCT objects
             BctBackend.scanWorkspace(app);
-            
+            BctBackend.scanSignals(app);
             % Load default BCT object if no objects found in workspace
             if isempty(fieldnames(app.BCTObjects))
                 BctBackend.loadDefaultBCT(app);
@@ -129,7 +135,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
              BctBackend.scanWorkspace(app);
         end
 
-        % Button pushed function: ShowMeshButton
+        % Callback function
         function ShowMeshButtonPushed(app, event)
             BctBackend.attachViewer(app, app.CurrentBCT);
         end
@@ -188,8 +194,9 @@ classdef BctFilterDesigner < matlab.apps.AppBase
         % Button pushed function: SynthesizeButton
         function SynthesizeButtonPushed(app, event)
          
-            % Compute impulse response by filtering KronDelta signal
-            % Transforms delta from Manifold_Time → Lambda_Omega → apply filter → Manifold_Time
+            % Compute impulse response using appropriate method based on kernel type
+            % For velocity_gabor: use FFT-based wave packet method
+            % For other kernels: use standard filter application
             
             B = app.CurrentBCT;
             
@@ -210,29 +217,39 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             end
             
             % Progress dialog
-            d = uiprogressdlg(app.UIFigure, 'Message', 'Creating impulse signal...', ...
-                'Title', 'Computing Impulse Response', 'Indeterminate', 'on');
+            d = uiprogressdlg(app.UIFigure, 'Message', 'Synthesizing signal...', ...
+                'Title', 'Computing Wave Packet', 'Indeterminate', 'on');
             
             try
-                % Create KronDelta signal if it doesn't exist
-                if isempty(app.KronDelta)
-                    app.KronDelta = BctBackend.createKronDelta(app, B);
+                % Check if velocity_gabor kernel is selected
+                if strcmpi(app.CurrentFilter.KernelName, 'velocity_gabor')
+                    % Use FFT-based wave packet method (EXACT bct_wavepacket implementation)
+                    d.Message = 'Generating wave packet (FFT method)...';
+                    packet_data = BctBackend.generateWavePacket(app, B);
+                    
+                    % Wrap in Signal object for consistency with app workflow
+                    app.IRSignal = bct.Signal(B.Joint, packet_data, 'Wave Packet');
+                    
+                    % Visualize velocity kernel in FFT domain
+                    d.Message = 'Visualizing velocity kernel...';
+                    BctBackend.visualizeVelocityKernel(app, app.UIAxesResponse);
+                    
+                else
+                    % Use standard filter application method
+                    % Create KronDelta signal if it doesn't exist
+                    if isempty(app.KronDelta)
+                        d.Message = 'Creating delta signal...';
+                        app.KronDelta = BctBackend.createKronDelta(app, B);
+                    end
+                    
+                    % Apply filter via domain transforms
+                    d.Message = 'Applying filter to delta signal...';
+                    app.IRSignal = BctBackend.impulseResponse(app, B);
+                    
+                    % Visualize filter kernel on Lambda-Omega grid
+                    d.Message = 'Visualizing filter response...';
+                    BctBackend.visualizeFilterOnLambdaOmega(app, B, app.UIAxesResponse);
                 end
-                
-                % Update progress
-                d.Message = 'Applying filter to delta signal...';
-                
-                % Compute impulse response through filter
-                app.IRSignal = BctBackend.impulseResponse(app, B);
-                
-                % Update progress
-                d.Message = 'Updating UI...';
-                
-                % Update signal dropdown with new signals
-         %       BctBackend.updateSignalDropDown(app);
-                
-                % Visualize filter kernel on actual Lambda-Omega eigenmode grid
-                BctBackend.visualizeFilterOnLambdaOmega(app, B, app.UIAxesResponse);
                 
                 % Update progress
                 d.Message = 'Rendering on mesh...';
@@ -246,15 +263,25 @@ classdef BctFilterDesigner < matlab.apps.AppBase
                 % Update the existing viewer with the signal (don't create new one)
                 B.Viewer.Children.Color = bct.show.x2rgb(abs(app.IRSignal.Data(:, 1)), 'colormap', 'hot');  % Show first time point
                 
+                % Add IRSignal to SignalObjects structure
+                if ~isempty(app.IRSignal)
+                    signalName = sprintf('IRSignal_%s', datestr(now, 'yyyymmdd_HHMMSS'));
+                    app.SignalObjects.(signalName) = app.IRSignal;
+                    fprintf('[SynthesizeButton] Added %s to SignalObjects\n', signalName);
+                end
+                
+                % Update signal dropdown
+                BctBackend.updateSignalDropDown(app);
+                
                 close(d);
                 
             catch ME
                 close(d);
-                uialert(app.UIFigure, ME.message, 'Error Computing Impulse Response');
+                uialert(app.UIFigure, ME.message, 'Error Computing Signal');
                 rethrow(ME);
             end
             
-            fprintf('[SynthesizeButton] Impulse response computed and visualized\n');
+            fprintf('[SynthesizeButton] Signal computed and visualized\n');
        
 
       
@@ -285,7 +312,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             
         end
 
-        % Callback function: not associated with a component
+        % Callback function
         function PlayButtonPushed(app, event)
             if isempty(app.IRSignal)
                 warning('BctBackend:NoIRSignal', 'No impulse response signal to step through.');
@@ -322,6 +349,82 @@ classdef BctFilterDesigner < matlab.apps.AppBase
 
         end
 
+        % Value changed function: KernelDropDown
+        function KernelDropDownValueChanged(app, event)
+                        value = app.KernelDropDown.Value;
+            
+            % Recreate filter with new kernel type
+            BctBackend.createFilterFromKernelType(app, value);
+            
+            % Update kernel preview
+            BctBackend.updateKernelPreview(app);
+            
+            % Update visibility of velocity spinner based on kernel type
+            if strcmpi(value, 'Velocity Gabor')
+                app.VelocitySpinner.Visible = 'on';
+                app.VelocitySpinnerLabel.Visible = 'on';
+            else
+                app.VelocitySpinner.Visible = 'off';
+                app.VelocitySpinnerLabel.Visible = 'off';
+            end
+            
+        end
+
+        % Value changed function: VelocitySpinner
+        function VelocitySpinnerValueChanged(app, event)
+                      value = app.VelocitySpinner.Value;
+            
+            % Update velocity parameter in filter
+            BctBackend.updateVelocityParameter(app, value);
+            
+            % Update kernel preview
+            BctBackend.updateKernelPreview(app);
+            
+        end
+
+        % Button pushed function: SaveButton
+        function SaveButtonPushed(app, event)
+            % Save all signals to base workspace
+            
+            savedCount = 0;
+            
+            % Save KronDelta signal
+            if ~isempty(app.KronDelta)
+                assignin('base', 'KronDelta', app.KronDelta);
+                savedCount = savedCount + 1;
+                fprintf('[SaveButton] Saved KronDelta to workspace\n');
+            end
+            
+            % Save IRSignal
+            if ~isempty(app.IRSignal)
+                assignin('base', 'IRSignal', app.IRSignal);
+                savedCount = savedCount + 1;
+                fprintf('[SaveButton] Saved IRSignal to workspace\n');
+            end
+            
+            % Save all signals from SignalObjects structure
+            if ~isempty(app.SignalObjects)
+                signalNames = fieldnames(app.SignalObjects);
+                for i = 1:length(signalNames)
+                    varName = signalNames{i};
+                    assignin('base', varName, app.SignalObjects.(varName));
+                    savedCount = savedCount + 1;
+                    fprintf('[SaveButton] Saved %s to workspace\n', varName);
+                end
+            end
+            
+            % Notify user
+            if savedCount > 0
+                uialert(app.UIFigure, ...
+                    sprintf('Successfully saved %d signal(s) to workspace.', savedCount), ...
+                    'Signals Saved', 'Icon', 'success');
+            else
+                uialert(app.UIFigure, ...
+                    'No signals available to save.', ...
+                    'No Signals', 'Icon', 'warning');
+            end
+        end
+
         % Changes arrangement of the app based on UIFigure width
         function updateAppLayout(app, event)
             currentFigureWidth = app.UIFigure.Position(3);
@@ -348,7 +451,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             else
                 % Change to a 1x3 grid
                 app.GridLayout.RowHeight = {'1x'};
-                app.GridLayout.ColumnWidth = {220, '1x', 592};
+                app.GridLayout.ColumnWidth = {198, '1x', 385};
                 app.LeftPanel.Layout.Row = 1;
                 app.LeftPanel.Layout.Column = 1;
                 app.CenterPanel.Layout.Row = 1;
@@ -368,13 +471,13 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             % Create UIFigure and hide until all components are created
             app.UIFigure = uifigure('Visible', 'off');
             app.UIFigure.AutoResizeChildren = 'off';
-            app.UIFigure.Position = [100 100 1340 746];
+            app.UIFigure.Position = [100 100 1110 746];
             app.UIFigure.Name = 'MATLAB App';
             app.UIFigure.SizeChangedFcn = createCallbackFcn(app, @updateAppLayout, true);
 
             % Create GridLayout
             app.GridLayout = uigridlayout(app.UIFigure);
-            app.GridLayout.ColumnWidth = {220, '1x', 592};
+            app.GridLayout.ColumnWidth = {198, '1x', 385};
             app.GridLayout.RowHeight = {'1x'};
             app.GridLayout.ColumnSpacing = 0;
             app.GridLayout.RowSpacing = 0;
@@ -388,7 +491,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
 
             % Create Tree
             app.Tree = uitree(app.LeftPanel);
-            app.Tree.Position = [19 535 186 174];
+            app.Tree.Position = [7 535 186 174];
 
             % Create DataNode
             app.DataNode = uitreenode(app.Tree);
@@ -409,45 +512,23 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             % Create ScanButton
             app.ScanButton = uibutton(app.LeftPanel, 'push');
             app.ScanButton.ButtonPushedFcn = createCallbackFcn(app, @ScanButtonPushed, true);
-            app.ScanButton.Position = [19 507 87 22];
+            app.ScanButton.Position = [7 507 87 22];
             app.ScanButton.Text = 'Scan';
 
             % Create LoadButton
             app.LoadButton = uibutton(app.LeftPanel, 'push');
             app.LoadButton.ButtonPushedFcn = createCallbackFcn(app, @LoadButtonPushed, true);
-            app.LoadButton.Position = [119 507 86 22];
+            app.LoadButton.Position = [107 507 86 22];
             app.LoadButton.Text = 'Load';
 
-            % Create SpectralLabel
-            app.SpectralLabel = uilabel(app.LeftPanel);
-            app.SpectralLabel.Position = [30 149 52 22];
-            app.SpectralLabel.Text = 'Spectral ';
-
-            % Create FourierButton
-            app.FourierButton = uibutton(app.LeftPanel, 'push');
-            app.FourierButton.ButtonPushedFcn = createCallbackFcn(app, @FourierButtonPushed, true);
-            app.FourierButton.Position = [89 109 100 22];
-            app.FourierButton.Text = 'Fourier';
-
-            % Create kmodesEditFieldLabel
-            app.kmodesEditFieldLabel = uilabel(app.LeftPanel);
-            app.kmodesEditFieldLabel.HorizontalAlignment = 'right';
-            app.kmodesEditFieldLabel.Position = [24 129 50 22];
-            app.kmodesEditFieldLabel.Text = 'k modes';
-
-            % Create kmodesEditField
-            app.kmodesEditField = uieditfield(app.LeftPanel, 'numeric');
-            app.kmodesEditField.Position = [89 129 100 22];
-            app.kmodesEditField.Value = 300;
-
-            % Create ResolutionLabel
-            app.ResolutionLabel = uilabel(app.LeftPanel);
-            app.ResolutionLabel.Position = [24 471 62 22];
-            app.ResolutionLabel.Text = 'Resolution';
+            % Create Label
+            app.Label = uilabel(app.LeftPanel);
+            app.Label.Position = [12 471 25 22];
+            app.Label.Text = '';
 
             % Create TextArea
             app.TextArea = uitextarea(app.LeftPanel);
-            app.TextArea.Position = [24 219 181 244];
+            app.TextArea.Position = [12 28 181 465];
 
             % Create CenterPanel
             app.CenterPanel = uipanel(app.GridLayout);
@@ -462,14 +543,6 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             app.JointTab = uitab(app.TabGroup);
             app.JointTab.Title = 'Joint';
 
-            % Create UIAxesResponse
-            app.UIAxesResponse = uiaxes(app.JointTab);
-            title(app.UIAxesResponse, 'Title')
-            xlabel(app.UIAxesResponse, 'Frequency (Hz)')
-            ylabel(app.UIAxesResponse, 'Wavenumber (k)')
-            zlabel(app.UIAxesResponse, 'Z')
-            app.UIAxesResponse.Position = [15 5 484 386];
-
             % Create FilterDesignPanel
             app.FilterDesignPanel = uipanel(app.JointTab);
             app.FilterDesignPanel.Title = 'Filter Design';
@@ -481,7 +554,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             xlabel(app.UIAxesKernel, 'X')
             ylabel(app.UIAxesKernel, 'Y')
             zlabel(app.UIAxesKernel, 'Z')
-            app.UIAxesKernel.Position = [216 56 272 210];
+            app.UIAxesKernel.Position = [216 49 272 210];
 
             % Create KernelDropDownLabel
             app.KernelDropDownLabel = uilabel(app.FilterDesignPanel);
@@ -492,58 +565,97 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             % Create KernelDropDown
             app.KernelDropDown = uidropdown(app.FilterDesignPanel);
             app.KernelDropDown.Items = {'Gaussian', 'Heat', 'Mexican Hat', 'Gabor', 'Velocity Gabor'};
+            app.KernelDropDown.ValueChangedFcn = createCallbackFcn(app, @KernelDropDownValueChanged, true);
             app.KernelDropDown.Position = [70 242 100 22];
             app.KernelDropDown.Value = 'Gaussian';
 
             % Create SynthesizeButton
             app.SynthesizeButton = uibutton(app.FilterDesignPanel, 'push');
             app.SynthesizeButton.ButtonPushedFcn = createCallbackFcn(app, @SynthesizeButtonPushed, true);
-            app.SynthesizeButton.Position = [388 18 100 22];
+            app.SynthesizeButton.Position = [388 11 100 22];
             app.SynthesizeButton.Text = 'Synthesize';
 
             % Create WavenumberSlider
             app.WavenumberSlider = uislider(app.FilterDesignPanel);
             app.WavenumberSlider.ValueChangedFcn = createCallbackFcn(app, @WavenumberSliderValueChanged, true);
-            app.WavenumberSlider.Position = [108 199 70 3];
+            app.WavenumberSlider.Position = [110 220 74 3];
 
             % Create WavenumberSliderLabel
             app.WavenumberSliderLabel = uilabel(app.FilterDesignPanel);
             app.WavenumberSliderLabel.HorizontalAlignment = 'right';
-            app.WavenumberSliderLabel.Position = [10 190 76 22];
+            app.WavenumberSliderLabel.Position = [18 211 76 22];
             app.WavenumberSliderLabel.Text = 'Wavenumber';
 
             % Create kbandwidthSlider
             app.kbandwidthSlider = uislider(app.FilterDesignPanel);
             app.kbandwidthSlider.ValueChangedFcn = createCallbackFcn(app, @kbandwidthSliderValueChanged, true);
-            app.kbandwidthSlider.Position = [101 152 74 3];
+            app.kbandwidthSlider.Position = [106 175 74 3];
 
             % Create kbandwidthSliderLabel
             app.kbandwidthSliderLabel = uilabel(app.FilterDesignPanel);
             app.kbandwidthSliderLabel.HorizontalAlignment = 'right';
-            app.kbandwidthSliderLabel.Position = [10 143 69 22];
+            app.kbandwidthSliderLabel.Position = [28 166 69 22];
             app.kbandwidthSliderLabel.Text = 'k bandwidth';
 
             % Create FrequencySlider
             app.FrequencySlider = uislider(app.FilterDesignPanel);
             app.FrequencySlider.ValueChangedFcn = createCallbackFcn(app, @FrequencySliderValueChanged, true);
-            app.FrequencySlider.Position = [106 99 61 3];
+            app.FrequencySlider.Position = [106 126 74 3];
 
             % Create FrequencySliderLabel
             app.FrequencySliderLabel = uilabel(app.FilterDesignPanel);
             app.FrequencySliderLabel.HorizontalAlignment = 'right';
-            app.FrequencySliderLabel.Position = [22 90 62 22];
+            app.FrequencySliderLabel.Position = [22 117 62 22];
             app.FrequencySliderLabel.Text = 'Frequency';
 
             % Create BandwidthSlider
             app.BandwidthSlider = uislider(app.FilterDesignPanel);
             app.BandwidthSlider.ValueChangedFcn = createCallbackFcn(app, @BandwidthSliderValueChanged, true);
-            app.BandwidthSlider.Position = [105 54 74 3];
+            app.BandwidthSlider.Position = [101 80 84 3];
 
             % Create BandwidthSliderLabel
             app.BandwidthSliderLabel = uilabel(app.FilterDesignPanel);
             app.BandwidthSliderLabel.HorizontalAlignment = 'right';
-            app.BandwidthSliderLabel.Position = [22 45 61 22];
+            app.BandwidthSliderLabel.Position = [18 71 61 22];
             app.BandwidthSliderLabel.Text = 'Bandwidth';
+
+            % Create VelocitySpinnerLabel
+            app.VelocitySpinnerLabel = uilabel(app.FilterDesignPanel);
+            app.VelocitySpinnerLabel.HorizontalAlignment = 'right';
+            app.VelocitySpinnerLabel.Position = [28 15 46 22];
+            app.VelocitySpinnerLabel.Text = 'Velocity';
+            app.VelocitySpinnerLabel.Visible = 'off';  % Initially hidden
+
+            % Create VelocitySpinner
+            app.VelocitySpinner = uispinner(app.FilterDesignPanel);
+            app.VelocitySpinner.Limits = [0 Inf];
+            app.VelocitySpinner.Value = 0.5;
+            app.VelocitySpinner.Step = 0.1;
+            app.VelocitySpinner.ValueChangedFcn = createCallbackFcn(app, @VelocitySpinnerValueChanged, true);
+            app.VelocitySpinner.Position = [89 15 100 22];
+            app.VelocitySpinner.Visible = 'off';  % Initially hidden
+
+            % Create ViewerPanel
+            app.ViewerPanel = uipanel(app.JointTab);
+            app.ViewerPanel.AutoResizeChildren = 'off';
+            app.ViewerPanel.Title = 'Viewer';
+            app.ViewerPanel.Position = [5 4 508 398];
+
+            % Create GridLayout2
+            app.GridLayout2 = uigridlayout(app.ViewerPanel);
+            app.GridLayout2.RowHeight = {'1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x'};
+
+            % Create BackButton
+            app.BackButton = uibutton(app.GridLayout2, 'push');
+            app.BackButton.Layout.Row = 12;
+            app.BackButton.Layout.Column = 1;
+            app.BackButton.Text = 'Back';
+
+            % Create PlayButton
+            app.PlayButton = uibutton(app.GridLayout2, 'push');
+            app.PlayButton.Layout.Row = 12;
+            app.PlayButton.Layout.Column = 2;
+            app.PlayButton.Text = 'Play';
 
             % Create SpatialTab
             app.SpatialTab = uitab(app.TabGroup);
@@ -592,67 +704,61 @@ classdef BctFilterDesigner < matlab.apps.AppBase
             app.MeshPanel.Layout.Row = 1;
             app.MeshPanel.Layout.Column = 3;
 
-            % Create ViewerPanel
-            app.ViewerPanel = uipanel(app.MeshPanel);
-            app.ViewerPanel.AutoResizeChildren = 'off';
-            app.ViewerPanel.Title = 'Viewer';
-            app.ViewerPanel.Position = [11 353 572 388];
+            % Create UIAxesResponse
+            app.UIAxesResponse = uiaxes(app.MeshPanel);
+            title(app.UIAxesResponse, 'Title')
+            xlabel(app.UIAxesResponse, 'Frequency (Hz)')
+            ylabel(app.UIAxesResponse, 'Wavenumber (k)')
+            zlabel(app.UIAxesResponse, 'Z')
+            app.UIAxesResponse.Position = [27 432 335 291];
 
-            % Create GridLayout2
-            app.GridLayout2 = uigridlayout(app.ViewerPanel);
-            app.GridLayout2.RowHeight = {'1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x', '1x'};
+            % Create EigenbasisLabel
+            app.EigenbasisLabel = uilabel(app.MeshPanel);
+            app.EigenbasisLabel.Position = [30 361 64 22];
+            app.EigenbasisLabel.Text = 'Eigenbasis';
 
-            % Create SignalPanel
-            app.SignalPanel = uipanel(app.MeshPanel);
-            app.SignalPanel.Title = 'Signal';
-            app.SignalPanel.Position = [11 20 564 233];
+            % Create FourierButton
+            app.FourierButton = uibutton(app.MeshPanel, 'push');
+            app.FourierButton.ButtonPushedFcn = createCallbackFcn(app, @FourierButtonPushed, true);
+            app.FourierButton.Position = [96 309 166 40];
+            app.FourierButton.Text = 'Fourier';
+
+            % Create kmodesEditFieldLabel
+            app.kmodesEditFieldLabel = uilabel(app.MeshPanel);
+            app.kmodesEditFieldLabel.HorizontalAlignment = 'right';
+            app.kmodesEditFieldLabel.Position = [30 329 50 22];
+            app.kmodesEditFieldLabel.Text = 'k modes';
+
+            % Create kmodesEditField
+            app.kmodesEditField = uieditfield(app.MeshPanel, 'numeric');
+            app.kmodesEditField.Position = [30 307 57 22];
+            app.kmodesEditField.Value = 300;
 
             % Create SignalDropDownLabel
-            app.SignalDropDownLabel = uilabel(app.SignalPanel);
+            app.SignalDropDownLabel = uilabel(app.MeshPanel);
             app.SignalDropDownLabel.HorizontalAlignment = 'right';
-            app.SignalDropDownLabel.Position = [13 144 38 22];
+            app.SignalDropDownLabel.Position = [30 269 38 22];
             app.SignalDropDownLabel.Text = 'Signal';
 
             % Create SignalDropDown
-            app.SignalDropDown = uidropdown(app.SignalPanel);
-            app.SignalDropDown.Position = [66 144 211 22];
+            app.SignalDropDown = uidropdown(app.MeshPanel);
+            app.SignalDropDown.Position = [30 240 115 22];
 
             % Create vDeltaEditFieldLabel
-            app.vDeltaEditFieldLabel = uilabel(app.SignalPanel);
+            app.vDeltaEditFieldLabel = uilabel(app.MeshPanel);
             app.vDeltaEditFieldLabel.HorizontalAlignment = 'right';
-            app.vDeltaEditFieldLabel.Position = [375 33 39 22];
+            app.vDeltaEditFieldLabel.Position = [161 269 39 22];
             app.vDeltaEditFieldLabel.Text = 'vDelta';
 
             % Create vDeltaEditField
-            app.vDeltaEditField = uieditfield(app.SignalPanel, 'numeric');
-            app.vDeltaEditField.Position = [429 33 100 22];
+            app.vDeltaEditField = uieditfield(app.MeshPanel, 'numeric');
+            app.vDeltaEditField.Position = [161 240 100 22];
 
-            % Create ShowMeshButton
-            app.ShowMeshButton = uibutton(app.SignalPanel, 'push');
-            app.ShowMeshButton.ButtonPushedFcn = createCallbackFcn(app, @ShowMeshButtonPushed, true);
-            app.ShowMeshButton.Position = [13 174 270 26];
-            app.ShowMeshButton.Text = 'Show Mesh';
-
-            % Create Panel_2
-            app.Panel_2 = uipanel(app.MeshPanel);
-            app.Panel_2.AutoResizeChildren = 'off';
-            app.Panel_2.Position = [12 265 564 65];
-
-            % Create GridLayout3
-            app.GridLayout3 = uigridlayout(app.Panel_2);
-            app.GridLayout3.RowHeight = {'1x'};
-
-            % Create BackButton
-            app.BackButton = uibutton(app.GridLayout3, 'push');
-            app.BackButton.Layout.Row = 1;
-            app.BackButton.Layout.Column = 1;
-            app.BackButton.Text = 'Back';
-
-            % Create PlayButton
-            app.PlayButton = uibutton(app.GridLayout3, 'push');
-            app.PlayButton.Layout.Row = 1;
-            app.PlayButton.Layout.Column = 2;
-            app.PlayButton.Text = 'Play';
+            % Create SaveButton
+            app.SaveButton = uibutton(app.MeshPanel, 'push');
+            app.SaveButton.ButtonPushedFcn = createCallbackFcn(app, @SaveButtonPushed, true);
+            app.SaveButton.Position = [34 211 100 22];
+            app.SaveButton.Text = 'Save';
 
             % Show the figure after all components are created
             app.UIFigure.Visible = 'on';
@@ -663,7 +769,7 @@ classdef BctFilterDesigner < matlab.apps.AppBase
     methods (Access = public)
 
         % Construct app
-        function app = BctFilterDesigner
+        function app = BctFrontend
 
             % Create UIFigure and components
             createComponents(app)
