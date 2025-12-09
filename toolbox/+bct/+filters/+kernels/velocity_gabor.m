@@ -9,31 +9,32 @@ function kernel_fh = velocity_gabor()
   %               Evaluates tilted/curved ridge kernel for traveling wave packets
   %
   % Description:
-  %   Creates a joint spatiotemporal filter with a tilted/curved ridge in (λ,ω) space.
-  %   This kernel enforces the dispersion relation: ω ≈ v√λ + Dλ
+  %   Creates a joint spatiotemporal filter with a velocity-coupled ridge in (λ,ω) space.
+  %   Like a 2D Gabor filter, but the frequency center follows: ω_center = omega0 + v√λ
   %   
-  %   The filter selects wave components that satisfy a group-velocity constraint,
-  %   producing traveling wave packets when applied to a delta signal.
+  %   This kernel is a 2D Gaussian envelope with independent centers (λ₀, ω₀) and 
+  %   bandwidths (σ_λ, σ_ω), but with velocity coupling that tilts the ridge.
   %
   %   Mathematical form:
-  %     H(λ,ω) = exp[-((ω - (v√λ + Dλ))² / (2σ_ω²))] · exp[-((λ - λ₀)² / (2σ_λ²))]
+  %     H(λ,ω) = exp[-((ω - (ω₀ + v√λ + Dλ))² / (2σ_ω²))] · exp[-((λ - λ₀)² / (2σ_λ²))]
   %
   %   Components:
-  %     - Ridge: ω ≈ v√λ + Dλ (velocity + dispersion)
-  %     - Spatial bandpass: Gaussian centered at λ₀ with width σ_λ
-  %     - Temporal selectivity: Controlled by σ_ω along the ridge
+  %     - Lambda axis: Gaussian centered at λ₀ with bandwidth σ_λ
+  %     - Omega axis: Gaussian centered at (ω₀ + v√λ) with bandwidth σ_ω
+  %     - Velocity coupling: v determines tilt, D adds curvature
   %
   % Parameters (when evaluating):
-  %   lambda   - Eigenvalue grid [K×1] or [K×F] (spatial frequency)
-  %   omega    - Angular frequency grid [1×F] or [K×F] (temporal frequency)
+  %   lambda   - Eigenvalue grid [M×N] (spatial frequency meshgrid)
+  %   omega    - Angular frequency grid [M×N] (temporal frequency meshgrid)
   %   v        - Group velocity (rad/mm/s) - controls tilt of ridge
-  %   sigma_w  - Temporal bandwidth along ridge (rad/s)
-  %   lambda0  - Center eigenvalue (controls spatial scale)
-  %   sigma_l  - Spatial bandwidth (controls packet size)
-  %   D        - Dispersion coefficient (optional, default: 0) - controls curvature
+  %   sigma_w  - Temporal bandwidth (rad/s) - width in omega direction
+  %   lambda0  - Spatial center eigenvalue - center in lambda direction
+  %   sigma_l  - Spatial bandwidth - width in lambda direction
+  %   omega0   - Frequency center (optional, default: 0) - baseline frequency
+  %   D        - Dispersion coefficient (optional, default: 0) - adds curvature
   %
   % Returns:
-  %   H - [K×F] filter response matrix on Lambda×Omega grid
+  %   H - [M×N] filter response matrix on Lambda×Omega grid
   %
   % Properties:
   %   ✓ Non-separable (both λ and ω appear in combined expression)
@@ -81,29 +82,26 @@ end
 function H = velocity_gabor_kernel(lambda, omega, v, sigma_w, lambda0, sigma_l, varargin)
   % Internal implementation with proper broadcasting and dispersion support
   
-  % Parse optional dispersion parameter
+  % Parse optional parameters
   p = inputParser;
-  addOptional(p, 'D', 0, @isnumeric);  % Dispersion coefficient (default: 0)
+  addOptional(p, 'omega0', 0, @isnumeric);  % Frequency center (default: 0)
+  addOptional(p, 'D', 0, @isnumeric);       % Dispersion coefficient (default: 0)
   parse(p, varargin{:});
+  omega0 = p.Results.omega0;
   D = p.Results.D;
   
-  % Ensure lambda is column vector [K×1]
-  lambda = lambda(:);
+  % lambda and omega are already meshgrids [M×N] from evaluateJoint
+  % No need to reshape - work with them directly like gabor does
   
-  % Ensure omega is row vector [1×F]
-  omega = omega(:).';
+  % Velocity kernel form: exp(-((ω - (ω₀ + v√λ + Dλ))² / (2σ_ω²))) · exp(-((λ - λ₀)² / (2σ_λ²)))
+  % This is exactly like 2D Gabor but with coupled center: (ω₀ + v√λ) instead of fixed ω₀
   
-  % Compute dispersion relation ridge: ω_ridge(λ) = v√λ + Dλ
-  % omega is [1×F], omega_ridge is [K×1], result is [K×F]
-  omega_ridge = v * sqrt(abs(lambda)) + D * lambda;
+  % Compute ridge component: exp[-((ω - (ω₀ + v√λ + Dλ))² / (2σ_ω²))]
+  ridge = exp(-((omega - (omega0 + v * sqrt(abs(lambda)) + D * lambda)).^2) ./ (2 * sigma_w^2));
   
-  % Compute ridge component: exp[-((ω - ω_ridge)² / (2σ_ω²))]
-  ridge = exp(-((omega - omega_ridge).^2) ./ (2 * sigma_w^2));
+  % Compute spatial component: exp[-((λ - λ₀)² / (2σ_λ²))]
+  spatial = exp(-((lambda - lambda0).^2) ./ (2 * sigma_l^2));
   
-  % Compute spatial bandpass component: exp[-((λ - λ₀)² / (2σ_λ²))]
-  % lambda is [K×1], result is [K×1], broadcasts to [K×F]
-  spatial_bandpass = exp(-((lambda - lambda0).^2) ./ (2 * sigma_l^2));
-  
-  % Combine both components (element-wise multiplication with broadcasting)
-  H = ridge .* spatial_bandpass;
+  % Combine both components (element-wise multiplication)
+  H = ridge .* spatial;
 end
