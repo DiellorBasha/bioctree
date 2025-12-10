@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCT Sidebar</title>
+  <link rel="stylesheet" href="../dist/bct-ui.css">
+</head>
+<body class="m-0 p-0 overflow-hidden h-screen">
+  <div id="sidebar" class="h-full flex flex-col bg-light-bg-primary dark:bg-dark-bg-primary border-r border-light-border dark:border-dark-border">
+    <!-- Sidebar header -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-light-border dark:border-dark-border bg-light-bg-secondary dark:bg-dark-bg-secondary">
+      <h3 class="text-sm font-semibold">Properties</h3>
+      <button id="collapse-all" class="btn-icon p-1" title="Collapse all sections">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Sections container -->
+    <div id="sections-container" class="flex-1 overflow-y-auto p-2 space-y-2">
+      <!-- Sections will be inserted here -->
+    </div>
+  </div>
+
+  <script src="../dist/bct-ui.js"></script>
+  <script src="./sidebar.js"></script>
+</body>
+</html>
