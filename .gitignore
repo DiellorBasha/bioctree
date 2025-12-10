@@ -15,6 +15,6 @@
 /external/toolbox_graph
 /external/gptoolbox
 
-
+/docs/site
 # Test files
 test_*.py

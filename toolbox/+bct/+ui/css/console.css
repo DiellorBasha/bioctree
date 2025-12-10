@@ -1,0 +1,206 @@
+/**
+ * BCT Console Styles
+ */
+
+.bct-console {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--bct-dark-bg-primary);
+    color: var(--bct-dark-text-primary);
+    font-family: var(--bct-font-mono);
+}
+
+.console-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--bct-spacing-sm) var(--bct-spacing-md);
+    background-color: var(--bct-dark-bg-secondary);
+    border-bottom: var(--bct-border-width) solid var(--bct-dark-border);
+}
+
+.console-title {
+    margin: 0;
+    font-size: var(--bct-font-size-md);
+    font-weight: 600;
+    color: var(--bct-dark-text-primary);
+}
+
+.console-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--bct-spacing-sm);
+}
+
+.console-filter {
+    padding: var(--bct-spacing-xs) var(--bct-spacing-sm);
+    font-size: var(--bct-font-size-sm);
+    background-color: var(--bct-dark-bg-tertiary);
+    color: var(--bct-dark-text-primary);
+    border: var(--bct-border-width) solid var(--bct-dark-border);
+}
+
+.console-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--bct-spacing-sm);
+    font-size: var(--bct-font-size-sm);
+    line-height: 1.6;
+}
+
+.console-message {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--bct-spacing-sm);
+    padding: var(--bct-spacing-xs) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.console-message:last-child {
+    border-bottom: none;
+}
+
+.console-timestamp {
+    flex-shrink: 0;
+    color: var(--bct-dark-text-secondary);
+    font-size: var(--bct-font-size-xs);
+    min-width: 60px;
+}
+
+.console-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: var(--bct-font-size-sm);
+    border-radius: 3px;
+}
+
+.console-message-info .console-badge {
+    background-color: var(--bct-info);
+    color: white;
+}
+
+.console-message-success .console-badge {
+    background-color: var(--bct-success);
+    color: white;
+}
+
+.console-message-warning .console-badge {
+    background-color: var(--bct-warning);
+    color: var(--bct-text-primary);
+}
+
+.console-message-error .console-badge {
+    background-color: var(--bct-error);
+    color: white;
+}
+
+.console-text {
+    flex: 1;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.console-message-info .console-text {
+    color: var(--bct-dark-text-primary);
+}
+
+.console-message-success .console-text {
+    color: #4ade80;
+}
+
+.console-message-warning .console-text {
+    color: #fbbf24;
+}
+
+.console-message-error .console-text {
+    color: #f87171;
+}
+
+.console-input-container {
+    display: flex;
+    align-items: center;
+    padding: var(--bct-spacing-sm) var(--bct-spacing-md);
+    background-color: var(--bct-dark-bg-secondary);
+    border-top: var(--bct-border-width) solid var(--bct-dark-border);
+    gap: var(--bct-spacing-sm);
+}
+
+.console-prompt {
+    color: var(--bct-primary-light);
+    font-weight: bold;
+    font-size: var(--bct-font-size-md);
+}
+
+.console-input {
+    flex: 1;
+    padding: var(--bct-spacing-xs) var(--bct-spacing-sm);
+    background-color: var(--bct-dark-bg-tertiary);
+    color: var(--bct-dark-text-primary);
+    border: var(--bct-border-width) solid var(--bct-dark-border);
+    border-radius: var(--bct-border-radius-sm);
+    font-family: var(--bct-font-mono);
+    font-size: var(--bct-font-size-sm);
+}
+
+.console-input:focus {
+    outline: none;
+    border-color: var(--bct-primary);
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+}
+
+.console-input::placeholder {
+    color: var(--bct-dark-text-secondary);
+}
+
+/* Custom button styling for console */
+.console-controls .bct-btn-icon {
+    padding: var(--bct-spacing-xs);
+    background-color: var(--bct-dark-bg-tertiary);
+    color: var(--bct-dark-text-primary);
+    border: var(--bct-border-width) solid var(--bct-dark-border);
+    font-size: var(--bct-font-size-md);
+    cursor: pointer;
+    transition: all var(--bct-transition-fast);
+}
+
+.console-controls .bct-btn-icon:hover:not(:disabled) {
+    background-color: var(--bct-bg-tertiary);
+}
+
+.console-controls .bct-btn-icon:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Scrollbar styling for dark console */
+.console-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.console-messages::-webkit-scrollbar-track {
+    background: var(--bct-dark-bg-secondary);
+}
+
+.console-messages::-webkit-scrollbar-thumb {
+    background: var(--bct-dark-border);
+    border-radius: 4px;
+}
+
+.console-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--bct-secondary);
+}
+
+/* Empty state */
+.console-messages:empty::before {
+    content: "Console is empty. Messages will appear here.";
+    display: block;
+    padding: var(--bct-spacing-lg);
+    text-align: center;
+    color: var(--bct-dark-text-secondary);
+    font-style: italic;
+}
