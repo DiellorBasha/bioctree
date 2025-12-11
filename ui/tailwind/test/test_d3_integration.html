@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCT D3 Integration Test</title>
+  <link rel="stylesheet" href="../dist/bct-ui.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .test-section {
+      margin-bottom: 40px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    #scrubber-test {
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>BCT + D3.js Integration Test</h1>
+    
+    <div class="test-section">
+      <h2>1. Library Loading Test</h2>
+      <div id="library-status" class="status">Checking...</div>
+      <ul id="library-checks"></ul>
+    </div>
+
+    <div class="test-section">
+      <h2>2. D3.js Functionality Test</h2>
+      <div id="d3-status" class="status">Checking...</div>
+      <svg id="d3-test-svg" width="400" height="100"></svg>
+    </div>
+
+    <div class="test-section">
+      <h2>3. BaseScrubber Component Test</h2>
+      <div id="scrubber-status" class="status">Checking...</div>
+      <div id="scrubber-test"></div>
+    </div>
+  </div>
+
+  <!-- Load BCT UI Library -->
+  <script src="../dist/bct-ui.js"></script>
+
+  <!-- Test Script -->
+  <script>
+    (function() {
+      'use strict';
+      
+      const libraryStatus = document.getElementById('library-status');
+      const libraryChecks = document.getElementById('library-checks');
+      const d3Status = document.getElementById('d3-status');
+      const scrubberStatus = document.getElementById('scrubber-status');
+
+      // Test 1: Library Loading
+      function testLibraryLoading() {
+        const checks = [
+          { name: 'BCT global namespace', test: () => typeof window.BCT !== 'undefined' },
+          { name: 'D3.js library', test: () => typeof BCT.d3 !== 'undefined' },
+          { name: 'BaseScrubber class', test: () => typeof BCT.BaseScrubber === 'function' },
+          { name: 'StateManager class', test: () => typeof BCT.StateManager === 'function' },
+          { name: 'Utility functions', test: () => typeof BCT.postToMatlab === 'function' },
+          { name: 'BCT version', test: () => typeof BCT.version === 'string' }
+        ];
+
+        let allPassed = true;
+        checks.forEach(check => {
+          const passed = check.test();
+          const li = document.createElement('li');
+          li.textContent = `${check.name}: ${passed ? '✅ PASS' : '❌ FAIL'}`;
+          li.style.color = passed ? 'green' : 'red';
+          libraryChecks.appendChild(li);
+          if (!passed) allPassed = false;
+        });
+
+        if (allPassed) {
+          libraryStatus.textContent = `✅ All library checks passed! BCT UI v${BCT.version}`;
+          libraryStatus.className = 'status success';
+        } else {
+          libraryStatus.textContent = '❌ Some library checks failed';
+          libraryStatus.className = 'status error';
+        }
+      }
+
+      // Test 2: D3.js Functionality
+      function testD3Functionality() {
+        try {
+          const svg = BCT.d3.select('#d3-test-svg');
+          
+          // Create a simple visualization
+          const data = [10, 20, 30, 40, 50];
+          
+          svg.selectAll('rect')
+            .data(data)
+            .join('rect')
+            .attr('x', (d, i) => i * 80)
+            .attr('y', d => 100 - d)
+            .attr('width', 60)
+            .attr('height', d => d)
+            .attr('fill', 'steelblue');
+
+          d3Status.textContent = '✅ D3.js working correctly! Created bar chart visualization.';
+          d3Status.className = 'status success';
+        } catch (error) {
+          d3Status.textContent = `❌ D3.js test failed: ${error.message}`;
+          d3Status.className = 'status error';
+        }
+      }
+
+      // Test 3: BaseScrubber Component
+      function testBaseScrubber() {
+        try {
+          const scrubber = new BCT.BaseScrubber('#scrubber-test', {
+            min: 0,
+            max: 100,
+            center: 50,
+            width: 20,
+            label: 'Test Axis',
+            domain: 'test',
+            kernelShape: 'gaussian'
+          });
+
+          scrubberStatus.textContent = '✅ BaseScrubber initialized successfully! Try interacting with it above.';
+          scrubberStatus.className = 'status success';
+
+          // Add some test controls
+          const controls = document.createElement('div');
+          controls.style.marginTop = '20px';
+          controls.innerHTML = `
+            <button onclick="window.testScrubber.setCenter(25)">Set Center to 25</button>
+            <button onclick="window.testScrubber.setWidth(40)">Set Width to 40</button>
+            <button onclick="window.testScrubber.setKernelShape('rectangular')">Rectangular Kernel</button>
+            <button onclick="window.testScrubber.setKernelShape('hann')">Hann Kernel</button>
+            <button onclick="window.testScrubber.reset()">Reset</button>
+          `;
+          controls.querySelectorAll('button').forEach(btn => {
+            btn.style.marginRight = '10px';
+            btn.style.padding = '8px 16px';
+            btn.style.cursor = 'pointer';
+          });
+          document.getElementById('scrubber-test').parentElement.appendChild(controls);
+
+          window.testScrubber = scrubber;
+        } catch (error) {
+          scrubberStatus.textContent = `❌ BaseScrubber test failed: ${error.message}`;
+          scrubberStatus.className = 'status error';
+          console.error(error);
+        }
+      }
+
+      // Run all tests when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          testLibraryLoading();
+          testD3Functionality();
+          testBaseScrubber();
+        });
+      } else {
+        testLibraryLoading();
+        testD3Functionality();
+        testBaseScrubber();
+      }
+    })();
+  </script>
+</body>
+</html>
