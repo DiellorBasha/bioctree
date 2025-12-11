@@ -1,9 +1,10 @@
 /**
  * BCT BaseScrubber Component
  * Interactive 1D axis navigation with kernel visualization using D3.js
+ * Features: Brush snapping, smooth transitions, kernel visualization
  */
 
-import { select, scaleLinear, line, drag, brushX } from 'd3';
+import { select, scaleLinear, line, brushX } from 'd3';
 import { StateManager, $, postToMatlab, onMatlabMessage } from '../core/utils.js';
 
 export class BaseScrubber {
@@ -39,8 +40,10 @@ export class BaseScrubber {
       dragTarget: null
     });
 
-    // D3 selections
+    // D3 selections and brush
     this.svg = null;
+    this.brushGroup = null;
+    this.brush = null;
     this.kernelPath = null;
     this.centerLine = null;
     this.leftLine = null;
@@ -48,6 +51,11 @@ export class BaseScrubber {
     
     // Scales
     this.xScale = null;
+    
+    // Brush snapping
+    this.snapThreshold = options.snapThreshold ?? 5; // pixels
+    this.transitionDuration = options.transitionDuration ?? 300; // ms
+    this.isSnapping = false;
     
     // Initialize
     this.init();
@@ -59,13 +67,20 @@ export class BaseScrubber {
 
   init() {
     this.render();
+    this.setupBrush();
     this.setupEventListeners();
     this.updateVisualization();
   }
 
   render() {
-    // Get elements
+    // Get SVG element
     this.svg = select(this.container).select('#kernel-svg');
+    
+    if (!this.svg.node()) {
+      throw new Error('BaseScrubber: SVG element #kernel-svg not found');
+    }
+    
+    // Get other DOM elements
     this.selectionRegion = $(this.container, '#selection-region');
     this.centerKnob = $(this.container, '#center-knob');
     this.leftHandle = $(this.container, '#left-handle');
@@ -75,43 +90,199 @@ export class BaseScrubber {
     // Create scale
     const axisMin = this.state.get('axisMin');
     const axisMax = this.state.get('axisMax');
+    const svgWidth = this.svg.node().clientWidth;
+    
     this.xScale = scaleLinear()
       .domain([axisMin, axisMax])
-      .range([0, this.svg.node().clientWidth]);
+      .range([0, svgWidth]);
     
-    // Get SVG elements
+    // Get SVG elements for kernel visualization
     this.kernelPath = this.svg.select('#kernel-path');
     this.centerLine = this.svg.select('#center-line');
     this.leftLine = this.svg.select('#left-line');
     this.rightLine = this.svg.select('#right-line');
     
+    // Create brush group if it doesn't exist
+    this.brushGroup = this.svg.select('.brush-group');
+    if (this.brushGroup.empty()) {
+      this.brushGroup = this.svg.append('g')
+        .attr('class', 'brush-group');
+    }
+    
     // Update initial view
     this.renderAxisTicks();
-    this.renderSelectionRegion();
+  }
+
+  setupBrush() {
+    const svgHeight = this.svg.node().clientHeight;
+    const center = this.state.get('center');
+    const width = this.state.get('width');
+    
+    // Calculate initial brush extent in pixel coordinates
+    const x0 = this.xScale(center - width / 2);
+    const x1 = this.xScale(center + width / 2);
+    
+    // Create D3 brush
+    this.brush = brushX()
+      .extent([[0, 0], [this.xScale.range()[1], svgHeight]])
+      .on('brush', (event) => this.onBrush(event))
+      .on('end', (event) => this.onBrushEnd(event));
+    
+    // Apply brush to group
+    this.brushGroup.call(this.brush);
+    
+    // Set initial brush selection
+    this.brushGroup.call(this.brush.move, [x0, x1]);
+    
+    // Style the brush
+    this.styleBrush();
+  }
+
+  styleBrush() {
+    // Style brush overlay (invisible clickable area)
+    this.brushGroup.select('.overlay')
+      .style('pointer-events', 'all')
+      .style('cursor', 'crosshair');
+    
+    // Style brush selection (the selected region)
+    this.brushGroup.select('.selection')
+      .style('fill', 'rgb(99, 102, 241)')
+      .style('fill-opacity', 0.2)
+      .style('stroke', 'rgb(99, 102, 241)')
+      .style('stroke-width', 2)
+      .style('cursor', 'move');
+    
+    // Style brush handles
+    this.brushGroup.selectAll('.handle')
+      .style('fill', 'rgb(99, 102, 241)')
+      .style('fill-opacity', 0.8)
+      .style('cursor', 'ew-resize')
+      .attr('width', 6)
+      .attr('rx', 3);
+  }
+
+  onBrush(event) {
+    // Don't update during programmatic moves or snapping
+    if (!event.sourceEvent || this.isSnapping) return;
+    
+    const selection = event.selection;
+    if (!selection) return;
+    
+    const [x0, x1] = selection;
+    
+    // Convert pixel coordinates to data coordinates
+    const left = this.xScale.invert(x0);
+    const right = this.xScale.invert(x1);
+    const newCenter = (left + right) / 2;
+    const newWidth = right - left;
+    
+    // Update state
+    this.state.set({
+      center: newCenter,
+      width: newWidth,
+      leftBound: left,
+      rightBound: right
+    });
+    
+    // Update visualization (kernel, lines, etc.)
+    this.updateKernelVisualization();
+    this.renderValueDisplays();
+  }
+
+  onBrushEnd(event) {
+    // Don't snap during programmatic moves
+    if (!event.sourceEvent || this.isSnapping) return;
+    
+    const selection = event.selection;
+    if (!selection) return;
+    
+    const [x0, x1] = selection;
+    
+    // Convert to data coordinates
+    const left = this.xScale.invert(x0);
+    const right = this.xScale.invert(x1);
+    const center = (left + right) / 2;
+    const width = right - left;
+    
+    // Apply snap function
+    const snapFunction = this.state.get('snapFunction');
+    const snappedCenter = snapFunction(center);
+    const snappedLeft = snapFunction(left);
+    const snappedRight = snapFunction(right);
+    
+    // Check if snapping is needed
+    const centerDiff = Math.abs(this.xScale(snappedCenter) - this.xScale(center));
+    const needsSnap = centerDiff > this.snapThreshold;
+    
+    if (needsSnap) {
+      this.isSnapping = true;
+      
+      // Calculate snapped extent
+      let newX0, newX1;
+      
+      if (this.state.get('isSymmetric')) {
+        // Symmetric: snap center and maintain width
+        const halfWidth = width / 2;
+        newX0 = this.xScale(snappedCenter - halfWidth);
+        newX1 = this.xScale(snappedCenter + halfWidth);
+      } else {
+        // Asymmetric: snap both boundaries
+        newX0 = this.xScale(snappedLeft);
+        newX1 = this.xScale(snappedRight);
+      }
+      
+      // Animate brush to snapped position
+      this.brushGroup
+        .transition()
+        .duration(this.transitionDuration)
+        .call(this.brush.move, [newX0, newX1])
+        .on('end', () => {
+          this.isSnapping = false;
+          
+          // Update state with snapped values
+          const finalCenter = (snappedLeft + snappedRight) / 2;
+          const finalWidth = snappedRight - snappedLeft;
+          
+          this.state.set({
+            center: this.state.get('isSymmetric') ? snappedCenter : finalCenter,
+            width: finalWidth,
+            leftBound: snappedLeft,
+            rightBound: snappedRight
+          });
+          
+          this.updateVisualization();
+          this.notifyChange();
+        });
+    } else {
+      // No snapping needed, just update state
+      this.state.set({
+        center: center,
+        width: width,
+        leftBound: left,
+        rightBound: right
+      });
+      
+      this.notifyChange();
+    }
   }
 
   setupEventListeners() {
-    // Center knob drag
-    if (this.centerKnob) {
-      this.centerKnob.addEventListener('mousedown', (e) => this.startDrag(e, 'center'));
+    // Click-to-set center (works with brush)
+    const svg = this.svg.node();
+    if (svg) {
+      svg.addEventListener('click', (e) => {
+        // Only handle clicks outside the brush selection
+        const brushSelection = this.brushGroup.select('.selection').node();
+        if (brushSelection && e.target !== brushSelection) {
+          this.handleClickToSet(e);
+        }
+      });
     }
     
-    // Handle drags (asymmetric mode)
-    if (this.leftHandle) {
-      this.leftHandle.addEventListener('mousedown', (e) => this.startDrag(e, 'left'));
-    }
-    if (this.rightHandle) {
-      this.rightHandle.addEventListener('mousedown', (e) => this.startDrag(e, 'right'));
-    }
-    
-    // Click-to-set center
-    if (this.clickOverlay) {
-      this.clickOverlay.addEventListener('click', (e) => this.handleClickToSet(e));
-    }
-    
-    // Scroll to adjust width
-    if (this.selectionRegion) {
-      this.selectionRegion.addEventListener('wheel', (e) => this.handleScroll(e), { passive: false });
+    // Scroll to adjust width (works with brush)
+    const brushOverlay = this.brushGroup.select('.overlay').node();
+    if (brushOverlay) {
+      brushOverlay.addEventListener('wheel', (e) => this.handleScroll(e), { passive: false });
     }
     
     // Kernel shape change
@@ -136,84 +307,35 @@ export class BaseScrubber {
       btnReset.addEventListener('click', () => this.reset());
     }
     
-    // Global mouse events for dragging
-    document.addEventListener('mousemove', (e) => this.handleDrag(e));
-    document.addEventListener('mouseup', () => this.endDrag());
-    
     // Listen for MATLAB messages
     onMatlabMessage((data) => this.handleMatlabMessage(data));
   }
 
   // ==========================================================================
-  // DRAG HANDLERS
+  // INTERACTION HANDLERS (work with brush)
   // ==========================================================================
-
-  startDrag(e, target) {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    this.state.set({
-      isDragging: true,
-      dragTarget: target,
-      dragStartX: e.clientX,
-      dragStartValue: this.state.get('center')
-    });
-    
-    if (target === 'center' && this.centerKnob) {
-      this.centerKnob.classList.remove('cursor-grab');
-      this.centerKnob.classList.add('cursor-grabbing');
-    }
-  }
-
-  handleDrag(e) {
-    if (!this.state.get('isDragging')) return;
-    
-    const target = this.state.get('dragTarget');
-    const rect = this.selectionRegion.getBoundingClientRect();
-    const deltaX = e.clientX - this.state.get('dragStartX');
-    const deltaValue = (deltaX / rect.parentElement.offsetWidth) * 
-                       (this.state.get('axisMax') - this.state.get('axisMin'));
-    
-    if (target === 'center') {
-      let newCenter = this.state.get('dragStartValue') + deltaValue;
-      newCenter = this.clampToAxis(newCenter);
-      newCenter = this.state.get('snapFunction')(newCenter);
-      this.state.set('center', newCenter);
-      this.updateVisualization();
-    } else if (target === 'left') {
-      const center = this.state.get('center');
-      let newLeft = center - (this.state.get('width') / 2) + deltaValue;
-      newLeft = this.clampToAxis(newLeft);
-      this.state.set('leftBound', newLeft);
-      this.updateVisualization();
-    } else if (target === 'right') {
-      const center = this.state.get('center');
-      let newRight = center + (this.state.get('width') / 2) + deltaValue;
-      newRight = this.clampToAxis(newRight);
-      this.state.set('rightBound', newRight);
-      this.updateVisualization();
-    }
-  }
-
-  endDrag() {
-    if (this.state.get('isDragging')) {
-      this.state.set('isDragging', false);
-      if (this.centerKnob) {
-        this.centerKnob.classList.remove('cursor-grabbing');
-        this.centerKnob.classList.add('cursor-grab');
-      }
-      this.notifyChange();
-    }
-  }
 
   handleClickToSet(e) {
     const rect = e.target.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const value = this.state.get('axisMin') + x * (this.state.get('axisMax') - this.state.get('axisMin'));
     const snapped = this.state.get('snapFunction')(value);
+    const center = this.clampToAxis(snapped);
+    const width = this.state.get('width');
     
-    this.state.set('center', this.clampToAxis(snapped));
-    this.updateVisualization();
+    // Update state
+    this.state.set({
+      center: center,
+      width: width,
+      leftBound: center - width / 2,
+      rightBound: center + width / 2
+    });
+    
+    // Move brush to new position
+    const x0 = this.xScale(center - width / 2);
+    const x1 = this.xScale(center + width / 2);
+    this.brushGroup.call(this.brush.move, [x0, x1]);
+    
     this.notifyChange();
   }
 
@@ -228,8 +350,18 @@ export class BaseScrubber {
     let newWidth = currentWidth + (delta * widthStep);
     newWidth = Math.max(axisRange * 0.01, Math.min(axisRange * 0.5, newWidth));
     
-    this.state.set('width', newWidth);
-    this.updateVisualization();
+    const center = this.state.get('center');
+    this.state.set({
+      width: newWidth,
+      leftBound: center - newWidth / 2,
+      rightBound: center + newWidth / 2
+    });
+    
+    // Update brush to reflect new width
+    const x0 = this.xScale(center - newWidth / 2);
+    const x1 = this.xScale(center + newWidth / 2);
+    this.brushGroup.call(this.brush.move, [x0, x1]);
+    
     this.notifyChange();
   }
 
@@ -238,22 +370,12 @@ export class BaseScrubber {
     this.state.set('isSymmetric', isSymmetric);
     
     if (isSymmetric) {
-      this.state.set({ leftBound: null, rightBound: null });
-      if (this.leftHandle) this.leftHandle.style.opacity = '0';
-      if (this.rightHandle) this.rightHandle.style.opacity = '0';
-      this.leftLine.attr('opacity', 0);
-      this.rightLine.attr('opacity', 0);
-    } else {
       const center = this.state.get('center');
       const width = this.state.get('width');
-      this.state.set({
-        leftBound: center - width / 2,
-        rightBound: center + width / 2
+      this.state.set({ 
+        leftBound: center - width / 2, 
+        rightBound: center + width / 2 
       });
-      if (this.leftHandle) this.leftHandle.style.opacity = '1';
-      if (this.rightHandle) this.rightHandle.style.opacity = '1';
-      this.leftLine.attr('opacity', 0.5);
-      this.rightLine.attr('opacity', 0.5);
     }
     
     this.updateVisualization();
@@ -263,12 +385,14 @@ export class BaseScrubber {
   reset() {
     const axisMin = this.state.get('axisMin');
     const axisMax = this.state.get('axisMax');
+    const center = (axisMin + axisMax) / 2;
+    const width = (axisMax - axisMin) * 0.2;
     
     this.state.set({
-      center: (axisMin + axisMax) / 2,
-      width: (axisMax - axisMin) * 0.2,
-      leftBound: null,
-      rightBound: null,
+      center: center,
+      width: width,
+      leftBound: center - width / 2,
+      rightBound: center + width / 2,
       isSymmetric: true,
       kernelShape: 'gaussian'
     });
@@ -276,8 +400,10 @@ export class BaseScrubber {
     const kernelSelect = $(this.container, '#kernel-shape');
     if (kernelSelect) kernelSelect.value = 'gaussian';
     
-    if (this.leftHandle) this.leftHandle.style.opacity = '0';
-    if (this.rightHandle) this.rightHandle.style.opacity = '0';
+    // Move brush to reset position
+    const x0 = this.xScale(center - width / 2);
+    const x1 = this.xScale(center + width / 2);
+    this.brushGroup.call(this.brush.move, [x0, x1]);
     
     this.updateVisualization();
     this.notifyChange();
