@@ -1,0 +1,132 @@
+/**
+ * BCT PlotPanel Styles
+ */
+
+.bct-plotpanel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--bct-bg-primary);
+}
+
+.plotpanel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--bct-spacing-md);
+    padding: var(--bct-spacing-sm) var(--bct-spacing-md);
+    background-color: var(--bct-bg-secondary);
+    border-bottom: var(--bct-border-width) solid var(--bct-border);
+}
+
+.plotpanel-toolbar-group {
+    display: flex;
+    gap: var(--bct-spacing-xs);
+    padding: 0 var(--bct-spacing-sm);
+    border-right: var(--bct-border-width) solid var(--bct-border);
+}
+
+.plotpanel-toolbar-group:last-child {
+    border-right: none;
+}
+
+.plotpanel-toolbar .bct-btn-icon {
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.plotpanel-toolbar .bct-btn-icon.active {
+    background-color: var(--bct-primary);
+    color: white;
+}
+
+.plotpanel-canvas-container {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    background-color: white;
+}
+
+#plotpanel-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+}
+
+.plotpanel-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.95);
+    pointer-events: none;
+}
+
+.plotpanel-loading,
+.plotpanel-empty {
+    display: none;
+    font-size: var(--bct-font-size-lg);
+    color: var(--bct-text-secondary);
+}
+
+.plotpanel-loading::before {
+    content: "⏳ ";
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.plotpanel-statusbar {
+    display: flex;
+    align-items: center;
+    gap: var(--bct-spacing-lg);
+    padding: var(--bct-spacing-xs) var(--bct-spacing-md);
+    background-color: var(--bct-bg-secondary);
+    border-top: var(--bct-border-width) solid var(--bct-border);
+    font-size: var(--bct-font-size-sm);
+    font-family: var(--bct-font-mono);
+}
+
+.plotpanel-status-item {
+    color: var(--bct-text-secondary);
+}
+
+/* Interaction mode cursors */
+.bct-plotpanel[data-mode="rotate"] #plotpanel-canvas {
+    cursor: grab;
+}
+
+.bct-plotpanel[data-mode="rotate"] #plotpanel-canvas:active {
+    cursor: grabbing;
+}
+
+.bct-plotpanel[data-mode="pan"] #plotpanel-canvas {
+    cursor: move;
+}
+
+.bct-plotpanel[data-mode="zoom"] #plotpanel-canvas {
+    cursor: zoom-in;
+}
+
+.bct-plotpanel[data-mode="select"] #plotpanel-canvas {
+    cursor: pointer;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .plotpanel-toolbar {
+        flex-wrap: wrap;
+    }
+    
+    .plotpanel-statusbar {
+        flex-wrap: wrap;
+        gap: var(--bct-spacing-sm);
+    }
+}
