@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCT Tailwind Components Browser Test</title>
+  <link rel="stylesheet" href="dist/bct-ui.css">
+  <style>
+    body { 
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .test-container {
+      flex: 1;
+      padding: 1rem;
+      overflow: auto;
+    }
+    .component-demo {
+      margin-bottom: 2rem;
+      border: 1px solid var(--bct-border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    .demo-header {
+      background: var(--bct-bg-secondary);
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--bct-border);
+    }
+    .demo-content {
+      padding: 1rem;
+    }
+    iframe {
+      border: 1px solid var(--bct-border);
+      border-radius: 0.25rem;
+    }
+  </style>
+</head>
+<body class="bg-dark-bg-primary text-dark-text-primary">
+  
+  <div class="bg-dark-bg-secondary border-b border-dark-border p-4">
+    <h1 class="text-2xl font-bold text-bct-primary">BCT Tailwind Components Test Suite</h1>
+    <p class="text-sm text-dark-text-tertiary mt-1">Browser validation for all Tailwind UI components</p>
+  </div>
+
+  <div class="test-container">
+    
+    <!-- Toolstrip Demo -->
+    <div class="component-demo">
+      <div class="demo-header">Toolstrip Component</div>
+      <div class="demo-content">
+        <iframe src="components/toolstrip.html" width="100%" height="120"></iframe>
+        <div class="mt-4 flex gap-2">
+          <button class="btn-primary" onclick="testToolstrip('addGroup')">Add Group</button>
+          <button class="btn-secondary" onclick="testToolstrip('disable')">Disable Buttons</button>
+          <button class="btn-ghost" onclick="testToolstrip('clear')">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar Demo -->
+    <div class="component-demo">
+      <div class="demo-header">Sidebar Component</div>
+      <div class="demo-content">
+        <iframe src="components/sidebar.html" width="300" height="500"></iframe>
+        <div class="mt-4 flex gap-2">
+          <button class="btn-primary" onclick="testSidebar('addSection')">Add Section</button>
+          <button class="btn-secondary" onclick="testSidebar('collapse')">Toggle Collapse</button>
+          <button class="btn-ghost" onclick="testSidebar('clear')">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Console Demo -->
+    <div class="component-demo">
+      <div class="demo-header">Console Component</div>
+      <div class="demo-content">
+        <iframe src="components/console.html" width="100%" height="300"></iframe>
+        <div class="mt-4 flex gap-2">
+          <button class="btn-primary" onclick="testConsole('info')">Add Info</button>
+          <button class="btn-success" onclick="testConsole('success')">Add Success</button>
+          <button class="btn-warning" onclick="testConsole('warning')">Add Warning</button>
+          <button class="btn-danger" onclick="testConsole('error')">Add Error</button>
+          <button class="btn-ghost" onclick="testConsole('clear')">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PlotPanel Demo -->
+    <div class="component-demo">
+      <div class="demo-header">PlotPanel Component</div>
+      <div class="demo-content">
+        <iframe src="components/plotpanel.html" width="100%" height="400"></iframe>
+        <div class="mt-4 flex gap-2">
+          <button class="btn-primary" onclick="testPlotPanel('rotate')">Rotate Mode</button>
+          <button class="btn-secondary" onclick="testPlotPanel('pan')">Pan Mode</button>
+          <button class="btn-secondary" onclick="testPlotPanel('select')">Select Mode</button>
+          <button class="btn-ghost" onclick="testPlotPanel('clear')">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Demo -->
+    <div class="component-demo">
+      <div class="demo-header">Modal Component</div>
+      <div class="demo-content">
+        <iframe src="components/modal.html" width="100%" height="200"></iframe>
+        <div class="mt-4 flex gap-2">
+          <button class="btn-primary" onclick="testModal('alert')">Show Alert</button>
+          <button class="btn-secondary" onclick="testModal('confirm')">Show Confirm</button>
+          <button class="btn-secondary" onclick="testModal('prompt')">Show Prompt</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="dist/bct-ui.js"></script>
+  <script>
+    // Test functions for each component
+    
+    function testToolstrip(action) {
+      const iframe = document.querySelector('iframe[src="components/toolstrip.html"]');
+      const win = iframe.contentWindow;
+      
+      switch(action) {
+        case 'addGroup':
+          const groupId = 'group_' + Date.now();
+          win.Data = {
+            cmd: 'addGroup',
+            group: {
+              id: groupId,
+              label: 'Test Group',
+              buttons: [
+                { id: 'btn1', icon: 'play-circle', label: 'Play', cmd: 'play' },
+                { id: 'btn2', icon: 'pause-circle', label: 'Pause', cmd: 'pause' },
+                { id: 'btn3', icon: 'stop-circle', label: 'Stop', cmd: 'stop' }
+              ]
+            }
+          };
+          break;
+        case 'disable':
+          win.Data = { cmd: 'setButtonEnabled', buttonId: 'btn1', enabled: false };
+          break;
+        case 'clear':
+          win.Data = { cmd: 'clear' };
+          break;
+      }
+    }
+
+    function testSidebar(action) {
+      const iframe = document.querySelector('iframe[src="components/sidebar.html"]');
+      const win = iframe.contentWindow;
+      
+      switch(action) {
+        case 'addSection':
+          const sectionId = 'section_' + Date.now();
+          win.Data = {
+            cmd: 'addSection',
+            section: {
+              id: sectionId,
+              title: 'Test Section ' + Math.floor(Math.random() * 100),
+              collapsible: true,
+              controls: [
+                { id: 'slider1', type: 'slider', label: 'Frequency', min: 0, max: 100, value: 50 },
+                { id: 'toggle1', type: 'toggle', label: 'Enable', value: true },
+                { id: 'dropdown1', type: 'dropdown', label: 'Type', 
+                  options: ['Option A', 'Option B', 'Option C'], value: 'Option A' }
+              ]
+            }
+          };
+          break;
+        case 'collapse':
+          win.Data = { cmd: 'toggleSection', sectionId: 'section_1' };
+          break;
+        case 'clear':
+          win.Data = { cmd: 'clear' };
+          break;
+      }
+    }
+
+    function testConsole(action) {
+      const iframe = document.querySelector('iframe[src="components/console.html"]');
+      const win = iframe.contentWindow;
+      
+      if (action === 'clear') {
+        win.Data = { cmd: 'clear' };
+      } else {
+        const messages = {
+          info: 'Information: Processing data...',
+          success: 'Success: Operation completed!',
+          warning: 'Warning: High memory usage detected',
+          error: 'Error: Failed to load mesh data'
+        };
+        win.Data = {
+          cmd: 'addMessage',
+          message: {
+            level: action,
+            text: messages[action]
+          }
+        };
+      }
+    }
+
+    function testPlotPanel(action) {
+      const iframe = document.querySelector('iframe[src="components/plotpanel.html"]');
+      const win = iframe.contentWindow;
+      
+      switch(action) {
+        case 'rotate':
+        case 'pan':
+        case 'select':
+          win.Data = { cmd: 'setMode', mode: action };
+          break;
+        case 'clear':
+          win.Data = { cmd: 'clear' };
+          break;
+      }
+    }
+
+    function testModal(action) {
+      const iframe = document.querySelector('iframe[src="components/modal.html"]');
+      const win = iframe.contentWindow;
+      
+      const configs = {
+        alert: {
+          cmd: 'show',
+          title: 'Alert',
+          content: 'This is an alert message!',
+          type: 'alert'
+        },
+        confirm: {
+          cmd: 'show',
+          title: 'Confirm',
+          content: 'Are you sure you want to proceed?',
+          type: 'confirm'
+        },
+        prompt: {
+          cmd: 'show',
+          title: 'Input Required',
+          content: 'Please enter your name:',
+          type: 'prompt',
+          promptValue: ''
+        }
+      };
+      
+      win.Data = configs[action];
+    }
+
+    // Initialize with some default content
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        testToolstrip('addGroup');
+        testSidebar('addSection');
+        testConsole('info');
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "bct-ui-tailwind",
+  "version": "1.0.0",
+  "description": "Tailwind-based UI design system for BCT Toolbox",
+  "scripts": {
+    "build": "tailwindcss -i ./src/tailwind.css -o ./dist/bct-ui.css --minify",
+    "watch": "tailwindcss -i ./src/tailwind.css -o ./dist/bct-ui.css --watch",
+    "dev": "tailwindcss -i ./src/tailwind.css -o ./dist/bct-ui.css"
+  },
+  "keywords": [
+    "tailwind",
+    "ui",
+    "matlab",
+    "components"
+  ],
+  "author": "BCT Toolbox",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

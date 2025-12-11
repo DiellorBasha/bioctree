@@ -1,0 +1,215 @@
+<!-- BCT UI Elements - Reusable Component Library -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCT UI Elements</title>
+  <link rel="stylesheet" href="../../dist/bct-ui.css">
+</head>
+<body class="p-8 space-y-8">
+  
+  <!-- Buttons -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Buttons</h2>
+    <div class="flex flex-wrap gap-3">
+      <button class="btn btn-primary">Primary Button</button>
+      <button class="btn btn-secondary">Secondary Button</button>
+      <button class="btn btn-ghost">Ghost Button</button>
+      <button class="btn btn-primary" disabled>Disabled Button</button>
+      
+      <button class="btn-icon">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+      </button>
+      
+      <button class="btn-icon active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- Inputs -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Inputs</h2>
+    <div class="space-y-3 max-w-md">
+      <input type="text" class="input w-full" placeholder="Text input">
+      <input type="number" class="input w-full" placeholder="Number input">
+      <input type="text" class="input w-full" placeholder="Disabled input" disabled>
+    </div>
+  </section>
+
+  <!-- Dropdowns -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Dropdowns</h2>
+    <div class="space-y-3 max-w-md">
+      <select class="select w-full">
+        <option>Select an option...</option>
+        <option>Option 1</option>
+        <option>Option 2</option>
+        <option>Option 3</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- Sliders -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Sliders</h2>
+    <div class="space-y-4 max-w-md">
+      <div>
+        <label class="block text-sm font-medium mb-2">Volume</label>
+        <input type="range" class="slider" min="0" max="100" value="50">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-2">Opacity</label>
+        <input type="range" class="slider" min="0" max="100" value="75">
+      </div>
+    </div>
+  </section>
+
+  <!-- Toggles -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Toggle Switches</h2>
+    <div class="space-y-3">
+      <div class="flex items-center gap-3">
+        <button class="toggle">
+          <span class="toggle-thumb"></span>
+        </button>
+        <span class="text-sm">Inactive toggle</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="toggle active">
+          <span class="toggle-thumb"></span>
+        </button>
+        <span class="text-sm">Active toggle</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabs -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Tabs</h2>
+    <div class="tabs">
+      <button class="tab active">Tab 1</button>
+      <button class="tab">Tab 2</button>
+      <button class="tab">Tab 3</button>
+      <button class="tab">Tab 4</button>
+    </div>
+    <div class="card mt-4 p-4">
+      <p>Tab content goes here...</p>
+    </div>
+  </section>
+
+  <!-- Cards -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Cards</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="card">
+        <div class="card-header">Card Title</div>
+        <div class="card-body">
+          <p class="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+            Card content goes here. This is a reusable card component.
+          </p>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">Another Card</div>
+        <div class="card-body">
+          <p class="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+            Cards can contain any content including buttons and inputs.
+          </p>
+          <button class="btn btn-primary mt-3">Action</button>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-body">
+          <p class="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+            Cards without headers are also supported.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Badges -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Badges</h2>
+    <div class="flex flex-wrap gap-3">
+      <span class="badge badge-primary">Primary</span>
+      <span class="badge badge-success">Success</span>
+      <span class="badge badge-warning">Warning</span>
+      <span class="badge badge-error">Error</span>
+    </div>
+  </section>
+
+  <!-- Notifications/Toasts -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Notifications</h2>
+    <div class="space-y-3 max-w-md">
+      <div class="toast info">
+        <span class="text-xl">ℹ</span>
+        <span class="flex-1">This is an info notification</span>
+        <button class="btn-icon p-1">&times;</button>
+      </div>
+      
+      <div class="toast success">
+        <span class="text-xl">✓</span>
+        <span class="flex-1">Operation completed successfully</span>
+        <button class="btn-icon p-1">&times;</button>
+      </div>
+      
+      <div class="toast warning">
+        <span class="text-xl">⚠</span>
+        <span class="flex-1">Warning: Check your settings</span>
+        <button class="btn-icon p-1">&times;</button>
+      </div>
+      
+      <div class="toast error">
+        <span class="text-xl">✗</span>
+        <span class="flex-1">Error: Something went wrong</span>
+        <button class="btn-icon p-1">&times;</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dividers -->
+  <section>
+    <h2 class="section-header text-lg mb-4">Dividers</h2>
+    <div class="space-y-6">
+      <div>
+        <p>Content above divider</p>
+        <div class="divider"></div>
+        <p>Content below divider</p>
+      </div>
+      
+      <div class="flex items-center gap-4">
+        <p>Left content</p>
+        <div class="divider-vertical h-12"></div>
+        <p>Right content</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="../../dist/bct-ui.js"></script>
+  <script>
+    // Add interactivity
+    document.querySelectorAll('.toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('active');
+      });
+    });
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
