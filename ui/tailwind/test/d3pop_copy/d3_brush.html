@@ -1,0 +1,56 @@
+<!-- D3 Brush Snapping Component -->
+<html>
+<head>
+    <title>D3 Brush Snapping</title>
+    <!-- Load custom CSS -->
+    <link rel="stylesheet" href="d3_brush.css">
+</head>
+<body>
+    <!-- The D3 brush will be rendered in this div -->
+    <div class="brush-container"></div>
+</body>
+
+<!-- Load D3 library -->
+<script src="./d3/d3.min.js"></script>
+
+<!-- Load custom Javascript for brush rendering -->
+<script src="./d3_brush_rendering.js"></script>
+
+<script>
+    console.log('[D3 Brush] Script loaded');
+    
+    // Define the required setup function
+    function setup(htmlComponent) {
+        console.log('[D3 Brush] setup() called');
+        console.log('[D3 Brush] htmlComponent:', htmlComponent);
+        console.log('[D3 Brush] Initial Data:', htmlComponent.Data);
+        
+        try {
+            // Get initial data from MATLAB
+            var data = htmlComponent.Data;
+            
+            // Draw the brush with initial data
+            console.log('[D3 Brush] Calling drawBrush...');
+            drawBrush(data, htmlComponent);
+            console.log('[D3 Brush] drawBrush completed');
+            
+            // Listen for data changes from MATLAB (when properties are updated)
+            htmlComponent.addEventListener("DataChanged", function(event) {
+                console.log('[D3 Brush] DataChanged event received - redrawing brush');
+                var newData = htmlComponent.Data;
+                console.log('[D3 Brush] New Data:', newData);
+                
+                // Redraw the brush with updated data
+                drawBrush(newData, htmlComponent);
+            });
+            
+            console.log('[D3 Brush] Setup complete, ready for interaction');
+        } catch (error) {
+            console.error('[D3 Brush] Error in setup():', error);
+            console.error('[D3 Brush] Stack:', error.stack);
+        }
+    }
+    
+    console.log('[D3 Brush] Waiting for MATLAB to call setup()...');
+</script>
+</html>
