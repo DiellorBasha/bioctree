@@ -39,6 +39,7 @@ classdef Graph < handle
         % Rule: Canonical data is stored. Representations are cached.
         GraphMATLABCache    % containers.Map of cached MATLAB graphs (key: metric_version)
         GraphGSPCache       % containers.Map of cached GSP graphs (key: metric_laplacian_version)
+        Incidence           % cached incidence matrix (topology-dependent only)
         
         GraphVersion        % version number of canonical graph state
     end
@@ -86,6 +87,7 @@ classdef Graph < handle
             % Invalidate all cached representations
             % Call this whenever canonical graph data changes
             obj.GraphVersion = obj.GraphVersion + 1;
+            obj.Incidence = [];  % clear topology-dependent caches
         end
     end
     
@@ -199,7 +201,7 @@ classdef Graph < handle
             
             if ~isKey(obj.GraphMATLABCache, key)
                 % Build weighted MATLAB graph
-                w = obj.Weights.(metric);
+                w = full(obj.Weights.(metric));  % MATLAB graph requires full (non-sparse)
                 G = graph( ...
                     obj.Edges(:,1), ...
                     obj.Edges(:,2), ...
@@ -271,19 +273,310 @@ classdef Graph < handle
         end
         
         function [path, dist] = shortestPath(obj, s, t, metric)
-            % Metric-aware shortest path
+            % Shortest path between two nodes
+            %
+            % Syntax:
+            %   [path, dist] = shortestPath(obj, s, t)
+            %   [path, dist] = shortestPath(obj, s, t, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   t      - Target node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   path - Vector of node indices along shortest path
+            %   dist - Total path distance
             
-            if nargin < 4
-                G = graph(obj.Adjacency);
-            else
-                G = obj.matlabGraph(metric);
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                t (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
             end
             
+            G = obj.matlabGraph(metric);
             [path, dist] = shortestpath(G, s, t);
         end
         
+        function T = shortestPathTree(obj, s, metric)
+            % Shortest path tree from source node
+            %
+            % Syntax:
+            %   T = shortestPathTree(obj, s)
+            %   T = shortestPathTree(obj, s, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   T - Directed graph representing shortest path tree
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            T = shortestpathtree(G, s);
+        end
+        
+        function D = distances(obj, metric)
+            % All-pairs shortest path distances
+            %
+            % Syntax:
+            %   D = distances(obj)
+            %   D = distances(obj, metric)
+            %
+            % Inputs:
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   D - [N×N] matrix of shortest path distances
+            
+            arguments
+                obj
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            D = distances(G);
+        end
+        
+        function [paths, costs] = allPaths(obj, s, t, metric)
+            % Find all paths between two nodes
+            %
+            % Syntax:
+            %   paths = allPaths(obj, s, t)
+            %   [paths, costs] = allPaths(obj, s, t, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   t      - Target node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   paths - Cell array of paths (each path is vector of node indices)
+            %   costs - Vector of path costs
+            %
+            % Note: Available in MATLAB R2021a and later
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                t (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            
+            if nargout > 1
+                [paths, costs] = allpaths(G, s, t);
+            else
+                paths = allpaths(G, s, t);
+            end
+        end
+        
+        function [mf, GF, cs, ct] = maxFlow(obj, s, t, metric)
+            % Maximum flow from source to sink
+            %
+            % Syntax:
+            %   mf = maxFlow(obj, s, t)
+            %   [mf, GF, cs, ct] = maxFlow(obj, s, t, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   t      - Sink node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   mf - Maximum flow value
+            %   GF - Graph with flow values on edges
+            %   cs - Nodes in source side of minimum cut
+            %   ct - Nodes in sink side of minimum cut
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                t (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            [mf, GF, cs, ct] = maxflow(G, s, t);
+        end
+        
+        function [T, pred] = bfSearch(obj, s, metric)
+            % Breadth-first search from source node
+            %
+            % Syntax:
+            %   T = bfSearch(obj, s)
+            %   [T, pred] = bfSearch(obj, s, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   T    - Vector of node discovery order
+            %   pred - Vector of predecessor nodes
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            
+            if nargout > 1
+                [T, pred] = bfsearch(G, s);
+            else
+                T = bfsearch(G, s);
+            end
+        end
+        
+        function [T, pred] = dfSearch(obj, s, metric)
+            % Depth-first search from source node
+            %
+            % Syntax:
+            %   T = dfSearch(obj, s)
+            %   [T, pred] = dfSearch(obj, s, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   T    - Vector of node discovery order
+            %   pred - Vector of predecessor nodes
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            
+            if nargout > 1
+                [T, pred] = dfsearch(G, s);
+            else
+                T = dfsearch(G, s);
+            end
+        end
+        
         function idx = neighbors(obj, v)
+            % Topological neighbors of vertex
+            %
+            % Syntax:
+            %   idx = neighbors(obj, v)
+            %
+            % Inputs:
+            %   v - Vertex index
+            %
+            % Outputs:
+            %   idx - Vector of neighbor vertex indices
+            
             idx = find(obj.Adjacency(v,:));
+        end
+        
+        function deg = degree(obj, v)
+            % Degree of vertex (number of incident edges)
+            %
+            % Syntax:
+            %   deg = degree(obj, v)
+            %   deg = degree(obj)  % all vertices
+            %
+            % Inputs:
+            %   v - Vertex index (scalar or vector), optional
+            %
+            % Outputs:
+            %   deg - Vertex degree(s)
+            %
+            % Note: Uses cached Degree matrix
+            
+            if nargin < 2
+                deg = full(diag(obj.Degree));
+            else
+                deg = full(diag(obj.Degree(v,v)));
+            end
+        end
+        
+        function edges = inedges(obj, v, metric)
+            % Indices of edges incoming to vertex
+            %
+            % Syntax:
+            %   edges = inedges(obj, v)
+            %   edges = inedges(obj, v, metric)
+            %
+            % Inputs:
+            %   v      - Vertex index
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   edges - Vector of edge indices incoming to v
+            %
+            % Note: For undirected graphs, inedges = outedges
+            %       Useful for: GSP gradients, flux aggregation, net flow
+            
+            arguments
+                obj
+                v (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            edges = inedges(G, v);
+        end
+        
+        function edges = outedges(obj, v, metric)
+            % Indices of edges outgoing from vertex
+            %
+            % Syntax:
+            %   edges = outedges(obj, v)
+            %   edges = outedges(obj, v, metric)
+            %
+            % Inputs:
+            %   v      - Vertex index
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   edges - Vector of edge indices outgoing from v
+            %
+            % Note: For undirected graphs, outedges = inedges
+            %       Useful for: GSP gradients, flux aggregation, net flow
+            
+            arguments
+                obj
+                v (1,1) {mustBeInteger, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            edges = outedges(G, v);
+        end
+        
+        function B = incidence(obj)
+            % Incidence matrix (topology-only, cached)
+            %
+            % Syntax:
+            %   B = incidence(obj)
+            %
+            % Outputs:
+            %   B - [N×E] incidence matrix where B(i,j) = ±1 if node i is 
+            %       incident to edge j, 0 otherwise
+            %
+            % Note: Result is cached since it depends only on topology
+            
+            if isempty(obj.Incidence)
+                % Compute from unweighted topology
+                G = obj.matlabGraph();
+                obj.Incidence = incidence(G);
+            end
+            B = obj.Incidence;
         end
     end
 end
