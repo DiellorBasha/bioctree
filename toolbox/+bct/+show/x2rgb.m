@@ -2,7 +2,7 @@ function RGB = x2rgb(x, varargin)
 %X2RGB Map a scalar field x to RGB in [0,1].
 %   RGB = X2RGB(x)                 % robust linear scaling (2–98 pct), parula
 %   RGB = X2RGB(x, 'symmetric',1)  % zero-centered diverging scaling
-%   RGB = X2RGB(x, 'colormap','parula')  % choose 'parula'|'turbo'|'jet'|...
+%   RGB = X2RGB(x, 'colormap','parula')  % choose 'parula'|'turbo'|'jet'|'redblue'|...
 
 % ---- options ----
 p = inputParser;
@@ -48,6 +48,21 @@ switch lower(cmapName)
     case 'turbo',   C = turbo(256);
     case 'jet',     C = jet(256);
     case 'hot',     C = hot(256);
+    case 'redblue'
+        % Diverging red-white-blue colormap
+        m = 256;
+        % Endpoints chosen for perceptual balance
+        bottom = [0.230, 0.299, 0.754];  % blue
+        middle = [1.000, 1.000, 1.000];  % white
+        top    = [0.706, 0.016, 0.150];  % red
+        
+        % Interpolate
+        C = zeros(m,3);
+        for i = 1:3
+            C(:,i) = interp1([1, ceil(m/2), m], ...
+                            [bottom(i), middle(i), top(i)], ...
+                            1:m);
+        end
     otherwise,      C = parula(256);
 end
 idx = 1 + round(xn*(size(C,1)-1));

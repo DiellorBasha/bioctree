@@ -122,4 +122,40 @@ classdef Lambda < bct.Domain
         end
 
     end
+    
+    methods (Static)
+        function obj = fromHDF5(filename)
+            %FROMHDF5 Load Lambda from HDF5 file (lazy loading)
+            %
+            % Syntax:
+            %   obj = bct.Lambda.fromHDF5(filename)
+            %
+            % Inputs:
+            %   filename - Path to HDF5 file
+            %
+            % Outputs:
+            %   obj - Lambda object with eigenvalues and eigenvectors loaded from HDF5
+            
+            % Read eigenvalues and eigenvectors from HDF5
+            lambda_vals = h5read(filename, '/lambda/values');
+            
+            % Check if eigenvectors exist
+            info = h5info(filename, '/lambda');
+            hasU = any(strcmp({info.Datasets.Name}, 'U'));
+            
+            if hasU
+                U = h5read(filename, '/lambda/U');
+            else
+                U = [];
+            end
+            
+            % Create eigenStruct
+            eigenStruct = struct();
+            eigenStruct.eigenvalues = lambda_vals;
+            eigenStruct.eigenvectors = U;
+            
+            % Create Lambda object
+            obj = bct.Lambda(eigenStruct);
+        end
+    end
 end

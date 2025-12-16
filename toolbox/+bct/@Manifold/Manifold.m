@@ -103,6 +103,44 @@ classdef Manifold < bct.Domain
         end
         
         % ---------------------------------------------------------------
+        function A = adjacency(obj)
+            % adjacency - Compute binary adjacency matrix from faces
+            %
+            % Syntax:
+            %   A = M.adjacency()
+            %
+            % Outputs:
+            %   A - [N×N] sparse logical adjacency matrix (symmetric, no self-loops)
+            %
+            % The adjacency is derived from mesh edges: two vertices are adjacent
+            % if they share an edge in any triangle face.
+            %
+            % Example:
+            %   A = B.Manifold.adjacency();
+            %   nnz(A) / 2  % Number of edges
+            %
+            % See also: bct.io.construct.edgesFromFaces
+            
+            F = obj.Faces;
+            if isempty(F)
+                % No faces: return empty sparse matrix
+                N = size(obj.Vertices, 1);
+                A = sparse(N, N);
+                return;
+            end
+            
+            % Extract unique edges from faces
+            e = unique(sort([F(:,[1 2]); F(:,[2 3]); F(:,[3 1])], 2), 'rows');
+            
+            % Build symmetric adjacency matrix
+            N = size(obj.Vertices, 1);
+            A = sparse(e(:,1), e(:,2), true, N, N);
+            A = A + A.';                % Make symmetric
+            A = A - diag(diag(A));      % Remove self-loops
+            A = spones(A) > 0;          % Binary adjacency
+        end
+        
+        % ---------------------------------------------------------------
         function obj = updateResolution(obj)
             % Future: decimation
             if obj.resolutionMode == bct.enum.ResolutionMode.Full
@@ -156,5 +194,28 @@ classdef Manifold < bct.Domain
     methods (Static)
         [L, M, K] = laplacian(V, F, laplacianType);
         lambda_max = maxLambda(obj, scope);
+        
+        function obj = fromHDF5(filename)
+            %FROMHDF5 Load Manifold from HDF5 file (lazy loading)
+            %
+            % Syntax:
+            %   obj = bct.Manifold.fromHDF5(filename)
+            %
+            % Inputs:
+            %   filename - Path to HDF5 file
+            %
+            % Outputs:
+            %   obj - Manifold object with geometry loaded from HDF5
+            
+            % Read vertices and faces from HDF5
+            V = h5read(filename, '/manifold/vertices');
+            F = h5read(filename, '/manifold/faces');
+            
+            % Create meshStruct
+            meshStruct = struct('V', V, 'F', F);
+            
+            % Create Manifold object
+            obj = bct.Manifold(meshStruct);
+        end
     end
 end

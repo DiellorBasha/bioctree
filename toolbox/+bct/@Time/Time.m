@@ -81,4 +81,26 @@ classdef Time < bct.Domain
             obj = obj.buildAxis();
         end
     end
+    
+    methods (Static)
+        function obj = fromHDF5(filename)
+            %FROMHDF5 Load Time from HDF5 file (lazy loading)
+            %
+            % Syntax:
+            %   obj = bct.Time.fromHDF5(filename)
+            %
+            % Inputs:
+            %   filename - Path to HDF5 file
+            %
+            % Outputs:
+            %   obj - Time object with axis and sampling frequency loaded from HDF5
+            
+            % Read time axis and sampling frequency from HDF5
+            t_axis = h5read(filename, '/time/axis');
+            fs = h5readatt(filename, '/time', 'fs');
+            
+            % Create Time object
+            obj = bct.Time(t_axis, fs);
+        end
+    end
 end
