@@ -62,6 +62,13 @@ try
             addpath(genpath(gptoolbox_mesh_path));
             fprintf('      ✓ External: %s\n', gptoolbox_mesh_path);
         end
+        
+        % Add DECLab
+        declab_path = fullfile(cfg.external, 'DECLab');
+        if exist(declab_path, 'dir')
+            addpath(genpath(declab_path));
+            fprintf('      ✓ External: %s\n', declab_path);
+        end
     end
     
     % Add data directory

@@ -212,7 +212,7 @@ classdef Manifold < bct.Domain
             % See also: triangulation
             
             if isempty(obj.Triangulation)
-                obj.Triangulation = triangulation(obj.Faces, obj.Vertices);
+                obj.Triangulation = triangulation(double(obj.Faces), double(obj.Vertices));
             end
             TR = obj.Triangulation;
         end

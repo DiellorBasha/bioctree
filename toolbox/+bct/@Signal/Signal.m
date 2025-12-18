@@ -128,6 +128,168 @@ classdef Signal < handle
         end
     end
 
+    methods (Static)
+        %% ----------------------------------------------------
+        function sig = fromBrush(manifold, varargin)
+        %FROMBRUSH Generate signal from brush system
+        %
+        %   sig = Signal.fromBrush(manifold, 'Category', cat, 'Type', type, ...)
+        %
+        % Required Inputs:
+        %   manifold - bct.Manifold object
+        %
+        % Name-Value Parameters:
+        %   'Category'  - Brush category: 'patch', 'trajectory', 'time'
+        %   'Type'      - Brush type: 'spectral', 'gaussian', 'heat', 'geodesic', 'nearest'
+        %   'Time'      - bct.Time object (required for 'time' category)
+        %   'Label'     - Signal label (default: auto-generated)
+        %   ...         - Additional brush-specific parameters
+        %
+        % Brush-Specific Parameters:
+        %   For 'patch' brushes:
+        %     'Source'    - Seed vertex index
+        %     'Kernel'    - Kernel name (for spectral)
+        %     'Sigma'     - Sigma parameter
+        %     'Tau'       - Tau parameter
+        %     'Bandwidth' - Eigenmode bandwidth
+        %
+        %   For 'trajectory' brushes:
+        %     'Source'    - Source vertex
+        %     'Target'    - Target vertex
+        %     'Sigma'     - Sigma parameter
+        %     'Kernel'    - Kernel name (for spectral)
+        %     'KernelParams' - Struct of kernel parameters
+        %     'Metric'    - Distance metric
+        %
+        %   For 'time' brushes:
+        %     All trajectory parameters plus:
+        %     'TauRange'    - [start, end] for heat
+        %     'TauProfile'  - 'linear', 'exponential', 'sigmoid'
+        %
+        % Examples:
+        %   % Patch - Spectral gaussian
+        %   sig = Signal.fromBrush(B.Manifold, 'Category', 'patch', ...
+        %       'Type', 'spectral', 'Source', 1000, 'Kernel', 'gaussian', ...
+        %       'Sigma', 15);
+        %
+        %   % Trajectory - Spectral with heat kernel
+        %   sig = Signal.fromBrush(B.Manifold, 'Category', 'trajectory', ...
+        %       'Type', 'spectral', 'Source', 100, 'Target', 500, ...
+        %       'Kernel', 'heat', 'KernelParams', struct('tau', 0.1));
+        %
+        %   % Time - Moving spectral patch
+        %   [path, ~] = B.Manifold.Graph.shortestPath(100, 500);
+        %   sig = Signal.fromBrush(B.Manifold, 'Category', 'time', ...
+        %       'Type', 'spectral', 'Time', B.Time, ...
+        %       'Source', @(t,T) path(min(round(t/T*length(path)), length(path))), ...
+        %       'Kernel', 'heat', 'Tau', 0.15);
+        %
+        % See also: bct.brush.patch, bct.brush.trajectory, bct.brush.time
+        
+            % Parse inputs
+            p = inputParser;
+            p.KeepUnmatched = true;
+            p.addRequired('manifold', @(x) isa(x, 'bct.Manifold'));
+            p.addParameter('Category', '', @(x) ischar(x) || isstring(x));
+            p.addParameter('Type', '', @(x) ischar(x) || isstring(x));
+            p.addParameter('Time', [], @(x) isempty(x) || isa(x, 'bct.Time'));
+            p.addParameter('Label', '', @(x) ischar(x) || isstring(x));
+            p.parse(manifold, varargin{:});
+            
+            category = string(p.Results.Category);
+            type = string(p.Results.Type);
+            time_domain = p.Results.Time;
+            label = string(p.Results.Label);
+            
+            % Validate required parameters
+            if isempty(category) || isempty(type)
+                error('Signal:fromBrush:MissingParams', ...
+                    'Both Category and Type must be specified');
+            end
+            
+            % Build parameters struct from unmatched parameters
+            params = struct();
+            unmatched_fields = fieldnames(p.Unmatched);
+            for i = 1:length(unmatched_fields)
+                field = unmatched_fields{i};
+                % Convert to lowercase for brush parameter names
+                params.(lower(field)) = p.Unmatched.(field);
+            end
+            
+            % Call appropriate brush function
+            category_lower = lower(category);
+            type_lower = lower(type);
+            
+            try
+                switch category_lower
+                    case 'patch'
+                        % Call patch brush: bct.brush.patch.<type>
+                        brush_fn = str2func(['bct.brush.patch.' char(type_lower)]);
+                        w = brush_fn(manifold, params);
+                        domain = manifold;
+                        time_out = [];
+                        
+                    case 'trajectory'
+                        % Call trajectory brush: bct.brush.trajectory.<type>
+                        brush_fn = str2func(['bct.brush.trajectory.' char(type_lower)]);
+                        w = brush_fn(manifold, params);
+                        domain = manifold;
+                        time_out = [];
+                        
+                    case 'time'
+                        % Call time brush: bct.brush.time.<type>
+                        if isempty(time_domain)
+                            error('Signal:fromBrush:MissingTime', ...
+                                'Time domain required for time category brushes');
+                        end
+                        brush_fn = str2func(['bct.brush.time.' char(type_lower)]);
+                        w = brush_fn(manifold, time_domain, params);
+                        domain = manifold;
+                        time_out = time_domain;
+                        
+                    otherwise
+                        error('Signal:fromBrush:UnknownCategory', ...
+                            'Unknown brush category: %s. Use: patch, trajectory, time', ...
+                            category);
+                end
+            catch ME
+                if strcmp(ME.identifier, 'MATLAB:UndefinedFunction')
+                    error('Signal:fromBrush:UnknownBrush', ...
+                        'Brush not found: bct.brush.%s.%s\n%s', ...
+                        category_lower, type_lower, ME.message);
+                else
+                    rethrow(ME);
+                end
+            end
+            
+            % Generate label if not provided
+            if isempty(label)
+                if ~isempty(time_out)
+                    label = sprintf('%s_%s_spatiotemporal', category_lower, type_lower);
+                else
+                    label = sprintf('%s_%s', category_lower, type_lower);
+                end
+            end
+            
+            % Build metadata
+            metadata = struct();
+            metadata.generator = 'fromBrush';
+            metadata.category = char(category);
+            metadata.brush_type = char(type);
+            metadata.brush_params = params;
+            metadata.Label = char(label);
+            
+            % Create Signal object
+            % For time category signals, create a Joint domain
+            if ~isempty(time_out)
+                joint_domain = bct.Joint(domain, time_out);
+                sig = bct.Signal(full(w), joint_domain, [], metadata);
+            else
+                sig = bct.Signal(full(w), domain, [], metadata);
+            end
+        end
+    end
+    
     methods
         %% ----------------------------------------------------
         function s = copy(obj)
@@ -146,6 +308,86 @@ classdef Signal < handle
             end
 
             s = bct.Signal(obj.Data, obj.Domain, obj.Time, newMeta);
+        end
+        
+        %% ----------------------------------------------------
+        function s_spectral = mft(obj)
+        %MFT Manifold Fourier Transform to spectral domain
+        %
+        %   s_spectral = signal.mft()
+        %
+        % Outputs:
+        %   s_spectral - bct.Signal on Lambda domain (spectral coefficients)
+        %
+        % Description:
+        %   Transforms the signal from Manifold domain to its spectral
+        %   basis (Lambda domain) using the FEM-based Manifold Fourier
+        %   Transform: x_hat = Phi' * M * x
+        %
+        %   where M is the mass matrix and Phi are the eigenmodes.
+        %
+        % Example:
+        %   % Create signal on manifold
+        %   sig = bct.Signal(data, manifold);
+        %   
+        %   % Transform to spectral domain
+        %   sig_spectral = sig.mft();
+        %   
+        %   % Inverse transform back
+        %   sig_reconstructed = sig_spectral.imft();
+        %
+        % See also: imft, bct.operator.transform.mft
+        
+            % Validate domain type
+            if ~isa(obj.Domain, 'bct.Manifold')
+                error('Signal:mft:InvalidDomain', ...
+                    'MFT only defined for Manifold signals');
+            end
+            
+            % Validate signal is static (not joint)
+            if obj.IsJoint
+                error('Signal:mft:JointSignal', ...
+                    'MFT not implemented for joint signals');
+            end
+            
+            % Transform using operator
+            s_spectral = bct.operator.transform.mft(obj);
+        end
+        
+        %% ----------------------------------------------------
+        function s_spatial = imft(obj)
+        %IMFT Inverse Manifold Fourier Transform to spatial domain
+        %
+        %   s_spatial = signal.imft()
+        %
+        % Outputs:
+        %   s_spatial - bct.Signal on Manifold domain (vertex-based)
+        %
+        % Description:
+        %   Transforms the signal from Lambda domain (spectral) back to
+        %   Manifold domain (spatial) using the inverse Manifold Fourier
+        %   Transform: x_rec = Phi * x_hat
+        %
+        % Example:
+        %   % Transform spectral signal back to spatial
+        %   sig_spatial = sig_spectral.imft();
+        %
+        % See also: mft, bct.operator.transform.imft
+        
+            % Validate domain type
+            if ~isa(obj.Domain, 'bct.Lambda')
+                error('Signal:imft:InvalidDomain', ...
+                    'IMFT only defined for Lambda signals');
+            end
+            
+            % Validate signal is static (not joint)
+            if obj.IsJoint
+                error('Signal:imft:JointSignal', ...
+                    'IMFT not implemented for joint signals');
+            end
+            
+            % Transform using operator
+            s_spatial = bct.operator.transform.imft(obj);
         end
         
         %% ----------------------------------------------------

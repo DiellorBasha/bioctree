@@ -6,6 +6,8 @@
 /data/experimental
 /data/mesh/external/brainstorm
 /data/mesh/external/freesurfer
+/data/bct/*.h5
+debug.log
 /external/.venv
 /external/bioelectromagnetism
 /external/gifti-main
@@ -14,7 +16,8 @@
 /external/meshfix
 /external/toolbox_graph
 /external/gptoolbox
-
+/external/brainstorm3
 /docs/site
+/external/bioelectromagnetism/MINC/
 # Test files
 test_*.py

@@ -483,6 +483,34 @@ classdef Graph < handle
             idx = find(obj.Adjacency(v,:));
         end
         
+        function nodeIDs = nearest(obj, s, d, metric)
+            % Nodes within distance d from source node
+            %
+            % Syntax:
+            %   nodeIDs = nearest(obj, s, d)
+            %   nodeIDs = nearest(obj, s, d, metric)
+            %
+            % Inputs:
+            %   s      - Source node
+            %   d      - Distance threshold
+            %   metric - "geometry" (default) | "fem" | custom
+            %
+            % Outputs:
+            %   nodeIDs - Vector of node indices within distance d from s
+            %
+            % Note: Uses edge weights from specified metric
+            
+            arguments
+                obj
+                s (1,1) {mustBeInteger, mustBePositive}
+                d (1,1) {mustBeNumeric, mustBePositive}
+                metric (1,1) string = "geometry"
+            end
+            
+            G = obj.matlabGraph(metric);
+            nodeIDs = nearest(G, s, d);
+        end
+        
         function deg = degree(obj, v)
             % Degree of vertex (number of incident edges)
             %
