@@ -31,32 +31,41 @@ classdef BaseBctTest < matlab.unittest.TestCase
         end
         
         function mesh = loadTestMesh(meshType)
-            % Load a test mesh for testing
-            % meshType: 'lh' or 'rh' (default: 'rh')
+            % Load a test mesh for testing using bct.data.load
+            % meshType: 'lh' or 'rh' (default: uses bct.data.load default)
+            %
+            % Returns struct with:
+            %   V or Vertices - [N×3] vertex coordinates
+            %   F or Faces    - [M×3] face connectivity
+            %   Meta          - metadata (if available)
             
             arguments
-                meshType (1,1) string {mustBeMember(meshType, ["lh", "rh"])} = "rh"
+                meshType (1,1) string {mustBeMember(meshType, ["lh", "rh", "default"])} = "default"
             end
             
-            cfg = bct_config();
-            if meshType == "lh"
-                meshFile = cfg.mesh.fsaverage_lh_pial;
+            if meshType == "default"
+                % Use bct.data.load() default
+                mesh = bct.data.load();
             else
-                meshFile = cfg.mesh.fsaverage_rh_pial;
+                % Load specific hemisphere - need to provide empty id string
+                mesh = bct.data.load("", Hemi=meshType);
             end
             
-            if ~exist(meshFile, 'file')
-                error('BaseBctTest:MeshNotFound', ...
-                    'Test mesh not found: %s', meshFile);
+            % Ensure both V/F and Vertices/Faces are available
+            if ~isfield(mesh, 'V')
+                mesh.V = mesh.Vertices;
             end
-            
-            data = load(meshFile);
-            mesh.V = data.V;
-            mesh.F = data.F;
-            
-            if isfield(data, 'meta')
-                mesh.meta = data.meta;
+            if ~isfield(mesh, 'F')
+                mesh.F = mesh.Faces;
             end
+        end
+        
+        function [V, F] = getDefaultTestMesh()
+            % Get default test mesh vertices and faces
+            % Convenience method for quick access to V, F arrays
+            mesh = bct.data.load();
+            V = mesh.Vertices;
+            F = mesh.Faces;
         end
     end
 end

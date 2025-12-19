@@ -55,27 +55,31 @@ if id == "" && options.Dataset == "" && options.Hemi == "" && options.Surface ==
     entry = catalog(idx);
     
 elseif id ~= ""
-    % Load by ID
-    idx = find(strcmp({catalog.Id}, id), 1);
+    % Load by ID - use == for string comparison
+    ids = [catalog.Id];  % Convert to string array
+    idx = find(ids == id, 1);
     if isempty(idx)
         error('bct:data:UnknownID', 'Asset ID "%s" not found in catalog', id);
     end
     entry = catalog(idx);
     
 else
-    % Load by attributes
+    % Load by attributes - use == for string arrays
     mask = true(size(catalog));
     
     if options.Dataset ~= ""
-        mask = mask & strcmp({catalog.Dataset}, options.Dataset);
+        datasets = [catalog.Dataset];
+        mask = mask & (datasets == options.Dataset);
     end
     
     if options.Hemi ~= ""
-        mask = mask & strcmp({catalog.Hemi}, options.Hemi);
+        hemis = [catalog.Hemi];
+        mask = mask & (hemis == options.Hemi);
     end
     
     if options.Surface ~= ""
-        mask = mask & strcmp({catalog.Surface}, options.Surface);
+        surfaces = [catalog.Surface];
+        mask = mask & (surfaces == options.Surface);
     end
     
     idx = find(mask, 1);

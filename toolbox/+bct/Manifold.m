@@ -37,39 +37,74 @@ classdef Manifold < handle
         % CONSTRUCTOR
         % ===============================================================
         
-        function obj = Manifold(meshStruct)
+        function obj = Manifold(varargin)
             %MANIFOLD Constructor for Manifold domain
             %
             % Syntax:
             %   M = bct.Manifold(meshStruct)
+            %   M = bct.Manifold(V, F)
             %
             % Inputs:
             %   meshStruct - Structure with fields:
             %                .V or .Vertices - [N×3] vertex coordinates
             %                .F or .Faces    - [M×3] face connectivity
+            %   V          - [N×3] vertex coordinates
+            %   F          - [M×3] face connectivity
             %
             % Outputs:
             %   M - Manifold object (immutable geometry)
             %
-            % Example:
+            % Examples:
+            %   % From struct
             %   data = load('mesh.mat');
             %   M = bct.Manifold(struct('V', data.V, 'F', data.F));
+            %
+            %   % From V, F directly
+            %   M = bct.Manifold(V, F);
             
-            % Extract geometry (support both old and new naming)
-            if isfield(meshStruct, 'Vertices')
-                obj.Vertices = meshStruct.Vertices;
-            elseif isfield(meshStruct, 'V')
-                obj.Vertices = meshStruct.V;
-            else
-                error('bct:Manifold:MissingVertices', 'meshStruct must have Vertices or V field');
-            end
+            % Parse inputs
+            if nargin == 1 && isstruct(varargin{1})
+                % Struct interface: M = Manifold(meshStruct)
+                meshStruct = varargin{1};
+                
+                % Extract geometry (support both old and new naming)
+                if isfield(meshStruct, 'Vertices')
+                    obj.Vertices = meshStruct.Vertices;
+                elseif isfield(meshStruct, 'V')
+                    obj.Vertices = meshStruct.V;
+                else
+                    error('bct:Manifold:MissingVertices', 'meshStruct must have Vertices or V field');
+                end
 
-            if isfield(meshStruct, 'Faces')
-                obj.Faces = meshStruct.Faces;
-            elseif isfield(meshStruct, 'F')
-                obj.Faces = meshStruct.F;
+                if isfield(meshStruct, 'Faces')
+                    obj.Faces = meshStruct.Faces;
+                elseif isfield(meshStruct, 'F')
+                    obj.Faces = meshStruct.F;
+                else
+                    error('bct:Manifold:MissingFaces', 'meshStruct must have Faces or F field');
+                end
+                
+            elseif nargin == 2
+                % Direct interface: M = Manifold(V, F)
+                obj.Vertices = varargin{1};
+                obj.Faces = varargin{2};
+                
+                % Validate inputs
+                if isempty(obj.Vertices)
+                    error('MATLAB:invalidInput', 'Vertices cannot be empty');
+                end
+                if isempty(obj.Faces)
+                    error('MATLAB:invalidInput', 'Faces cannot be empty');
+                end
+                if size(obj.Vertices, 2) ~= 3
+                    error('MATLAB:invalidInput', 'Vertices must be N×3 array');
+                end
+                if size(obj.Faces, 2) ~= 3
+                    error('MATLAB:invalidInput', 'Faces must be M×3 array');
+                end
             else
-                error('bct:Manifold:MissingFaces', 'meshStruct must have Faces or F field');
+                error('bct:Manifold:InvalidArguments', ...
+                    'Usage: Manifold(meshStruct) or Manifold(V, F)');
             end
             
             % Extract or compute edges
