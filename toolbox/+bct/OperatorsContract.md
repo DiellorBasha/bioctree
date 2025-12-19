@@ -1,12 +1,3 @@
-This is the right time to ask this, because **operators are where architectures usually collapse** if they are not disciplined early.
-
-I’ll give you a **clear, scalable organization** that fits your current design decisions and does **not** turn operators into objects, while still keeping them discoverable, composable, and type-safe.
-
----
-
-# 1. First principles (this resolves the confusion)
-
-You are correct about two things simultaneously:
 
 1. **Operators are functions**, not objects
 2. You will have **many operators**, across domains, representations, and data types
@@ -474,11 +465,3 @@ No magic dispatch
 No hidden state
 
 No ambiguity
-
-Final rule of thumb (pin this)
-
-Registries describe what exists.
-Dictionaries enable using it.
-Never collapse the two.
-
-If you follow that rule, your operator system will remain robust, debuggable, and extensible.

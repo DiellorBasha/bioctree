@@ -1,4 +1,278 @@
 Below is a **foundational answer**, not just an API sketch. I will explain **what FEM is in your system**, **why “eigenpairs” is the correct abstraction**, and then give you a **clear, enforceable contract** for the `FEM` class that will scale with everything you want to build (filters, uncertainty, dynamics, worldlines).
+Below is the **updated, corrected, and final FEM contract**, incorporating:
+
+* Your **namespace separation**
+* Delegation to `bct.eigenpairs`
+* **No duplicated solver logic**
+* Clean wrapping semantics
+* Your naming update: `Stiffness`, `Mass`
+
+This version is **internally consistent** with everything we have established and is the one you should lock in.
+
+---
+
+# 1. Final governing rule for FEM (reaffirmed)
+
+> **`bct.FEM` defines the variational function space and exposes canonical operators.
+> It *never* implements numerical algorithms that already exist in `bct.eigenpairs` or other packages.**
+
+FEM is a **semantic wrapper**, not a numerical engine.
+
+---
+
+# 2. Updated FEM class contract (authoritative)
+
+## Identity
+
+> **`bct.FEM` represents a variational discretization of scalar fields on a Manifold.**
+
+It defines:
+
+* the inner product
+* the Dirichlet energy
+* the induced Laplace–Beltrami operator
+
+---
+
+## Owns (state)
+
+```matlab
+properties (SetAccess = private)
+    Manifold        % geometric substrate
+    Mass            % ⟨u,v⟩ inner product
+    Stiffness       % ⟨∇u,∇v⟩ Dirichlet form
+end
+```
+
+These are **immutable once constructed**.
+
+---
+
+## Provides (public API)
+
+### Spectral access (delegation only)
+
+```matlab
+methods
+    E = eigenpairs(obj, k)
+end
+```
+
+* Delegates to `bct.fem.eigensolve`
+* Does not compute or normalize eigenvectors
+
+---
+
+### Canonical operator application
+
+```matlab
+methods
+    y = applyLaplacian(obj, x)
+    y = heat(obj, x, t, k)
+    y = wave(obj, x, t, k)
+    y = schrodinger(obj, x, t, k)
+end
+```
+
+* Uses Eigenpairs where appropriate
+* Uses `bct.fem.applyLaplacian` for direct application
+* Does not assemble operators
+
+---
+
+### Inner-product–aware diagnostics
+
+```matlab
+methods
+    n = norm(obj, x)
+    e = energy(obj, x)
+end
+```
+
+These express FEM semantics and therefore belong in the class.
+
+---
+
+## May cache (privately)
+
+* Eigenpairs (immutable)
+* Factorizations (if needed later)
+
+Cache must:
+
+* be transparent
+* never change meaning
+
+---
+
+## Must NOT
+
+* call `eigs`
+* normalize eigenvectors
+* assemble Mass or Stiffness
+* loop over faces or edges
+* know DEC or Graph internals
+* mutate Eigenpairs
+
+---
+
+# 3. Updated `+bct/+fem` package contract
+
+The `bct.fem` package contains **only FEM-specific glue and numerical application routines**, not spectral logic.
+
+---
+
+## 3.1 FEM construction helpers
+
+```text
++bct/+fem/
+├─ assembleMass.m
+├─ assembleStiffness.m
+```
+
+These:
+
+* consume Manifold geometry
+* produce matrices
+* are purely numerical
+
+---
+
+## 3.2 Eigenpair delegation (thin wrappers only)
+
+```text
++bct/+fem/
+├─ eigensolve.m
+```
+
+### `eigensolve.m` (final form)
+
+```matlab
+function E = bct.fem.eigensolve(FEM, k)
+
+    meta.operator   = "Laplace-Beltrami";
+    meta.basis      = "P1-FEM";
+    meta.manifoldID = FEM.Manifold.ID;
+
+    E = bct.eigenpairs.solveGeneralized( ...
+            FEM.Stiffness, ...
+            FEM.Mass, ...
+            k, meta);
+end
+```
+
+This file:
+
+* adapts FEM semantics
+* delegates all spectral logic
+* creates no duplication
+
+---
+
+## 3.3 Operator application utilities
+
+```text
++bct/+fem/
+├─ applyLaplacian.m
+```
+
+```matlab
+function y = applyLaplacian(Stiffness, Mass, x)
+    y = Mass \ (Stiffness * x);
+end
+```
+
+Note:
+
+* This is *numerical application*, not spectral computation
+* FEM class calls this
+
+---
+
+# 4. Final `bct.FEM` class (concise definition)
+
+```matlab
+classdef FEM < handle
+
+    properties (SetAccess = private)
+        Manifold
+        Mass
+        Stiffness
+    end
+
+    properties (Access = private)
+        EigenpairCache
+    end
+
+    methods
+        function obj = FEM(M)
+            obj.Manifold = M;
+            obj.Mass      = bct.fem.assembleMass(M);
+            obj.Stiffness = bct.fem.assembleStiffness(M);
+            obj.EigenpairCache = containers.Map('KeyType','char','ValueType','any');
+        end
+
+        function E = eigenpairs(obj, k)
+            key = sprintf("k=%d", k);
+            if ~isKey(obj.EigenpairCache, key)
+                obj.EigenpairCache(key) = bct.fem.eigensolve(obj, k);
+            end
+            E = obj.EigenpairCache(key);
+        end
+
+        function y = applyLaplacian(obj, x)
+            y = bct.fem.applyLaplacian(obj.Stiffness, obj.Mass, x);
+        end
+
+        function y = heat(obj, x, t, k)
+            E = obj.eigenpairs(k);
+            c = E.project(x);
+            c = exp(-t * E.Values) .* c;
+            y = E.reconstruct(c);
+        end
+
+        function y = wave(obj, x, t, k)
+            E = obj.eigenpairs(k);
+            c = E.project(x);
+            c = cos(t * sqrt(E.Values)) .* c;
+            y = E.reconstruct(c);
+        end
+
+        function y = schrodinger(obj, x, t, k)
+            E = obj.eigenpairs(k);
+            c = E.project(x);
+            c = exp(-1i * t * E.Values) .* c;
+            y = E.reconstruct(c);
+        end
+
+        function n = norm(obj, x)
+            n = sqrt(x' * obj.Mass * x);
+        end
+
+        function e = energy(obj, x)
+            e = x' * obj.Stiffness * x;
+        end
+    end
+end
+```
+
+This class is now:
+
+* Minimal
+* Correct
+* Non-duplicative
+* Architecturally clean
+
+---
+
+# 5. Final consistency check (you passed)
+
+✔ Eigenpairs logic centralized
+✔ FEM delegates instead of duplicating
+✔ Names clarified (`Mass`, `Stiffness`)
+✔ Invariants enforced in the right layer
+✔ Ready for DEC and Graph parity
+
 
 ---
 

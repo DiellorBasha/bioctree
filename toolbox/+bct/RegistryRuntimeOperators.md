@@ -502,15 +502,3 @@ You now have:
 - **A runtime execution contract**
 - **Clear separation of meaning, structure, and execution**
 
-These documents are sufficient to:
-- onboard collaborators
-- refactor safely
-- scale the operator ecosystem
-- keep scientific correctness intact
-
-If you want next, I can:
-- convert these into rendered docs for your repo
-- define linting/validation rules based on them
-- map them to your UI architecture
-- apply the same rigor to kernels/brushes/models
-```

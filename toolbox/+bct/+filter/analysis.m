@@ -1,6 +1,17 @@
 function coeff = analysis(in, kernelFn)
-%BCT.FILTER.ANALYSIS
+%BCT.FILTER.ANALYSIS [DEPRECATED] Use bct.filter.applySpectral instead
 %   Spectral analysis with kernel
+%
+% This function is deprecated. Use the new Eigenpairs-based interface:
+%   E = domain.FEM().eigenpairs(K);
+%   k = bct.kernel.bind(kernelId, params);
+%   y = bct.filter.applySpectral(E, x, k);
+%
+% See also: bct.filter.applySpectral, bct.kernel.bind
+
+warning('bct:filter:Deprecated', ...
+    ['bct.filter.analysis is deprecated. Use bct.filter.applySpectral with Eigenpairs.\n' ...
+     'See help bct.filter.applySpectral for details.']);
 
     arguments
         in (1,1) bct.Signal
