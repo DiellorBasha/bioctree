@@ -1,0 +1,150 @@
+classdef test_bct_start < BaseBctTest
+    % TEST_BCT_START Unit tests for bct_start initialization
+    %
+    % Tests that bct_start properly initializes the BCT package:
+    % - Adds required paths
+    % - Loads external dependencies (DECLab, GSPBox, GPToolbox)
+    % - Sets up configuration
+    % - Makes package structure accessible
+    
+    methods (Test)
+        %% Basic Initialization Tests
+        function testBctStartCompletes(testCase)
+            % Verify bct_start runs without error (idempotent)
+            testCase.verifyWarningFree(@() bct_start(), ...
+                'bct_start should run without warnings when called again');
+        end
+        
+        function testBctPackageOnPath(testCase)
+            % Verify +bct package is accessible
+            testCase.verifyTrue(exist('bct.Manifold', 'class') == 8, ...
+                'bct.Manifold class should be accessible');
+            testCase.verifyTrue(exist('bct.Graph', 'class') == 8, ...
+                'bct.Graph class should be accessible');
+            testCase.verifyTrue(exist('bct.DEC', 'class') == 8, ...
+                'bct.DEC class should be accessible');
+            testCase.verifyTrue(exist('bct.FEM', 'class') == 8, ...
+                'bct.FEM class should be accessible');
+        end
+        
+        function testConfigAccessible(testCase)
+            % Verify bct_config is accessible
+            testCase.verifyTrue(exist('bct_config', 'file') > 0, ...
+                'bct_config should be on path');
+            
+            cfg = bct_config();
+            testCase.verifyTrue(isstruct(cfg), ...
+                'bct_config should return a struct');
+        end
+        
+        %% Configuration Tests
+        function testConfigHasRequiredFields(testCase)
+            % Verify configuration has core fields
+            cfg = bct_config();
+            
+            testCase.verifyTrue(isfield(cfg, 'root'), ...
+                'Config should have root field');
+            testCase.verifyTrue(isfield(cfg, 'toolbox'), ...
+                'Config should have toolbox field');
+            testCase.verifyTrue(isfield(cfg, 'external'), ...
+                'Config should have external field');
+            testCase.verifyTrue(isfield(cfg, 'deps'), ...
+                'Config should have deps field');
+            testCase.verifyTrue(isfield(cfg, 'mesh'), ...
+                'Config should have mesh field');
+        end
+        
+        function testConfigPathsAreAbsolute(testCase)
+            % Verify paths are absolute
+            cfg = bct_config();
+            
+            testCase.verifyTrue(isfolder(cfg.root), ...
+                'Root path should exist');
+            testCase.verifyTrue(isfolder(cfg.toolbox), ...
+                'Toolbox path should exist');
+            testCase.verifyTrue(isfolder(cfg.external), ...
+                'External path should exist');
+        end
+        
+        function testMeshPathsDefined(testCase)
+            % Verify mesh paths are defined in config
+            cfg = bct_config();
+            
+            testCase.verifyTrue(isfield(cfg.mesh, 'fsaverage_lh_pial'), ...
+                'Config should have fsaverage_lh_pial path');
+            testCase.verifyTrue(isfield(cfg.mesh, 'fsaverage_rh_pial'), ...
+                'Config should have fsaverage_rh_pial path');
+        end
+        
+        %% External Dependencies Tests
+        function testDECLabLoaded(testCase)
+            % Verify DECLab is loaded and functional
+            testCase.verifyTrue(exist('DiscreteExteriorCalculus', 'class') == 8, ...
+                'DiscreteExteriorCalculus class should be accessible');
+        end
+        
+        function testGSPBoxLoaded(testCase)
+            % Verify GSPBox is loaded and functional
+            testCase.verifyTrue(exist('gsp_start', 'file') > 0, ...
+                'GSPBox should be on path');
+        end
+        
+        function testGPToolboxLoaded(testCase)
+            % Verify GPToolbox is loaded and functional
+            % Check for common GPToolbox functions
+            hasGP = exist('cotmatrix', 'file') > 0 || ...
+                    exist('massmatrix', 'file') > 0;
+            testCase.verifyTrue(hasGP, ...
+                'GPToolbox functions should be accessible');
+        end
+        
+        %% Package Structure Tests
+        function testCoreSubpackagesExist(testCase)
+            % Verify core subpackages are accessible via bct namespace
+            cfg = bct_config();
+            toolbox_path = cfg.toolbox;
+            
+            subpackages = {'kernel', 'filter', 'graph', 'dec', 'fem', ...
+                          'data', 'registry', 'runtime', 'eigenpairs'};
+            
+            for i = 1:numel(subpackages)
+                pkg = subpackages{i};
+                pkg_path = fullfile(toolbox_path, '+bct', ['+' pkg]);
+                testCase.verifyTrue(exist(pkg_path, 'dir') > 0, ...
+                    sprintf('+bct/+%s package should exist at %s', pkg, pkg_path));
+            end
+        end
+        
+        function testCoreClassesExist(testCase)
+            % Verify core classes are accessible
+            classes = {'Manifold', 'Graph', 'DEC', 'FEM', 'Eigenpairs'};
+            
+            for i = 1:numel(classes)
+                cls = classes{i};
+                testCase.verifyTrue(exist(sprintf('bct.%s', cls), 'class') == 8, ...
+                    sprintf('bct.%s class should be accessible', cls));
+            end
+        end
+        
+        function testKeyFunctionsAccessible(testCase)
+            % Verify key package functions are accessible by calling them
+            % Kernel functions - test they exist by checking which
+            testCase.verifyNotEmpty(which('bct.kernel.list'), ...
+                'bct.kernel.list should be accessible');
+            testCase.verifyNotEmpty(which('bct.kernel.get'), ...
+                'bct.kernel.get should be accessible');
+            testCase.verifyNotEmpty(which('bct.kernel.bind'), ...
+                'bct.kernel.bind should be accessible');
+            
+            % Registry functions
+            testCase.verifyNotEmpty(which('bct.registry.kernels'), ...
+                'bct.registry.kernels should be accessible');
+            
+            % Data functions
+            testCase.verifyNotEmpty(which('bct.data.load'), ...
+                'bct.data.load should be accessible');
+            testCase.verifyNotEmpty(which('bct.data.list'), ...
+                'bct.data.list should be accessible');
+        end
+    end
+end
