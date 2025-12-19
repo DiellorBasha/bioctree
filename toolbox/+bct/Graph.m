@@ -68,8 +68,8 @@ classdef Graph < handle
             obj.NumNodes = size(manifold.Vertices, 1);
             obj.LaplacianType = laplacianType;
             
-            % Build canonical topology
-            obj.Edges = obj.Manifold.edges();
+            % Build canonical topology (use Edges property, not method)
+            obj.Edges = obj.Manifold.Edges;
             
             % Initialize cache
             obj.GraphVersion = 1;
@@ -293,6 +293,49 @@ classdef Graph < handle
             else
                 T = bct.graph.dfSearch(obj, s, metric);
             end
+        end
+    end
+    
+    %% Spectral decomposition
+    methods
+        function E = eigenpairs(obj, k, options)
+            %EIGENPAIRS Compute graph spectral eigenpairs
+            %
+            % Syntax:
+            %   E = G.eigenpairs(k)
+            %   E = G.eigenpairs(k, 'Force', true)
+            %
+            % Inputs:
+            %   k - Number of eigenpairs to compute
+            %
+            % Optional Parameters:
+            %   Force - Recompute even if cached (default: false)
+            %
+            % Outputs:
+            %   E - bct.Eigenpairs object
+            %
+            % Note: Delegates to bct.graph.eigensolve
+            %
+            % See also: bct.graph.eigensolve, bct.Eigenpairs
+            
+            arguments
+                obj (1,1) bct.Graph
+                k (1,1) {mustBePositive, mustBeInteger}
+                options.Force (1,1) logical = false
+            end
+            
+            % Check cache
+            key = sprintf("k=%d", k);
+            if ~options.Force && isKey(obj.GraphGSPCache, key)
+                E = obj.GraphGSPCache(key);
+                return;
+            end
+            
+            % Delegate to bct.graph.eigensolve
+            E = bct.graph.eigensolve(obj, k);
+            
+            % Cache result
+            obj.GraphGSPCache(key) = E;
         end
     end
     

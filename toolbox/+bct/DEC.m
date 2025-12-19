@@ -95,6 +95,54 @@ classdef DEC < handle
             %clearCache Clear internal cache (does not modify backend)
             remove(obj.Cache, keys(obj.Cache));
         end
+        
+        function E = eigenpairs(obj, formDegree, k, options)
+            %EIGENPAIRS Compute eigenpairs for k-form Laplacian
+            %
+            % Syntax:
+            %   E = D.eigenpairs(formDegree, k)
+            %   E = D.eigenpairs(formDegree, k, 'Force', true)
+            %
+            % Inputs:
+            %   formDegree - 0, 1, or 2 (form degree)
+            %   k          - Number of eigenpairs to compute
+            %
+            % Optional Parameters:
+            %   Force - Recompute even if cached (default: false)
+            %
+            % Outputs:
+            %   E - bct.Eigenpairs object
+            %
+            % Note: Delegates to bct.dec.eigensolve
+            %
+            % See also: bct.dec.eigensolve, bct.Eigenpairs
+            
+            arguments
+                obj (1,1) bct.DEC
+                formDegree (1,1) {mustBeInteger, mustBeNonnegative}
+                k (1,1) {mustBePositive, mustBeInteger}
+                options.Force (1,1) logical = false
+            end
+            
+            % Validate form degree
+            if formDegree > 2
+                error('bct:DEC:InvalidFormDegree', ...
+                    'Form degree must be 0, 1, or 2 for 2D manifolds');
+            end
+            
+            % Check cache
+            key = sprintf("form%d_k=%d", formDegree, k);
+            if ~options.Force && isKey(obj.Cache, key)
+                E = obj.Cache(key);
+                return;
+            end
+            
+            % Delegate to bct.dec.eigensolve
+            E = bct.dec.eigensolve(obj, formDegree, k);
+            
+            % Cache result
+            obj.Cache(key) = E;
+        end
 
         % ---- Optional: thin pass-through accessors (NO computations) ----
         % These accessors exist only to standardize access patterns and reduce

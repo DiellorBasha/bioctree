@@ -112,22 +112,14 @@ classdef Manifold < handle
             %   dec = M.DEC()
             %
             % Outputs:
-            %   dec - DiscreteExteriorCalculus object from DECLab
+            %   dec - bct.DEC object (exterior calculus representation)
             %
-            % Note: First call creates DEC object, subsequent calls return cached version
+            % Note: First call creates DEC wrapper, subsequent calls return cached version
             %
-            % See also: DiscreteExteriorCalculus
+            % See also: bct.DEC, DiscreteExteriorCalculus
             
             if ~isKey(obj.Cache, "DEC")
-                try
-                    % Ensure inputs are double matrices (DECLab requirement)
-                    Faces_double = double(obj.Faces);
-                    Vertices_double = double(obj.Vertices);
-                    obj.Cache("DEC") = DiscreteExteriorCalculus(Faces_double, Vertices_double);
-                catch ME
-                    error('bct:Manifold:DECInitFailed', ...
-                        'Failed to initialize DEC object: %s', ME.message);
-                end
+                obj.Cache("DEC") = bct.DEC(obj);
             end
             dec = obj.Cache("DEC");
         end
