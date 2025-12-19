@@ -27,7 +27,7 @@ classdef DEC < handle
     end
 
     properties (Access = private)
-        Cache (1,1) containers.Map    % Optional cache of backend-derived objects
+        Cache    % Optional cache of backend-derived objects (containers.Map)
     end
 
     methods
