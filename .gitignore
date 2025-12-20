@@ -20,4 +20,4 @@ debug.log
 /docs/site
 /external/bioelectromagnetism/MINC/
 # Test files
-test_*.py
+/data

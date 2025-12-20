@@ -1,11 +1,12 @@
 function E = fromFEM(FEM, numModes, options)
-%FROMFEM Create Eigenpairs from FEM representation
+%FROMFEM Create Eigenpairs from FEM representation (lazy evaluation)
 %
 % Syntax:
 %   E = bct.eigenpairs.fromFEM(FEM, k)
 %   E = bct.eigenpairs.fromFEM(FEM, k, 'RemoveDC', true)
 %
-% Computes eigenpairs of the Laplace-Beltrami operator via FEM:
+% Constructs a lazy Eigenpairs object that defers eigensolve until needed.
+% Eigendecomposition of Laplace-Beltrami operator via FEM:
 %   Stiffness * U = Mass * U * Λ
 %
 % Inputs:
@@ -17,18 +18,20 @@ function E = fromFEM(FEM, numModes, options)
 %   EigsOpts  - Additional options passed to eigs (struct)
 %
 % Outputs:
-%   E - bct.Eigenpairs object
+%   E - bct.Eigenpairs object (eigensolve deferred until Values/Vectors accessed)
 %
 % Notes:
 %   - Uses smallest-magnitude eigenvalues ('SM')
 %   - Enforces M-orthonormality via bct.eigenpairs.normalize
 %   - DC mode (if present) is removed by default
 %   - Eigenvalues sorted in ascending order
+%   - Computation is LAZY: only runs when Values or Vectors are accessed
 %
 % Example:
 %   M = bct.Manifold(struct('V', V, 'F', F));
 %   fem = M.FEM();
-%   E = bct.eigenpairs.fromFEM(fem, 100);
+%   E = bct.eigenpairs.fromFEM(fem, 100);  % Instantaneous (no eigensolve yet)
+%   vals = E.Values;                       % Now eigensolve runs
 %
 % See also: bct.eigenpairs.solveGeneralized, bct.eigenpairs.normalize
 
@@ -40,31 +43,18 @@ arguments
 end
 
 % Extract variational forms from FEM
-Mass = FEM.Mass;
-Stiffness = FEM.Stiffness;
+K = FEM.Stiffness;
+M = FEM.Mass;
 manifoldID = FEM.Manifold.ID;
 
-% Solve generalized eigenproblem
-[U, lambda] = bct.eigenpairs.solveGeneralized(Stiffness, Mass, numModes, ...
-    'EigsOpts', options.EigsOpts);
-
-% Remove DC mode if requested
-if options.RemoveDC
-    [U, lambda] = bct.eigenpairs.removeDC(U, lambda);
-end
-
-% Normalize eigenvectors
-U = bct.eigenpairs.normalize(U, Mass);
-
-% Report
-fprintf('bct.eigenpairs.fromFEM:\n');
-fprintf('  Requested modes: %d\n', numModes);
-fprintf('  Retained modes:  %d\n', size(U, 2));
-fprintf('  Eigenvalue range: [%.6f, %.6f]\n', min(lambda), max(lambda));
-
-% Construct Eigenpairs object
-E = bct.Eigenpairs(lambda, U, Mass, ...
+% Construct lazy Eigenpairs object (no computation yet)
+E = bct.Eigenpairs(...
+    'K', K, ...
+    'M', M, ...
+    'numModes', numModes, ...
     'operator', "Laplace-Beltrami", ...
     'basis', "P1-FEM", ...
-    'manifoldID', manifoldID);
+    'manifoldID', manifoldID, ...
+    'RemoveDC', options.RemoveDC, ...
+    'EigsOpts', options.EigsOpts);
 end
