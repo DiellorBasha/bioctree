@@ -1,36 +1,35 @@
 function D = dictionary()
-%BCT.KERNEL.DICTIONARY  Pure function handle registry
+%BCT.KERNEL.DICTIONARY  Executable kernel evaluator dictionary (façade)
 %
 %   D = bct.kernel.dictionary()
 %
-% Returns a dictionary mapping kernel names to pure function handles.
-% Each function handle is a pure, stateless function that can be directly
-% applied to data.
+% Purpose
+%   User-facing wrapper that delegates to bct.runtime.kernels.dictionary().
+%   Returns dictionary mapping kernel IDs to evaluator functions @(x,p)->y.
 %
-% Integration with bct.kernel package:
-%   - Uses names from bct.kernel.registry()
-%   - Provides lightweight access to kernel functions
-%   - No metadata, no UI dependencies, just pure math
+% Output
+%   D - MATLAB dictionary
+%       keys: kernel Id (string)
+%       values: evaluator function_handle @(x,p)->y
 %
-% Usage:
+% Usage
 %   D = bct.kernel.dictionary();
-%   
-%   % Get a kernel function
 %   gaussian = D("Gaussian");
-%   y = gaussian(x, mu, sigma);
-%   
-%   % List available kernels
-%   kernelNames = keys(D);
-%   
-%   % Iterate over all kernels
-%   for name = keys(D)
-%       f = D(name);
-%       % Use f...
-%   end
+%   axis = linspace(-5, 5, 501).';
+%   params = struct('mu', 0, 'sigma', 1);
+%   y = gaussian(axis, params);
 %
-% See also: bct.kernel.registry, bct.kernel.list, bct.kernel.get
+% Note
+%   This is a façade function. The authoritative runtime is:
+%   bct.runtime.kernels.dictionary()
+%
+%   For new code, prefer:
+%     D = bct.runtime.kernels.dictionary();
+%
+% See also: bct.runtime.kernels.dictionary, bct.kernel.get, bct.kernel.list
 
-    D = dictionary();
+    % Delegate to authoritative runtime
+    D = bct.runtime.kernels.dictionary();
 
     %% =========================================================
     % BASIC SMOOTHING KERNELS

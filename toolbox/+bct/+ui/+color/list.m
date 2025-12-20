@@ -1,5 +1,5 @@
 function ids = list()
-%BCT.UI.COLOR.LIST  Return available colormap IDs
+%BCT.UI.COLOR.LIST  Return available colormap IDs (façade)
 %
 %   ids = bct.ui.color.list()
 %
@@ -7,14 +7,15 @@ function ids = list()
 %   Discovery function for UI dropdowns. Returns all registered colormap IDs
 %   in registry order.
 %
-% Outputs
-%   ids - string array of available colormap IDs
+% Output
+%   ids - string column vector of available colormap IDs
 %
-% Behavior
-%   Calls bct.registry.colormaps() and extracts the Id field.
+% Note
+%   This is a façade function. For new code, prefer:
+%     ids = bct.registry.colormaps.list();
 %
-% See also: bct.registry.colormaps, bct.ui.color.resolve
+% See also: bct.registry.colormaps.list, bct.ui.color.resolve
 
-    defs = bct.registry.colormaps();
-    ids = string({defs.Id});
+    % Delegate to authoritative registry
+    ids = bct.registry.colormaps.list();
 end

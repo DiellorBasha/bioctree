@@ -9,22 +9,26 @@ function coeff = analysis(in, kernelFn)
 %
 % See also: bct.filter.applySpectral, bct.kernel.bind
 
-warning('bct:filter:Deprecated', ...
-    ['bct.filter.analysis is deprecated. Use bct.filter.applySpectral with Eigenpairs.\n' ...
-     'See help bct.filter.applySpectral for details.']);
-
     arguments
         in (1,1) bct.Signal
-        kernelFn (1,1) function_handle
+        kernelFn {mustBeA(kernelFn, 'function_handle')}
     end
+
+    warning('bct:filter:Deprecated', ...
+        ['bct.filter.analysis is deprecated. Use bct.filter.applySpectral with Eigenpairs.\n' ...
+         'See help bct.filter.applySpectral for details.']);
 
     domain = in.Domain;
 
     if isa(domain, 'bct.Manifold')
-        L = domain.dual;
-        U = L.U;
-        lambda = L.lambda;
-        coeff0 = U' * in.Data;
+        % Get eigenpairs through FEM
+        fem = domain.FEM();
+        E = fem.eigenpairs();
+        
+        % Project to spectral domain and apply kernel
+        lambda = E.Values;
+        U = E.Vectors;
+        coeff0 = U' * (E.MassMatrix * in.Data);
         coeff = kernelFn(lambda) .* coeff0;
 
     elseif isa(domain, 'bct.Graph')

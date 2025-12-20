@@ -9,17 +9,20 @@ function out = synthesis(coeff, domain)
 %
 % See also: bct.filter.applySpectral, bct.Eigenpairs.reconstruct
 
-warning('bct:filter:Deprecated', ...
-    ['bct.filter.synthesis is deprecated. Use bct.filter.applySpectral with Eigenpairs.\n' ...
-     'See help bct.filter.applySpectral for details.']);
-
     arguments
         coeff (:,:) double
         domain
     end
 
+    warning('bct:filter:Deprecated', ...
+        ['bct.filter.synthesis is deprecated. Use bct.filter.applySpectral with Eigenpairs.\n' ...
+         'See help bct.filter.applySpectral for details.']);
+
     if isa(domain, 'bct.Manifold')
-        U = domain.dual.U;
+        % Get eigenpairs through FEM
+        fem = domain.FEM();
+        E = fem.eigenpairs();
+        U = E.Vectors;
         data = U * coeff;
 
     elseif isa(domain, 'bct.Graph')
