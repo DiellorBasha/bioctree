@@ -10,6 +10,13 @@ classdef BaseBctTest < matlab.unittest.TestCase
         function initializeBct(testCase)
             % Initialize BCT package before running tests
             try
+                % Get BCT root and add to path if bct_start not found
+                if ~exist('bct_start', 'file')
+                    bctRoot = testCase.getBctRoot();
+                    addpath(bctRoot);
+                end
+                
+                % Initialize BCT
                 bct_start();
             catch ME
                 testCase.verifyFail(sprintf('Failed to initialize BCT: %s', ME.message));
@@ -21,8 +28,9 @@ classdef BaseBctTest < matlab.unittest.TestCase
         function rootPath = getBctRoot()
             % Get BCT root directory
             testFile = mfilename('fullpath');
-            testsDir = fileparts(fileparts(testFile));
-            rootPath = testsDir;
+            testsUnitDir = fileparts(testFile);
+            testsDir = fileparts(testsUnitDir);
+            rootPath = fileparts(testsDir);
         end
         
         function cfg = getConfig()
