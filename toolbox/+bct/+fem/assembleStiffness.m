@@ -23,6 +23,12 @@ arguments
 end
 
 % Use gptoolbox as authoritative source for FEM computations
-K = cotmatrix(Manifold.Vertices, Manifold.Faces);
+% Note: gptoolbox cotmatrix() returns negative semidefinite operator
+% (positive off-diagonals, negative diagonal). We negate to get positive
+% semidefinite operator for eigenvalue problems: K*u = λ*M*u
+K = -cotmatrix(Manifold.Vertices, Manifold.Faces);
+
+% Symmetrize for numerical safety (cotmatrix should be symmetric but floating point...)
+K = (K + K') / 2;
 
 end

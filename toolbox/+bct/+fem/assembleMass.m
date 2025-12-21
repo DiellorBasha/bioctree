@@ -22,10 +22,13 @@ function M = assembleMass(Manifold, massType)
 
 arguments
     Manifold (1,1) bct.Manifold
-    massType (1,1) string {mustBeMember(massType, ["voronoi","barycentric","full"])} = "voronoi"
+    massType (1,1) string {mustBeMember(massType, ["voronoi","barycentric","full"])} = "barycentric"
 end
 
 % Use gptoolbox as authoritative source for FEM computations
 M = massmatrix(Manifold.Vertices, Manifold.Faces, char(massType));
+
+% Symmetrize for numerical safety
+M = (M + M') / 2;
 
 end

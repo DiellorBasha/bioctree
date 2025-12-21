@@ -179,6 +179,67 @@ classdef Manifold < handle
         end
         
         % ===============================================================
+        % SPECTRAL ANALYSIS
+        % ===============================================================
+        
+        function [Psi, Lambda] = eigensolve(obj, k, options)
+            %EIGENSOLVE Compute eigenpairs of Laplace-Beltrami operator
+            %
+            % Syntax:
+            %   [Psi, Lambda] = M.eigensolve(k)
+            %   [Psi, Lambda] = M.eigensolve(k, 'Method', 'FEM')
+            %   [Psi, Lambda] = M.eigensolve(k, 'Force', true)
+            %
+            % Inputs:
+            %   k - Number of eigenmodes to compute
+            %
+            % Optional Parameters:
+            %   Method - Eigensolve method: 'FEM' (default)
+            %            Future: 'DEC', 'Graph'
+            %   Force  - If true, recompute even if cached (default: false)
+            %
+            % Outputs:
+            %   Psi    - [N×k] matrix of eigenvectors (columns are eigenmodes)
+            %   Lambda - [k×1] vector of eigenvalues (spatial frequencies)
+            %
+            % Note: Currently only 'FEM' method is implemented. This delegates
+            %       to FEM().eigenpairs() for computation.
+            %
+            % Examples:
+            %   % Compute first 100 eigenmodes
+            %   [Psi, Lambda] = M.eigensolve(100);
+            %
+            %   % Use FEM method explicitly
+            %   [Psi, Lambda] = M.eigensolve(100, 'Method', 'FEM');
+            %
+            % See also: bct.FEM.eigenpairs, bct.Eigenpairs
+            
+            arguments
+                obj
+                k (1,1) double {mustBePositive, mustBeInteger}
+                options.Method (1,1) string {mustBeMember(options.Method, ["FEM"])} = "FEM"
+                options.Force (1,1) logical = false
+            end
+            
+            % Delegate to appropriate method
+            switch options.Method
+                case "FEM"
+                    % Delegate to FEM eigenpairs method
+                    fem = obj.FEM();
+                    E = fem.eigenpairs(k, 'Force', options.Force);
+                    
+                    % Extract eigenvectors and eigenvalues
+                    Psi = E.Vectors;
+                    Lambda = E.Values;
+                    
+                otherwise
+                    error('bct:Manifold:UnsupportedMethod', ...
+                          'Method "%s" not yet implemented. Currently only "FEM" is supported.', ...
+                          options.Method);
+            end
+        end
+        
+        % ===============================================================
         % GEOMETRIC QUERIES (thin delegations)
         % ===============================================================
         
@@ -245,6 +306,9 @@ classdef Manifold < handle
             %
             % Returns:
             %   E - [E×2] matrix of vertex indices forming edges
+            %
+            % Note: Manual unique() approach is faster than triangulation.edges()
+            %       for large meshes (0.32s vs 0.50s on fsaverage6)
             
             F = obj.Faces;
             if isempty(F)
