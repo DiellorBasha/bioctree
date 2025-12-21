@@ -20,11 +20,28 @@ disp(['Vertices: ' num2str(size(M.Vertices, 1))]);
 disp(['Faces: ' num2str(size(M.Faces, 1))]);
 
 %% Visualize using bct.ui.show
-% The bct.ui.show() function automatically creates a figure with uigridlayout
-% and displays the manifold with an appropriate inspector
+% The bct.ui.show() function automatically:
+%   1. Creates a figure with uigridlayout
+%   2. Selects appropriate inspector via registry (bct.ui.manifold.Inspector)
+%   3. Uses bct.ui.data.manifoldToMesh adapter to extract Vertices/Faces
+%   4. Displays the manifold with interactive controls
 
 [inspector, fig] = bct.ui.show(M);
 
-% The inspector provides interactive controls for the manifold
-disp('Manifold visualization created successfully!');
-disp('Use the inspector controls to interact with the visualization.');
+disp(' ');
+disp('✓ Manifold visualization created successfully!');
+disp('✓ Inspector: bct.ui.manifold.Inspector');
+disp('✓ Interactive controls available');
+
+%% Optional: Customize the visualization
+% You can also specify custom title and position
+% [inspector, fig] = bct.ui.show(M, 'Title', 'My Manifold', 'Position', [100 100 800 600]);
+
+%% Optional: List available inspectors
+% See what other inspectors are registered
+inspectors = bct.ui.listInspectors();
+disp(' ');
+disp(['Available inspectors: ' num2str(length(inspectors))]);
+for i = 1:length(inspectors)
+    disp(['  - ' char(inspectors(i).Id) ' (' char(inspectors(i).Class) ')']);
+end
