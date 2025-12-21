@@ -82,8 +82,8 @@ classdef test_ui_show < BaseBctTest
                 'Should resolve to ManifoldInspector');
             testCase.verifyEqual(def.Class, "bct.ui.manifold.Inspector", ...
                 'Should have correct class path');
-            testCase.verifyEqual(def.ForClass, "bct.Manifold", ...
-                'Should target bct.Manifold class');
+            testCase.verifyTrue(any(def.Supports == "bct.Manifold"), ...
+                'Should support bct.Manifold class');
             
             % Verify factory is a function handle
             testCase.verifyClass(factory, 'function_handle', ...
@@ -108,12 +108,16 @@ classdef test_ui_show < BaseBctTest
             testCase.verifyNotEmpty(inspector, 'Inspector should be created');
             testCase.verifyTrue(isvalid(inspector), 'Inspector should be valid');
             
-            % Bind Manifold
-            inspector.Object = M;
+            % Bind Manifold via adapter
+            [V, F] = bct.ui.data.manifoldToMesh(M);
+            inspector.Vertices = V;
+            inspector.Faces = F;
             
-            % Verify binding
-            testCase.verifyEqual(inspector.Object, M, ...
-                'Manifold should be bound to inspector');
+            % Verify binding (compare values, not types since Faces might be int32 or double)
+            testCase.verifyEqual(inspector.Vertices, M.Vertices, ...
+                'Vertices should match Manifold');
+            testCase.verifyEqual(double(inspector.Faces), double(M.Faces), ...
+                'Faces should match Manifold (converted to double for comparison)');
             
             % Cleanup
             delete(fig);
@@ -131,7 +135,7 @@ classdef test_ui_show < BaseBctTest
             [~, fig] = bct.ui.show(M, 'Title', customTitle);
             
             % Verify title
-            testCase.verifyEqual(fig.Name, customTitle, ...
+            testCase.verifyEqual(string(fig.Name), customTitle, ...
                 'Figure title should match provided title');
             
             % Cleanup

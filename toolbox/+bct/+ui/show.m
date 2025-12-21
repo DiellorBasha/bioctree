@@ -55,13 +55,13 @@ function [comp, fig] = show(obj, options)
     end
     
     % Resolve inspector via runtime
-    resolveOpts = struct();
-    if options.InspectorId ~= ""
-        resolveOpts.InspectorId = options.InspectorId;
-    end
-    
     try
-        [factory, def] = bct.runtime.ui.resolveInspector(obj, resolveOpts);
+        if options.InspectorId ~= ""
+            [factory, def] = bct.runtime.ui.resolveInspector(obj, ...
+                'InspectorId', options.InspectorId);
+        else
+            [factory, def] = bct.runtime.ui.resolveInspector(obj);
+        end
     catch ME
         error('bct:ui:show:ResolverFailed', ...
             'Failed to resolve inspector for object of class "%s":\n%s', ...
@@ -133,6 +133,14 @@ function bindObject(comp, obj)
     % Try Function property (for function_handle objects with Fplot)
     if isa(obj, 'function_handle') && isprop(comp, 'Function')
         comp.Function = obj;
+        return;
+    end
+    
+    % Special handling for bct.Manifold with manifold.Inspector
+    if isa(obj, 'bct.Manifold') && isa(comp, 'bct.ui.manifold.Inspector')
+        [V, F] = bct.ui.data.manifoldToMesh(obj);
+        comp.Vertices = V;
+        comp.Faces = F;
         return;
     end
     
