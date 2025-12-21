@@ -25,6 +25,12 @@ classdef DEC < handle
         Backend                        % DECLab DiscreteExteriorCalculus (math authority)
         BackendInfo (1,1) struct = struct()  % Optional diagnostics metadata
     end
+    
+    properties (Dependent)
+        Gradient     % [E×V] gradient operator (0-forms → 1-forms)
+        Divergence   % [V×E] divergence operator (1-forms → 0-forms)
+        Curl         % [F×E] curl operator (1-forms → 2-forms)
+    end
 
     properties (Access = private)
         Cache    % Optional cache of backend-derived objects (containers.Map)
@@ -174,6 +180,123 @@ classdef DEC < handle
         function op = star2(obj)
             %star2 Hodge star on 2-forms (pass-through to hd2)
             op = obj.getBackendField_("hd2");
+        end
+        
+        % ---- Differential operators (cached) ----
+        
+        function op = get.Gradient(obj)
+            %get.Gradient Get gradient operator (d0)
+            %
+            % Returns:
+            %   op - [E×V] sparse matrix mapping 0-forms to 1-forms
+            %
+            % Note: Equivalent to d0, cached for convenience
+            if ~isKey(obj.Cache, 'Gradient')
+                obj.Cache('Gradient') = bct.dec.d0(obj);
+            end
+            op = obj.Cache('Gradient');
+        end
+        
+        function op = get.Divergence(obj)
+            %get.Divergence Get divergence operator (-d0' * star1)
+            %
+            % Returns:
+            %   op - [V×E] sparse matrix mapping 1-forms to 0-forms
+            %
+            % Note: Adjoint of gradient under Hodge inner product
+            if ~isKey(obj.Cache, 'Divergence')
+                d0 = bct.dec.d0(obj);
+                star1 = bct.dec.star1(obj);
+                obj.Cache('Divergence') = -d0' * star1;
+            end
+            op = obj.Cache('Divergence');
+        end
+        
+        function op = get.Curl(obj)
+            %get.Curl Get curl operator (d1)
+            %
+            % Returns:
+            %   op - [F×E] sparse matrix mapping 1-forms to 2-forms
+            %
+            % Note: Equivalent to d1, cached for convenience
+            if ~isKey(obj.Cache, 'Curl')
+                obj.Cache('Curl') = bct.dec.d1(obj);
+            end
+            op = obj.Cache('Curl');
+        end
+        
+        % ---- Differential operator methods (apply to signals) ----
+        
+        function a1 = gradient(obj, f0)
+            %gradient Compute gradient of scalar field (0-form → 1-form)
+            %
+            % Syntax:
+            %   a1 = dec.gradient(f0)
+            %
+            % Inputs:
+            %   f0 - [V×1] scalar field on vertices
+            %
+            % Returns:
+            %   a1 - [E×1] edge-based gradient (1-form)
+            %
+            % Note: Delegates to bct.dec.gradient
+            %
+            % See also: bct.dec.gradient, divergence, curl
+            
+            arguments
+                obj (1,1) bct.DEC
+                f0 (:,1) double
+            end
+            
+            a1 = bct.dec.gradient(obj, f0);
+        end
+        
+        function f0 = divergence(obj, a1)
+            %divergence Compute divergence of vector field (1-form → 0-form)
+            %
+            % Syntax:
+            %   f0 = dec.divergence(a1)
+            %
+            % Inputs:
+            %   a1 - [E×1] edge-based vector field (1-form)
+            %
+            % Returns:
+            %   f0 - [V×1] vertex-based divergence (0-form)
+            %
+            % Note: Delegates to bct.dec.divergence
+            %
+            % See also: bct.dec.divergence, gradient, curl
+            
+            arguments
+                obj (1,1) bct.DEC
+                a1 (:,1) double
+            end
+            
+            f0 = bct.dec.divergence(obj, a1);
+        end
+        
+        function a2 = curl(obj, a1)
+            %curl Compute curl of vector field (1-form → 2-form)
+            %
+            % Syntax:
+            %   a2 = dec.curl(a1)
+            %
+            % Inputs:
+            %   a1 - [E×1] edge-based vector field (1-form)
+            %
+            % Returns:
+            %   a2 - [F×1] face-based curl (2-form / scalar curl)
+            %
+            % Note: Delegates to bct.dec.curl
+            %
+            % See also: bct.dec.curl, gradient, divergence
+            
+            arguments
+                obj (1,1) bct.DEC
+                a1 (:,1) double
+            end
+            
+            a2 = bct.dec.curl(obj, a1);
         end
     end
 

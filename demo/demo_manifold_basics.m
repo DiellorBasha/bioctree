@@ -59,14 +59,13 @@ disp(['Eigenvalue range: [' num2str(Lambda(1), '%.6f') ', ' num2str(Lambda(end),
 dec = M.DEC();
 
 % The DEC object contains:
-%   - Gradient operator: dec.G (vertices → edges)
-%   - Divergence operator: dec.D (edges → vertices)
-%   - Edge-to-face incidence: dec.E2F
-%   - Face-to-edge incidence: dec.F2E
+%   - Gradient operator: dec.Gradient (vertices → edges)
+%   - Divergence operator: dec.Divergence (edges → vertices)
+%   - Curl operator: dec.Curl (edges → faces)
 
 % Display DEC properties
-disp(['DEC gradient operator: ' num2str(size(dec.G, 1)) ' × ' num2str(size(dec.G, 2))]);
-nEdges = size(dec.G, 1);
+disp(['DEC gradient operator: ' num2str(size(dec.Gradient, 1)) ' × ' num2str(size(dec.Gradient, 2))]);
+nEdges = size(dec.Gradient, 1);
 disp(['Number of edges: ' num2str(nEdges)]);
 
 % Example: Compute gradient of a scalar field
@@ -74,9 +73,16 @@ disp(['Number of edges: ' num2str(nEdges)]);
 seedVertex = 1000;
 distances = vecnorm(M.Vertices - M.Vertices(seedVertex, :), 2, 2);
 
-% Compute gradient (produces edge-based vector field)
-gradField = dec.G * distances;
-disp(['Gradient field dimension: ' num2str(length(gradField))]);
+% Compute gradient (two equivalent methods)
+% Method 1: Using operator matrix
+gradField1 = dec.Gradient * distances;
+% Method 2: Using method
+gradField2 = dec.gradient(distances);
+disp(['Gradient field dimension: ' num2str(length(gradField1))]);
+
+% Compute divergence of gradient (should approximate Laplacian)
+divGrad = dec.divergence(gradField1);
+disp(['Divergence of gradient dimension: ' num2str(length(divGrad))]);
 
 %% Graph Analysis - Connectivity and Topology
 % Access the graph representation for connectivity-based analysis
@@ -84,19 +90,19 @@ disp(['Gradient field dimension: ' num2str(length(gradField))]);
 G = M.Graph();
 
 % The Graph object provides:
-%   - Adjacency matrix: G.A
-%   - Degree matrix: G.D
-%   - Graph Laplacian: G.L
+%   - Adjacency matrix: G.Adjacency
+%   - Degree matrix: G.Degree
+%   - Graph Laplacian: G.Laplacian
 
 % Display graph properties
-disp(['Graph adjacency matrix: ' num2str(size(G.A, 1)) ' × ' num2str(size(G.A, 2))]);
-avgDegree = mean(sum(G.A, 2));
+disp(['Graph adjacency matrix: ' num2str(size(G.Adjacency, 1)) ' × ' num2str(size(G.Adjacency, 2))]);
+avgDegree = mean(sum(G.Adjacency, 2));
 disp(['Average vertex degree: ' num2str(avgDegree, '%.2f')]);
 
 % Compute graph-based metrics
 % Example: diffusion distance from seed vertex
 diffusionTime = 100;
-diffusionKernel = expm(-diffusionTime * G.L);
+diffusionKernel = expm(-diffusionTime * G.Laplacian);
 diffusionDist = diffusionKernel(seedVertex, :)';
 disp(['Computed diffusion distances from vertex ' num2str(seedVertex)]);
 
