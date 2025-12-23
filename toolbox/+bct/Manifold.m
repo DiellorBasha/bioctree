@@ -30,6 +30,7 @@ classdef Manifold < handle
 
     properties (Access = private)
         Cache            % containers.Map for lazy representation creation
+        Geometry         % Struct for cached geometric computations (frames, etc.)
     end
 
     methods
@@ -115,6 +116,9 @@ classdef Manifold < handle
 
             % Initialize cache for representations
             obj.Cache = containers.Map('KeyType','char','ValueType','any');
+            
+            % Initialize geometry cache for frames
+            obj.Geometry = struct();
         end
 
         % ===============================================================
@@ -176,6 +180,20 @@ classdef Manifold < handle
                 obj.Cache("Graph") = bct.Graph(obj);
             end
             g = obj.Cache("Graph");
+        end
+        
+        % ===============================================================
+        % GEOMETRY CACHE (Internal accessor methods)
+        % ===============================================================
+        
+        function geom = getGeometry(obj)
+            %GETGEOMETRY Get geometry cache (internal use by bct.manifold.*)
+            geom = obj.Geometry;
+        end
+        
+        function setGeometry(obj, geom)
+            %SETGEOMETRY Set geometry cache (internal use by bct.manifold.*)
+            obj.Geometry = geom;
         end
         
         % ===============================================================
@@ -297,6 +315,135 @@ classdef Manifold < handle
             
             V = obj.Vertices;
             bbox = [min(V); max(V)].';
+        end
+        
+        function C = centroids(obj)
+            %CENTROIDS Compute face centroids
+            %
+            % Syntax:
+            %   C = M.centroids()
+            %
+            % Outputs:
+            %   C - [M×3] matrix of face centroids where M is number of faces
+            %
+            % Description:
+            %   Computes the geometric center (centroid) of each triangular face
+            %   as the average of its three vertex positions. This is a wrapper
+            %   for bct.manifold.centroids().
+            %
+            % Examples:
+            %   % Compute centroids
+            %   M = bct.Manifold(V, F);
+            %   C = M.centroids();
+            %
+            %   % Visualize centroids
+            %   C = M.centroids();
+            %   plot3(C(:,1), C(:,2), C(:,3), 'r.', 'MarkerSize', 10);
+            %
+            % See also: bct.manifold.centroids
+            
+            C = bct.manifold.centroids(obj);
+        end
+        
+        function N = normals(obj, type)
+            %NORMALS Compute vertex or face normals
+            %
+            % Syntax:
+            %   N = M.normals()
+            %   N = M.normals(Type)
+            %
+            % Inputs:
+            %   Type - 'Vertex' (default) or 'Face'
+            %
+            % Outputs:
+            %   N - [N×3] vertex normals or [M×3] face normals
+            %
+            % Description:
+            %   Computes vertex or face normals using MATLAB's surfaceMesh object.
+            %   By default returns vertex normals. Specify 'Face' to get face normals.
+            %   This is a wrapper for bct.manifold.normals().
+            %
+            % Examples:
+            %   % Compute vertex normals (default)
+            %   M = bct.Manifold(V, F);
+            %   VN = M.normals();
+            %
+            %   % Compute face normals
+            %   FN = M.normals('Face');
+            %
+            %   % Visualize vertex normals
+            %   VN = M.normals();
+            %   quiver3(V(:,1), V(:,2), V(:,3), VN(:,1), VN(:,2), VN(:,3), 0.5);
+            %
+            % See also: bct.manifold.normals, centroids
+            
+            arguments
+                obj
+                type {mustBeTextScalar} = 'Vertex'
+            end
+            
+            N = bct.manifold.normals(obj, type);
+        end
+        
+        function [N, e1, e2] = tangents(obj, options)
+            %TANGENTS Compute orthonormal tangent frame for each face or vertex
+            %
+            % Syntax:
+            %   [N, e1, e2] = M.tangents()
+            %   [N, e1, e2] = M.tangents('Domain', 'face')    % default
+            %   [N, e1, e2] = M.tangents('Domain', 'vertex')
+            %
+            % Name-Value:
+            %   'Domain' - 'face' (default) or 'vertex'
+            %
+            % Outputs:
+            %   N  - normals:
+            %        * face domain:   [Nf×3] face normals (unit)
+            %        * vertex domain: [Nv×3] vertex normals (unit)
+            %   e1 - first tangent basis vector (same size as N)
+            %   e2 - second tangent basis vector (same size as N)
+            %
+            % Description:
+            %   Computes an orthonormal coordinate frame {e1, e2, N} for each face or
+            %   vertex. The frame is right-handed with:
+            %   - N: face/vertex normal
+            %   - e1: first tangent basis vector (orthogonal to N)
+            %   - e2: second tangent basis vector (orthogonal to both N and e1)
+            %
+            %   Face tangents are computed per triangle using the first edge.
+            %   Vertex tangents use a robust reference axis projection method.
+            %   This is a wrapper for bct.manifold.tangents().
+            %
+            % Examples:
+            %   % Face tangent frame
+            %   M = bct.Manifold(V, F);
+            %   [N, e1, e2] = M.tangents();
+            %   [N, e1, e2] = M.tangents('Domain', 'face');
+            %
+            %   % Vertex tangent frame
+            %   [N, e1, e2] = M.tangents('Domain', 'vertex');
+            %
+            %   % Visualize face tangent frame at centroids
+            %   C = M.centroids();
+            %   [N, e1, e2] = M.tangents('Domain', 'face');
+            %   quiver3(C(:,1), C(:,2), C(:,3), e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
+            %   hold on;
+            %   quiver3(C(:,1), C(:,2), C(:,3), e2(:,1), e2(:,2), e2(:,3), 0.5, 'g');
+            %   quiver3(C(:,1), C(:,2), C(:,3), N(:,1), N(:,2), N(:,3), 0.5, 'b');
+            %
+            %   % Visualize vertex tangent frame
+            %   [N, e1, e2] = M.tangents('Domain', 'vertex');
+            %   quiver3(M.Vertices(:,1), M.Vertices(:,2), M.Vertices(:,3), ...
+            %           e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
+            %
+            % See also: bct.manifold.tangents, normals, centroids
+            
+            arguments
+                obj bct.Manifold
+                options.Domain {mustBeMember(options.Domain, ["face", "vertex", "Face", "Vertex"])} = "face"
+            end
+            
+            [N, e1, e2] = bct.manifold.tangents(obj, 'Domain', options.Domain);
         end
         
         function write(obj, fileName, options)
