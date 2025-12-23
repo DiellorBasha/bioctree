@@ -298,6 +298,63 @@ classdef Manifold < handle
             V = obj.Vertices;
             bbox = [min(V); max(V)].';
         end
+        
+        function write(obj, fileName, options)
+            %WRITE Write Manifold to mesh file
+            %
+            % Syntax:
+            %   M.write(fileName)
+            %   M.write(fileName, 'Encoding', enc)
+            %   M.write(fileName, 'Format', fmt)
+            %
+            % Supported File Formats:
+            %   - .stl  - STL (STereoLithography) format
+            %   - .ply  - PLY (Polygon File Format)
+            %   - .obj  - OBJ (Wavefront) format
+            %   - .glb  - GLB (Binary glTF)
+            %   - .gltf - GLTF (GL Transmission Format)
+            %   - .mat  - MATLAB data file (saves V and F variables)
+            %   - .h5/.hdf5 - HDF5 format
+            %
+            % Inputs:
+            %   fileName - String or char path for output file
+            %
+            % Optional Parameters:
+            %   Encoding - 'binary' or 'ascii' (for formats that support it)
+            %   Format   - Explicitly specify file format (auto-detected from extension)
+            %
+            % Examples:
+            %   % Write to OBJ file
+            %   M = bct.Manifold(V, F);
+            %   M.write('output.obj');
+            %
+            %   % Write to GLB file
+            %   M.write('model.glb');
+            %
+            %   % Write to HDF5 file
+            %   M.write('mesh.h5');
+            %
+            %   % Write to STL with binary encoding
+            %   M.write('output.stl', 'Encoding', 'binary');
+            %
+            % See also: bct.Manifold.read, bct.manifold.write
+            
+            arguments
+                obj
+                fileName string
+                options.Encoding string = ""
+                options.Format string = ""
+            end
+            
+            % Delegate to bct.manifold.write function
+            if options.Encoding ~= ""
+                bct.manifold.write(obj, fileName, 'Encoding', options.Encoding, 'Format', options.Format);
+            elseif options.Format ~= ""
+                bct.manifold.write(obj, fileName, 'Format', options.Format);
+            else
+                bct.manifold.write(obj, fileName);
+            end
+        end
     end
     
     methods (Access = private)
@@ -328,27 +385,57 @@ classdef Manifold < handle
     end
 
     methods (Static)
-        function obj = fromHDF5(filename)
-            %FROMHDF5 Load Manifold from HDF5 file
+        function obj = read(fileName, options)
+            %READ Load Manifold from mesh file
             %
             % Syntax:
-            %   obj = bct.Manifold.fromHDF5(filename)
+            %   M = bct.Manifold.read(fileName)
+            %   M = bct.Manifold.read(fileName, 'Format', fmt)
+            %
+            % Supported File Formats:
+            %   - .stl  - STL (STereoLithography) format
+            %   - .ply  - PLY (Polygon File Format)
+            %   - .obj  - OBJ (Wavefront) format
+            %   - .glb  - GLB (Binary glTF)
+            %   - .gltf - GLTF (GL Transmission Format)
+            %   - .mat  - MATLAB data file
+            %   - .h5/.hdf5 - HDF5 format
             %
             % Inputs:
-            %   filename - Path to HDF5 file
+            %   fileName - String or char path to mesh file
+            %
+            % Optional Parameters:
+            %   Format - Explicitly specify file format (auto-detected from extension)
             %
             % Outputs:
-            %   obj - Manifold object with geometry loaded from HDF5
+            %   M - Manifold object loaded from file
+            %
+            % Examples:
+            %   % Read from OBJ file
+            %   M = bct.Manifold.read('mesh.obj');
+            %
+            %   % Read from GLB file
+            %   M = bct.Manifold.read('model.glb');
+            %
+            %   % Read from HDF5 file
+            %   M = bct.Manifold.read('data.h5');
+            %
+            %   % Read MATLAB data file
+            %   M = bct.Manifold.read('data/mesh/fsaverage_lh_pial.mat');
+            %
+            % See also: bct.Manifold.write, bct.manifold.read
             
-            % Read vertices and faces from HDF5
-            V = h5read(filename, '/manifold/vertices');
-            F = h5read(filename, '/manifold/faces');
+            arguments
+                fileName {mustBeFile}
+                options.Format string = ""
+            end
             
-            % Create meshStruct
-            meshStruct = struct('V', V, 'F', F);
-            
-            % Create Manifold object
-            obj = bct.Manifold(meshStruct);
+            % Delegate to bct.manifold.read function
+            if options.Format ~= ""
+                obj = bct.manifold.read(fileName, 'Format', options.Format);
+            else
+                obj = bct.manifold.read(fileName);
+            end
         end
     end
 end

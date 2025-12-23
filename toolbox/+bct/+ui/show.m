@@ -144,6 +144,14 @@ function bindObject(comp, obj)
         return;
     end
     
+    % Special handling for bct.Manifold with manifold.Selector
+    if isa(obj, 'bct.Manifold') && isa(comp, 'bct.ui.manifold.Selector')
+        [V, F] = bct.ui.data.manifoldToMesh(obj);
+        comp.Vertices = V;
+        comp.Faces = F;
+        return;
+    end
+    
     % Try model-specific property (e.g., Manifold property)
     objClass = class(obj);
     if isprop(comp, objClass)

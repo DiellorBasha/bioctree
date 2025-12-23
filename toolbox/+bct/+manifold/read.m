@@ -12,6 +12,7 @@ function M = read(fileName, options)
 %   - .glb  - GLB (Binary glTF)
 %   - .gltf - GLTF (GL Transmission Format)
 %   - .mat  - MATLAB data file (via bct.manifold.load)
+%   - .h5/.hdf5 - HDF5 format
 %
 % Inputs:
 %   fileName - String or char path to mesh file
@@ -79,9 +80,22 @@ switch ext
         % Use bct.manifold.load for MATLAB data files
         M = bct.manifold.load(fileName);
         
+    case {".h5", ".hdf5"}
+        % Read from HDF5 file
+        try
+            V = h5read(fileName, '/manifold/vertices');
+            F = h5read(fileName, '/manifold/faces');
+        catch ME
+            error('bct:manifold:ReadError', ...
+                'Failed to read HDF5 file "%s": %s', fileName, ME.message);
+        end
+        
+        % Create Manifold from HDF5 data
+        M = bct.Manifold(V, F);
+        
     otherwise
         error('bct:manifold:UnsupportedFormat', ...
-            'Unsupported file format: %s. Supported formats: .stl, .ply, .obj, .glb, .gltf, .mat', ...
+            'Unsupported file format: %s. Supported formats: .stl, .ply, .obj, .glb, .gltf, .mat, .h5, .hdf5', ...
             ext);
 end
 

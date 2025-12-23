@@ -186,6 +186,37 @@ classdef test_ui_show < BaseBctTest
             testCase.verifyError(@() bct.ui.show(unsupportedObj), ...
                 'bct:ui:show:ResolverFailed', ...
                 'Should throw error for unsupported class');
-        end
-    end
+        end        
+        function testShowManifoldWithSelector(testCase)
+            % Test explicit selection of ManifoldSelector via InspectorId
+            
+            % Load test mesh
+            mesh = testCase.loadTestMesh();
+            M = bct.Manifold(mesh);
+            
+            % Call bct.ui.show with explicit InspectorId for Selector
+            [inspector, fig] = bct.ui.show(M, 'InspectorId', 'ManifoldSelector');
+            
+            % Verify figure was created
+            testCase.verifyNotEmpty(fig, 'Figure should be created');
+            testCase.verifyTrue(isvalid(fig), 'Figure should be valid');
+            
+            % Verify correct inspector type
+            testCase.verifyClass(inspector, 'bct.ui.manifold.Selector', ...
+                'Should instantiate ManifoldSelector when explicitly requested');
+            
+            % Verify data was bound
+            testCase.verifyNotEmpty(inspector.Vertices, 'Vertices should be set');
+            testCase.verifyNotEmpty(inspector.Faces, 'Faces should be set');
+            testCase.verifyEqual(size(inspector.Vertices, 1), size(M.Vertices, 1), ...
+                'Vertex count should match');
+            
+            % Verify Seed property exists and is valid
+            testCase.verifyGreaterThanOrEqual(inspector.Seed, 1, 'Seed should be >= 1');
+            testCase.verifyLessThanOrEqual(inspector.Seed, size(M.Vertices, 1), ...
+                'Seed should be <= vertex count');
+            
+            % Cleanup
+            delete(fig);
+        end    end
 end

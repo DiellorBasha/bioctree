@@ -1,4 +1,4 @@
-```markdown
+
 # BCT Registry + Runtime Contract
 ## Scope: Kernels and UI Colormaps Only
 
@@ -604,6 +604,4 @@ RGB = bct.ui.color.apply(signal, "Colormap","parula", "CLim",[-1 1], "N",256);
 
 End of contract.
 
-```
-::contentReference[oaicite:0]{index=0}
-```
+

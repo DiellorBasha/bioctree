@@ -13,6 +13,7 @@ function write(M, fileName, options)
 %   - .glb  - GLB (Binary glTF)
 %   - .gltf - GLTF (GL Transmission Format)
 %   - .mat  - MATLAB data file (saves V and F variables)
+%   - .h5/.hdf5 - HDF5 format
 %
 % Inputs:
 %   M        - bct.Manifold object
@@ -100,9 +101,28 @@ switch ext
                 'Failed to write MATLAB file "%s": %s', fileName, ME.message);
         end
         
+    case {".h5", ".hdf5"}
+        % Write to HDF5 file
+        try
+            % Delete existing file if it exists
+            if isfile(fileName)
+                delete(fileName);
+            end
+            
+            % Write vertices and faces to HDF5
+            h5create(fileName, '/manifold/vertices', size(M.Vertices));
+            h5write(fileName, '/manifold/vertices', M.Vertices);
+            
+            h5create(fileName, '/manifold/faces', size(M.Faces));
+            h5write(fileName, '/manifold/faces', M.Faces);
+        catch ME
+            error('bct:manifold:WriteError', ...
+                'Failed to write HDF5 file "%s": %s', fileName, ME.message);
+        end
+        
     otherwise
         error('bct:manifold:UnsupportedFormat', ...
-            'Unsupported file format: %s. Supported formats: .stl, .ply, .obj, .glb, .gltf, .mat', ...
+            'Unsupported file format: %s. Supported formats: .stl, .ply, .obj, .glb, .gltf, .mat, .h5, .hdf5', ...
             ext);
 end
 

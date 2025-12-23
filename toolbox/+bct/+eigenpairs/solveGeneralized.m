@@ -41,7 +41,7 @@ assert(size(K,1) == N && size(K,2) == N, ...
 % Enforce FEM invariants on eigs options
 eigsOpts = options.EigsOpts;
 eigsOpts.isreal = true;  % FEM operators are real
-eigsOpts.issym  = true;  % Symmetric
+%eigsOpts.issym  = true;  % Symmetric
 
 % Solve generalized eigenproblem: K*u = λ*M*u
 % Use 'SM' (smallest magnitude) for spectral problems
