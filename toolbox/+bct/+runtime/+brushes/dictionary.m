@@ -52,7 +52,7 @@ function [D, meta] = dictionary(context)
         defs = bct.registry.brushes();
         
         % Build dictionary
-        cachedDict = builtin('dictionary');
+        cachedDict = dictionary();
         for i = 1:length(defs)
             cachedDict(defs(i).Id) = defs(i);
         end
@@ -95,7 +95,7 @@ function filtered = filterByDependencies(D, context)
     end
     
     % Create new filtered dictionary
-    filtered = builtin('dictionary');
+    filtered = dictionary();
     
     % Check each brush
     ids = keys(D);

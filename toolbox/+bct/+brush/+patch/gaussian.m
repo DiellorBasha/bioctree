@@ -37,7 +37,8 @@ function w = gaussian(manifold, params)
     end
 
     % --- Compute distances from source ---
-    G = manifold.Graph.matlabGraph(metric);
+    graphObj = manifold.Graph();
+    G = graphObj.matlab(metric);
     d = distances(G, source);  % [N×1] distances from source to all vertices
 
     % --- Apply Gaussian kernel ---

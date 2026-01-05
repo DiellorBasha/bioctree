@@ -36,10 +36,14 @@ function w = nearest(manifold, params)
         metric = "geometry";
     end
 
-    % --- Use Graph.nearest for efficient distance-based selection ---
-    idx = manifold.Graph.nearest(seed, dist, metric);
+    % --- Use Graph distances to find vertices within distance threshold ---
+    G = manifold.Graph();
+    d = G.distances(metric);
+    idx = find(d(:, seed) <= dist);
 
     % --- Binary selection field ---
-    w = bct.brush.embed(idx, manifold.N);
+    N = manifold.numVertices;
+    w = zeros(N, 1);
+    w(idx) = 1;
 
 end
