@@ -171,14 +171,16 @@ end
 function [V, F] = createTestMesh()
 %CREATETESTMESH  Create small test manifold for validation
 %
-% Returns icosphere with 3 subdivisions (~642 vertices)
+% Uses bct.data.load() to get default test mesh
 
-    % Check if icosphere is available
-    if exist('icosphere', 'file') ~= 2
-        % Fallback: create simple tetrahedron
+    % Use standard bct.data.load()
+    try
+        mesh = bct.data.load();
+        V = mesh.Vertices;
+        F = mesh.Faces;
+    catch
+        % Fallback: create simple tetrahedron only if bct.data fails
         V = [0 0 0; 1 0 0; 0.5 sqrt(3)/2 0; 0.5 sqrt(3)/6 sqrt(6)/3];
         F = [1 2 3; 1 2 4; 2 3 4; 3 1 4];
-    else
-        [V, F] = icosphere(3);
     end
 end

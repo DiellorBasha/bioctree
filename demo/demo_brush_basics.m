@@ -11,24 +11,28 @@
 %   4. Visualizing brush selections
 %   5. Discovering available brushes
 %
+% Uses the default fsaverage6 test mesh included with the toolbox.
+%
 % See also: bct.brush.apply, bct.registry.brushes, bct.runtime.brushes
 
-%% Setup
-fprintf('=== BCT Brush Basics Demo ===\n\n');
+%% Initialize workspace
+clearvars; close all;
 
-% Initialize BCT if needed
+% Ensure bioctree is initialized
 if ~exist('bct.Manifold', 'class')
-    bct_start();
+    error('bioctree toolbox not initialized. Run bct_start first.');
 end
+
+fprintf('=== BCT Brush Basics Demo ===\n\n');
 
 %% 1. Load Test Mesh
 fprintf('[1/6] Loading cortical mesh...\n');
 
-% Load fsaverage right hemisphere pial surface
-mesh = bct.data.load();  % Default: fsaverage6 right hemisphere
-M = bct.Manifold(mesh.Vertices, mesh.Faces);
+% Get the default mesh path from bct.data
+mesh = bct.data.load();  % Load default mesh struct
+M = bct.manifold.load(mesh);  % Create Manifold object
 
-fprintf('  Loaded: %d vertices, %d faces\n', M.numVertices, M.numFaces);
+fprintf('  Loaded: %d vertices, %d faces\n', size(M.Vertices, 1), size(M.Faces, 1));
 
 %% 2. Discover Available Brushes
 fprintf('\n[2/6] Discovering available brushes...\n');
@@ -46,7 +50,7 @@ fprintf('  Available: %s\n', strjoin(availableBrushes, ', '));
 fprintf('\n[3/6] Creating K-nearest neighbors selection...\n');
 
 % Select center vertex (middle of mesh approximately)
-centerIdx = round(M.numVertices / 2);
+centerIdx = round(size(M.Vertices, 1) / 2);
 
 % Apply nearest neighbors brush
 params_nearest = struct(...
