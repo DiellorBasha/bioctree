@@ -1,8 +1,11 @@
-fsdir = "C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage6\surf";
+fsdir = "C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage\surf";
 
 % Left hemisphere
 [V_pial,   F_pial]   = freesurfer_read_surf(fullfile(fsdir, "lh.pial"));
 [V_sphere, F_sphere] = freesurfer_read_surf(fullfile(fsdir, "lh.sphere.reg")); % or lh.sphere
+
+savePath='C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-lh_sphere.mat'
+
 
 % Sanity checks
 if ~isequal(F_pial, F_sphere)
@@ -91,3 +94,170 @@ s.ValueChangedFcn  = @(src,evt) updateMesh(evt.Value);
         % p.VertexNormals = []; % let MATLAB recompute lazily
         drawnow limitrate;
     end
+
+%%
+fsdir = "C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage\surf";
+
+[V_sphere, F_sphere] = freesurfer_read_surf(fullfile(fsdir, "lh.sphere.reg")); % or "lh.sphere"
+
+% Ensure 1-based faces (some readers return 0-based)
+if min(F_sphere(:)) == 0
+    F_sphere = F_sphere + 1;
+end
+
+% Match desired types
+V = double(V_sphere);
+F = int32(F_sphere);
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-lh_sphere.mat';
+
+% Save as a MAT-file with variables V and F (will load as fields a.V and a.F)
+save(savePath, 'V', 'F', '-v7.3');
+
+%% Convert sphere coordinates to UV
+
+% Inputs: V_sphere, F_sphere from freesurfer_read_surf
+if min(F_sphere(:)) == 0
+    F_sphere = F_sphere + 1;
+end
+
+V = double(V_sphere);
+F = int32(F_sphere);
+
+% ---- UV parameterization from spherical embedding (equirectangular) ----
+Vs = V - mean(V, 1);  % center used for angles
+
+[az, el, ~] = cart2sph(Vs(:,1), Vs(:,2), Vs(:,3));  % radians
+U = (az + pi) / (2*pi);
+Vv = (el + pi/2) / pi;
+
+UV = [U, Vv];  % [Nv×2], in [0,1]
+
+UVInfo = struct();
+UVInfo.Method        = "sphere_equirectangular";
+UVInfo.Centering     = "subtract_mean";
+UVInfo.AngleUnits    = "radians";
+UVInfo.U_Range       = [0 1];
+UVInfo.V_Range       = [0 1];
+UVInfo.Seam          = "U wraps at 0/1 (azimuth -pi/pi)";
+UVInfo.Poles         = "V=0/1 correspond to south/north poles";
+UVInfo.SourceSurface = "lh.sphere.reg"; % or "lh.sphere"
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-lh_sphere.mat';
+save(savePath, 'V', 'F', 'UV', 'UVInfo', '-v7.3');
+
+%%
+fsdir = "C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage\surf";
+
+[V_sphere, F_sphere] = freesurfer_read_surf(fullfile(fsdir, "rh.sphere.reg")); % or "lh.sphere"
+
+% Ensure 1-based faces (some readers return 0-based)
+if min(F_sphere(:)) == 0
+    F_sphere = F_sphere + 1;
+end
+
+% Match desired types
+V = double(V_sphere);
+F = int32(F_sphere);
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-rh_sphere.mat';
+
+% Save as a MAT-file with variables V and F (will load as fields a.V and a.F)
+save(savePath, 'V', 'F', '-v7.3');
+
+%% Convert sphere coordinates to UV
+
+% Inputs: V_sphere, F_sphere from freesurfer_read_surf
+if min(F_sphere(:)) == 0
+    F_sphere = F_sphere + 1;
+end
+
+V = double(V_sphere);
+F = int32(F_sphere);
+
+% ---- UV parameterization from spherical embedding (equirectangular) ----
+Vs = V - mean(V, 1);  % center used for angles
+
+[az, el, ~] = cart2sph(Vs(:,1), Vs(:,2), Vs(:,3));  % radians
+U = (az + pi) / (2*pi);
+Vv = (el + pi/2) / pi;
+
+UV = [U, Vv];  % [Nv×2], in [0,1]
+
+UVInfo = struct();
+UVInfo.Method        = "sphere_equirectangular";
+UVInfo.Centering     = "subtract_mean";
+UVInfo.AngleUnits    = "radians";
+UVInfo.U_Range       = [0 1];
+UVInfo.V_Range       = [0 1];
+UVInfo.Seam          = "U wraps at 0/1 (azimuth -pi/pi)";
+UVInfo.Poles         = "V=0/1 correspond to south/north poles";
+UVInfo.SourceSurface = "lh.sphere.reg"; % or "lh.sphere"
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-rh_sphere.mat';
+save(savePath, 'V', 'F', 'UV', 'UVInfo', '-v7.3');
+%%
+% Paths
+fsdir = "C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage6\surf";
+
+% ---------- Left hemisphere: lh.inflated ----------
+[V_lh, F_lh] = freesurfer_read_surf(fullfile(fsdir, "lh.inflated"));
+
+% Ensure 1-based faces (some readers return 0-based)
+if min(F_lh(:)) == 0
+    F_lh = F_lh + 1;
+end
+
+% Match your desired MAT schema/types
+V = double(V_lh);
+F = int32(F_lh);
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-lh_inflated.mat';
+save(savePath, 'V', 'F', '-v7.3');
+
+
+% ---------- Right hemisphere: rh.inflated ----------
+[V_rh, F_rh] = freesurfer_read_surf(fullfile(fsdir, "rh.inflated"));
+
+% Ensure 1-based faces
+if min(F_rh(:)) == 0
+    F_rh = F_rh + 1;
+end
+
+V = double(V_rh);
+F = int32(F_rh);
+
+savePath = 'C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-rh_inflated.mat';
+save(savePath, 'V', 'F', '-v7.3');
+
+
+%% Geometry export
+V=M.Vertices; F=M.Faces; 
+UV=load('C:\CodingProjects\bioctree\toolbox\+bct\+data\assets\fsaverage6\surf\fsaverage6_hemi-lh_sphere.mat');
+savePathJSON='C:\CodingProjects\bioctree-ui-library\+bct\+ui\+manifold\+viewer\web\assets\fsaverage.json'
+
+vertices = single(V');      % 3 x N
+vertices = vertices(:)';    % 1 x (3N)
+
+faces = int32(F' - 1);      % 3 x M, 0-based
+faces = faces(:)';          % 1 x (3M)
+
+uv = single(UV');           % 2 x N
+uv = uv(:)';                % 1 x (2N)
+
+vertices = single(V');      % 3 x N
+vertices = vertices(:)';    % 1 x (3N)
+
+faces = int32(F' - 1);      % 3 x M, 0-based
+faces = faces(:)';          % 1 x (3M)
+
+uv = single(UV');           % 2 x N
+uv = uv(:)';                % 1 x (2N)
+
+jsonText = jsonencode(meshJSON);
+jsonText = prettyjson(jsonText);   % optional but recommended
+
+fid = fopen(savePathJSON, 'w');
+fwrite(fid, jsonText, 'char');
+fclose(fid);
+

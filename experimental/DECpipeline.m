@@ -5,29 +5,24 @@ clearvars; clc;
 bioctree_start;
 
 %% Setup
-data = load('data/mesh/fsaverage_rh_pial.mat');
-B = bct.bct.fromMesh(data.V, data.F);
+% Get the default mesh path from bct.data
+mesh = bct.data.load();  % Load default mesh struct
+B = bct.manifold.load(mesh);  % Create Manifold object
 
-V = B.Manifold.Vertices;
-F = B.Manifold.Faces;
-COM = B.Manifold.centroid();  % Face centers
+
+V = B.Vertices;
+F = B.Faces;
+COM = B.centroids();  % Face centers
 ssf = 15;  % Subsample factor for vectors
 subsample = 1:ssf:size(COM,1);
 
 %% Create viewer (ONCE)
 % Create figure
-fig = uifigure('Position', [100 100 250 250], 'Color', 'k');
-
-% Create root layout
-root = uigridlayout(fig);  % ← Fixed: 'fig' not 'f'
-root.RowHeight   = {'1x'};
-root.ColumnWidth = {'1x'};
-root.BackgroundColor = 'k';
-
-viewer = bctui.component.Manifold('Parent', root);
-viewer.Vertices = V;
-viewer.Faces = F;
-
+  fig  = uifigure('Position', [100 100 1200 800]);
+      gr = uigridlayout(fig, [1 1]);
+      gr.RowHeight    = {'1x'};
+      gr.ColumnWidth  = {'1x'};
+      v = bct.ui.manifold.Viewer(gr);
 fprintf('=== Differential Forms Pipeline ===\n\n');
 
 %% ========================================================================
