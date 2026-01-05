@@ -39,7 +39,8 @@ function w = gaussian(manifold, params)
     % --- Compute distances from source ---
     graphObj = manifold.Graph();
     G = graphObj.matlab(metric);
-    d = distances(G, source);  % [N×1] distances from source to all vertices
+    d = distances(G, source);  % [1×N] distances from source to all vertices
+    d = d(:);  % Ensure column vector [N×1]
 
     % --- Apply Gaussian kernel ---
     % w = exp(-d^2 / (2*sigma^2))

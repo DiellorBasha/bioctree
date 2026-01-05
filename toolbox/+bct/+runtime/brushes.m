@@ -71,7 +71,10 @@ function varargout = brushes(action, varargin)
             end
             manifold = varargin{1};
             dict = bct.runtime.brushes.dictionary(manifold);
-            varargout{1} = string({dict.Id})';
+            
+            % Extract IDs from dictionary
+            brushIds = keys(dict);
+            varargout{1} = string(brushIds);
 
         otherwise
             error('bct:runtime:brushes:UnknownAction', ...
