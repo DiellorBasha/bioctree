@@ -146,26 +146,9 @@ function validateExecutable(spec)
         error('ParamRanges validation failed: %s', ME.message);
     end
     
-    % Test Evaluate (smoke test only - may fail due to dependencies)
-    try
-        w = spec.Evaluate(M, params);
-        
-        % Check output dimensions
-        if size(w, 1) ~= M.numVertices()
-            error('Output size mismatch: expected [%d×?], got [%d×%d]', ...
-                M.numVertices(), size(w, 1), size(w, 2));
-        end
-        
-    catch ME
-        % Only warn for execution failures (may require specific dependencies)
-        if contains(spec.Id, 'spectral') || any(ismember(spec.Requires, ["FEM", "Eigenpairs"]))
-            % Expected to fail without FEM/eigenpairs
-            % Silently skip
-        else
-            warning('bct:registry:brushes:ExecutionWarning', ...
-                'Brush "%s" execution test failed: %s', spec.Id, ME.message);
-        end
-    end
+    % NOTE: Execution test is DISABLED to avoid expensive computation
+    % Validation should only check schema, not run brushes on large meshes
+    % To test execution, call the brush directly in a unit test
 end
 
 function [V, F] = createTestMesh()

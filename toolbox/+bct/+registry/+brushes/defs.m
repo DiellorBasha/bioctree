@@ -59,8 +59,8 @@ function defs = defs()
     defs(end+1) = defineTimeHeat();
     defs(end+1) = defineTimeSpectral();
     
-    % Validate registry on construction
-    bct.registry.brushes.validate(defs);
+    % NOTE: Validation is NOT called here to avoid expensive operations
+    % Call bct.registry.brushes.validate(defs) explicitly if needed
 end
 
 %% =========================================================

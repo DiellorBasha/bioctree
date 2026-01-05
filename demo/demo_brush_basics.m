@@ -38,7 +38,7 @@ fprintf('  Loaded: %d vertices, %d faces\n', size(M.Vertices, 1), size(M.Faces, 
 fprintf('\n[2/6] Discovering available brushes...\n');
 
 % List all registered brushes
-allBrushes = bct.registry.brushes('list');
+allBrushes = bct.registry.brushes.list;
 fprintf('  Total brushes: %d\n', numel(allBrushes));
 
 % List only brushes compatible with this manifold
