@@ -3,10 +3,24 @@ function R = registry()
 %
 %   R = bct.brush.registry()
 %
+%   DEPRECATED: This function is maintained for backward compatibility.
+%   New code should use bct.registry.brushes() and bct.runtime.brushes.*
+%
 %   Each entry declares:
 %     - Name        : human-readable
 %     - Category    : patch | trajectory | time | dynamic
 %     - Algorithm   : function handle
+%
+%   See also: bct.registry.brushes, bct.runtime.brushes.dictionary
+
+    % Issue deprecation warning once per session
+    persistent hasWarned
+    if isempty(hasWarned)
+        warning('bct:brush:registry:Deprecated', ...
+            ['bct.brush.registry() is deprecated. ' ...
+             'Use bct.registry.brushes() and bct.runtime.brushes.* instead.']);
+        hasWarned = true;
+    end
 
     R = struct();
 

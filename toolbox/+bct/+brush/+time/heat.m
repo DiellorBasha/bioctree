@@ -5,11 +5,12 @@ function w = heat(manifold, time, params)
 %
 %   Creates a spatiotemporal brush [N×T] that shows heat diffusion along
 %   a geodesic path over time. The brush:
-%   1. Computes shortest path between source and target
-%   2. Creates initial spatial signal on the path
-%   3. Projects to eigenmode domain (Lambda)
-%   4. Applies time-varying heat kernel with increasing diffusion
-%   5. Reconstructs to spatial domain at each time step
+%   1. Gets FEM representation and computes eigenpairs (cached)
+%   2. Computes shortest path between source and target
+%   3. Creates initial spatial signal on the path
+%   4. Projects to eigenmode domain using Eigenpairs.project()
+%   5. Applies time-varying heat kernel with increasing diffusion
+%   6. Reconstructs to spatial domain at each time step using Eigenpairs.reconstruct()
 %
 %   Required params
 %   ---------------
@@ -42,10 +43,8 @@ function w = heat(manifold, time, params)
 %   Example:
 %   --------
 %   % Setup
-%   B = bct.bct();
-%   B.Manifold = bct.Manifold(V, F);
-%   B.Lambda = B.Manifold.dual('numModes', 100);
-%   B.Time = bct.Time(0:0.01:1, 100);  % 1 second at 100 Hz
+%   M = bct.Manifold(V, F);
+%   time_axis = bct.Time(0:0.01:1, 100);  % 1 second at 100 Hz
 %
 %   % Create heat brush
 %   params.source = 100;
@@ -53,10 +52,10 @@ function w = heat(manifold, time, params)
 %   params.tau_range = [0.02, 0.4];
 %   params.tau_profile = 'exponential';
 %   
-%   w = bct.brush.time.heat(B.Manifold, B.Time, params);
+%   w = bct.brush.time.heat(M, time_axis, params);
 %   
 %   % Visualize at specific time
-%   figure; B.Manifold.plot('data', full(w(:, 50)));
+%   figure; M.plot('data', full(w(:, 50)));
 
     arguments
         manifold (1,1) bct.Manifold
@@ -98,37 +97,34 @@ function w = heat(manifold, time, params)
         metric = "geometry";
     end
 
-    % --- Get Lambda domain (dual of Manifold) ---
-    lambda_domain = manifold.dual;
+    % --- Get FEM representation and eigenpairs ---
+    fem = manifold.FEM();
     
-    if isempty(lambda_domain) || isempty(lambda_domain.U) || isempty(lambda_domain.lambda)
-        error('bct:brush:time:heat', ...
-              'Manifold must have computed eigenbasis with dual Lambda domain. ' + ...
-              'Use: B.Lambda = B.Manifold.dual(''numModes'', k) or B.computeEigenbasis(k)');
+    % Determine number of modes (default to 100)
+    numModes = min(100, manifold.numVertices());
+    
+    % Get eigenpairs (uses caching internally)
+    E = fem.eigenpairs(numModes);
+    eigenvalues = E.Values;
+    lambda_max = max(eigenvalues);
+    
+    if lambda_max == 0
+        error('bct:brush:time:heat', 'Maximum eigenvalue is zero');
     end
 
     % --- Compute shortest path ---
     % Suppress warning about sparse-to-full conversion
     warnState = warning('off', 'MATLAB:table:RowsAddedExistingVars');
-    [path, ~] = manifold.Graph.shortestPath(source, target, metric);
+    [path, ~] = manifold.Graph().shortestPath(source, target, metric);
     warning(warnState);
 
     % --- Create initial spatial signal on path ---
-    path_signal = zeros(manifold.N, 1);
+    Nv = manifold.numVertices();
+    path_signal = zeros(Nv, 1);
     path_signal(path) = 1;
 
-    % --- Project to spectral domain (MFT) ---
-    M = manifold.MassMatrix;
-    U = lambda_domain.U;
-    spectral_coeffs = U' * (M * path_signal);
-
-    % --- Get eigenvalues and normalize ---
-    lambda = lambda_domain.lambda;
-    lambda_max = max(lambda);
-    
-    if lambda_max == 0
-        error('bct:brush:time:heat', 'Maximum eigenvalue is zero');
-    end
+    % --- Project to spectral domain using Eigenpairs ---
+    spectral_coeffs = E.project(path_signal);
 
     % --- Generate tau values over time ---
     T = time.N;
@@ -154,21 +150,21 @@ function w = heat(manifold, time, params)
     end
 
     % --- Initialize output ---
-    N = manifold.N;
-    w = zeros(N, T);
+    Nv = manifold.numVertices();
+    w = zeros(Nv, T);
 
     % --- Apply heat kernel at each time step ---
     for t = 1:T
         tau_t = tau_vec(t);
         
         % Heat kernel: H(λ) = exp(-τ·λ/λ_max)
-        H = exp(-tau_t * lambda / lambda_max);
+        H = exp(-tau_t * eigenvalues / lambda_max);
         
         % Apply filter in spectral domain
         filtered_coeffs = spectral_coeffs .* H(:);
         
-        % Inverse transform to spatial domain
-        w_t = U * filtered_coeffs;
+        % Reconstruct to spatial domain using Eigenpairs
+        w_t = E.reconstruct(filtered_coeffs);
         
         % Store (absolute value and normalize)
         w_t = abs(w_t);

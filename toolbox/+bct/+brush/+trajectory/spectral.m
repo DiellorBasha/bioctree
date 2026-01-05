@@ -17,10 +17,11 @@ function w = spectral(manifold, params)
 %                          e.g., struct('center', 10, 'sigma', 3) for Gaussian
 %
 %   Note: Creates a path via shortest path, then applies spectral filtering:
-%         1. Creates binary signal from path vertices
-%         2. Projects to eigenmode domain (Lambda) via MFT
-%         3. Applies spectral kernel (filter)
-%         4. Reconstructs back to Manifold via IMFT
+%         1. Computes eigenpairs from FEM representation (cached)
+%         2. Creates binary signal from path vertices
+%         3. Projects to eigenmode domain using Eigenpairs.project()
+%         4. Applies spectral kernel (filter)
+%         5. Reconstructs back to Manifold using Eigenpairs.reconstruct()
 %
 %   This produces a spatially smooth trajectory that respects the
 %   spectral characteristics of the manifold.
@@ -59,38 +60,35 @@ function w = spectral(manifold, params)
         kernel_params = struct();
     end
 
-    % --- Get Lambda domain (dual of Manifold) ---
-    lambda_domain = manifold.dual;
+    % --- Get FEM representation and eigenpairs ---
+    fem = manifold.FEM();
     
-    if isempty(lambda_domain) || isempty(lambda_domain.U) || isempty(lambda_domain.lambda)
-        error('bct:brush:trajectory:spectral', ...
-              'Manifold must have computed eigenbasis with dual Lambda domain. ' + ...
-              'Use: B.Lambda = B.Manifold.dual(''numModes'', k) or B.computeEigenbasis(k)');
+    % Determine number of modes from kernel params or use default
+    if isfield(kernel_params, 'numModes')
+        numModes = kernel_params.numModes;
+    else
+        numModes = min(100, manifold.numVertices());  % Default to 100 modes
     end
+    
+    % Get eigenpairs (uses caching internally)
+    E = fem.eigenpairs(numModes);
+    eigenvalues = E.Values;
 
     % --- Compute shortest path ---
     % Suppress warning about sparse-to-full conversion in graph operations
     warnState = warning('off', 'MATLAB:table:RowsAddedExistingVars');
-    [path, ~] = manifold.Graph.shortestPath(source, target, metric);
+    [path, ~] = manifold.Graph().shortestPath(source, target, metric);
     warning(warnState);
 
     % --- Create binary signal on path ---
-    % Initialize signal with zeros
-    path_signal = zeros(manifold.N, 1);
-    
-    % Set path vertices to 1
+    Nv = manifold.numVertices();
+    path_signal = zeros(Nv, 1);
     path_signal(path) = 1;
 
-    % --- Project to spectral domain (MFT) ---
-    % Forward transform: x_hat = U' * M * x
-    % where U = eigenvectors, M = mass matrix
-    M = manifold.MassMatrix;
-    U = lambda_domain.U;
-    
-    % Compute spectral coefficients
-    spectral_coeffs = U' * (M * path_signal);
+    % --- Project to spectral domain using Eigenpairs ---
+    spectral_coeffs = E.project(path_signal);
 
-    % Create filter on Lambda domain
+    % --- Build spectral filter ---
     % Convert kernel_params struct to cell array for Filter constructor
     param_cell = {};
     if ~isempty(fieldnames(kernel_params))
@@ -101,7 +99,9 @@ function w = spectral(manifold, params)
         end
     end
     
-    filt = bct.filters.Filter(lambda_domain, kernel_name, param_cell{:});
+    % Create filter with eigenvalues as domain axis
+    kernel_params.axis = eigenvalues;
+    filt = bct.filters.Filter(eigenvalues, kernel_name, param_cell{:});
 
     % --- Apply filter in spectral domain ---
     % Evaluate filter response on eigenvalues
@@ -110,9 +110,8 @@ function w = spectral(manifold, params)
     % Apply filter: multiply spectral coefficients by filter response
     filtered_coeffs = spectral_coeffs .* H(:);
 
-    % --- Reconstruct to spatial domain (IMFT) ---
-    % Inverse transform: x_rec = U * x_hat
-    w = U * filtered_coeffs;
+    % --- Reconstruct to spatial domain using Eigenpairs ---
+    w = E.reconstruct(filtered_coeffs);
 
     % --- Ensure non-negative and normalize ---
     % Spectral filtering can produce negative values; take absolute value
