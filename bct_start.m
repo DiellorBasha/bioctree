@@ -125,7 +125,7 @@ fprintf('\n[4/5] Validating +bct package...\n');
 
 % Check core classes
 key_classes = {
-    'bct.Manifold', 'bct.FEM', 'bct.Graph', 'bct.DEC', 'bct.Eigenpairs'
+    'bct.Manifold', 'bct.FEM', 'bct.Graph', 'bct.Eigenpairs'
 };
 
 all_found = true;
@@ -140,7 +140,7 @@ end
 
 % Check key packages
 key_packages = {
-    'bct.fem', 'bct.graph', 'bct.dec', 'bct.eigenpairs', ...
+    'bct.fem', 'bct.graph', 'bct.eigenpairs', ...
     'bct.registry', 'bct.runtime'
 };
 

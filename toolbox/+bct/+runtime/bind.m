@@ -41,7 +41,6 @@ baseFn = spec.function;
 % =========================================================================
 % Resolve representation from context
 % =========================================================================
-rep = [];
 repType = spec.representation;
 
 switch repType
@@ -51,8 +50,6 @@ switch repType
             rep = context.DEC;
         elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
             rep = context.Manifold.DEC();
-            % Update context for future calls
-            context.DEC = rep;
         else
             error('bct:runtime:NoRepresentation', ...
                 'Cannot resolve DiscreteExteriorCalculus: no DEC or Manifold in context');
@@ -64,8 +61,6 @@ switch repType
             rep = context.FEM;
         elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
             rep = context.Manifold.FEM();
-            % Update context for future calls
-            context.FEM = rep;
         else
             error('bct:runtime:NoRepresentation', ...
                 'Cannot resolve FEM: no FEM or Manifold in context');
@@ -77,8 +72,6 @@ switch repType
             rep = context.Graph;
         elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
             rep = context.Manifold.Graph();
-            % Update context for future calls
-            context.Graph = rep;
         else
             error('bct:runtime:NoRepresentation', ...
                 'Cannot resolve Graph: no Graph or Manifold in context');

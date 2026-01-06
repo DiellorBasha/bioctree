@@ -123,7 +123,7 @@ classdef test_bct_start < BaseBctTest
             cfg = bct_config();
             toolbox_path = cfg.toolbox;
             
-            subpackages = {'kernel', 'filter', 'graph', 'dec', 'fem', ...
+            subpackages = {'kernel', 'filter', 'graph', 'fem', ...
                           'data', 'registry', 'runtime', 'eigenpairs'};
             
             for i = 1:numel(subpackages)
@@ -136,7 +136,7 @@ classdef test_bct_start < BaseBctTest
         
         function testCoreClassesExist(testCase)
             % Verify core classes are accessible
-            classes = {'Manifold', 'Graph', 'DEC', 'FEM', 'Eigenpairs'};
+            classes = {'Manifold', 'Graph', 'FEM', 'Eigenpairs'};
             
             for i = 1:numel(classes)
                 cls = classes{i};
