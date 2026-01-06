@@ -21,10 +21,29 @@ classdef test_bct_start < BaseBctTest
                 'bct.Manifold class should be accessible');
             testCase.verifyTrue(exist('bct.Graph', 'class') == 8, ...
                 'bct.Graph class should be accessible');
-            testCase.verifyTrue(exist('bct.DEC', 'class') == 8, ...
-                'bct.DEC class should be accessible');
             testCase.verifyTrue(exist('bct.FEM', 'class') == 8, ...
                 'bct.FEM class should be accessible');
+            
+            % Verify new operator system is callable
+            try
+                specs = bct.registry.operators.defs();
+                testCase.verifyClass(specs, 'dictionary', ...
+                    'bct.registry.operators.defs() should return a dictionary');
+            catch ME
+                testCase.verifyFail('bct.registry.operators.defs() should be callable');
+            end
+            
+            try
+                % Create simple context for testing
+                [V, F] = testCase.getDefaultTestMesh();
+                M = bct.Manifold(V, F);
+                ctx = bct.runtime.context(M, 'DEC', false);
+                ops = bct.runtime.operators.dictionary(ctx);
+                testCase.verifyClass(ops, 'dictionary', ...
+                    'bct.runtime.operators.dictionary() should return a dictionary');
+            catch ME
+                testCase.verifyFail('bct.runtime.operators.dictionary() should be callable');
+            end
         end
         
         function testConfigAccessible(testCase)

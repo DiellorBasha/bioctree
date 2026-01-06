@@ -1,5 +1,13 @@
 # bct.dec — Discrete Exterior Calculus Operators
 
+⚠️ **DEPRECATED: This package is deprecated as of BCT v2.0**
+
+**Migration:** Use `bct.ops.dec.*` functions with `DiscreteExteriorCalculus` backend directly.
+
+See deprecation details at the end of this file.
+
+---
+
 This package provides pure functional operators for Discrete Exterior Calculus (DEC) on manifolds.
 
 ## Design Principles
@@ -98,3 +106,67 @@ Test coverage includes:
 - DECLab: https://github.com/DillonCislo/DECLab
 - bct.DEC class documentation
 - bct.eigenpairs package documentation
+
+---
+
+## DEPRECATION NOTICE
+
+### Why Deprecated?
+
+The `bct.dec.*` package and `bct.DEC` wrapper class introduced unnecessary architectural redundancy:
+
+1. **Double Caching**: `bct.DEC` cached operators that were already computed/available in `DiscreteExteriorCalculus`
+2. **Indirection**: Required wrapping the backend in a class, adding complexity
+3. **Not Single Source of Truth**: Math lived in DECLab but was exposed through an intermediate layer
+
+### Migration Path
+
+**Old (Deprecated):**
+```matlab
+M = bct.Manifold(struct('V', V, 'F', F));
+D = bct.DEC(M);  % Deprecated wrapper
+G = bct.dec.gradient(D, f0);  % Deprecated operator
+```
+
+**New (Recommended):**
+```matlab
+M = bct.Manifold(struct('V', V, 'F', F));
+dec = M.DEC();  % Returns DiscreteExteriorCalculus directly
+G = bct.ops.dec.gradient(dec, f0);  % New operator
+```
+
+### Operator Mapping
+
+| Old (Deprecated)           | New (Recommended)           |
+|---------------------------|----------------------------|
+| `bct.dec.gradient`        | `bct.ops.dec.gradient`     |
+| `bct.dec.divergence`      | `bct.ops.dec.divergence`   |
+| `bct.dec.curl`            | `bct.ops.dec.curl`         |
+| `bct.dec.d0`              | `bct.ops.dec.d0`           |
+| `bct.dec.d1`              | `bct.ops.dec.d1`           |
+| `bct.dec.star0`           | `bct.ops.dec.star0`        |
+| `bct.dec.star1`           | `bct.ops.dec.star1`        |
+| `bct.dec.star2`           | `bct.ops.dec.star2`        |
+| `bct.dec.laplacian0`      | `bct.ops.dec.laplacian0`   |
+| `bct.dec.laplacian1`      | `bct.ops.dec.laplacian1`   |
+| `bct.dec.laplacian2`      | `bct.ops.dec.laplacian2`   |
+| `bct.dec.eigensolve`      | `bct.ops.dec.eigensolve`   |
+
+### Benefits
+
+1. **Single Source of Truth**: DECLab is the sole authority for DEC math
+2. **No Redundant Caching**: Operators accessed directly from backend
+3. **Cleaner Architecture**: Thin wrappers delegate immediately to backend
+4. **Better Registry Integration**: Works seamlessly with `bct.registry.operators` and `bct.runtime.operators`
+
+### Timeline
+
+- **v2.0**: Deprecation warnings added
+- **v3.0**: Old package will be removed
+
+### See Also
+
+- [bct.ops.dec Package](../+ops/+dec/)
+- [DiscreteExteriorCalculus](https://github.com/DillonCislo/DECLab)
+- [bct.Manifold.DEC()](../Manifold.m)
+- [bct.registry.operators](../+registry/operators.m)

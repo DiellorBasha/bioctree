@@ -126,39 +126,65 @@ classdef Manifold < handle
         % ===============================================================
         
         function fem = FEM(obj)
-            %FEM Get FEM representation (lazy creation with caching)
+            %FEM Get FEM representation struct (lazy creation with caching)
             %
             % Syntax:
             %   fem = M.FEM()
             %
             % Outputs:
-            %   fem - bct.FEM object (spectral representation)
+            %   fem - Struct with fields:
+            %         * V - Vertices
+            %         * F - Faces
+            %         * G - Gradient operator (lazy-computed)
+            %         * D - Divergence operator (lazy-computed)
+            %         * Manifold - Reference to parent Manifold
             %
-            % Note: First call creates FEM object, subsequent calls return cached version
+            % Note: 
+            %   - First call creates FEM struct, subsequent calls return cached version
+            %   - Gradient/Divergence matrices computed on first use and cached
+            %   - Requires gptoolbox functions (grad, div) on path
             %
-            % See also: bct.FEM
+            % See also: bct.runtime.operators.femGradient, bct.runtime.operators.femDivergence
             
             if ~isKey(obj.Cache, "FEM")
-                obj.Cache("FEM") = bct.FEM(obj);
+                fem = struct();
+                fem.V = obj.Vertices;
+                fem.F = obj.Faces;
+                fem.Manifold = obj;
+                fem.G = [];  % Lazy-computed gradient matrix
+                fem.D = [];  % Lazy-computed divergence matrix
+                obj.Cache("FEM") = fem;
             end
             fem = obj.Cache("FEM");
         end
 
         function dec = DEC(obj)
-            %DEC Get DEC representation (lazy creation with caching)
+            %DEC Get DECLab DiscreteExteriorCalculus backend (lazy creation with caching)
             %
             % Syntax:
             %   dec = M.DEC()
             %
             % Outputs:
-            %   dec - bct.DEC object (exterior calculus representation)
+            %   dec - DiscreteExteriorCalculus (DECLab backend)
             %
-            % Note: First call creates DEC wrapper, subsequent calls return cached version
+            % Note: 
+            %   - First call creates DEC backend, subsequent calls return cached version
+            %   - Returns DiscreteExteriorCalculus directly (not bct.DEC wrapper)
+            %   - Use with bct.runtime.operators() for DEC operations
             %
-            % See also: bct.DEC, DiscreteExteriorCalculus
+            % See also: DiscreteExteriorCalculus, bct.runtime.operators
             
             if ~isKey(obj.Cache, "DEC")
-                obj.Cache("DEC") = bct.DEC(obj);
+                % Check for DECLab availability
+                if exist("DiscreteExteriorCalculus", "class") ~= 8
+                    error("bct:MissingDependency", ...
+                        ['DECLab not found on MATLAB path (DiscreteExteriorCalculus missing). ' ...
+                         'Add external/DECLab to your path.']);
+                end
+                
+                F = double(obj.Faces);
+                V = double(obj.Vertices);
+                obj.Cache("DEC") = DiscreteExteriorCalculus(F, V);
             end
             dec = obj.Cache("DEC");
         end

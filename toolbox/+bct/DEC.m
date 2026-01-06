@@ -1,6 +1,14 @@
 classdef DEC < handle
     %bct.DEC  Discrete Exterior Calculus (DEC) representation for a Manifold
     %
+    % ⚠️  DEPRECATED: This wrapper class is deprecated as of BCT v2.0
+    %     Use DiscreteExteriorCalculus directly from Manifold.DEC() instead.
+    %     Operators are available via bct.ops.dec.* functions.
+    %
+    % MIGRATION:
+    %   Old: D = bct.DEC(M); G = D.Gradient;
+    %   New: dec = M.DEC(); G = bct.ops.dec.gradient(dec);
+    %
     % DESIGN CONTRACT (summary):
     %   - bct.DEC is a THIN semantic wrapper around the DECLab backend:
     %       DiscreteExteriorCalculus(Faces, Vertices)
@@ -10,6 +18,13 @@ classdef DEC < handle
     %   - bct.DEC may cache derived backend-access results if strictly needed,
     %     but must not introduce new discretizations or numerical routines.
     %
+    % ARCHITECTURE:
+    %   - bct.DEC class provides method interface (gradient, divergence, curl)
+    %   - Methods delegate to bct.dec.* package functions
+    %   - Package functions (bct.dec.gradient, bct.dec.divergence, etc.)
+    %     implement the actual DEC operations using the Backend
+    %   - This separation keeps the class thin and operations testable
+    %
     % CONSTRUCTION:
     %   D = bct.DEC(M) where M is a bct.Manifold
     %
@@ -18,7 +33,8 @@ classdef DEC < handle
     %   - Backend : DECLab DiscreteExteriorCalculus object (math authority)
     %
     % SEE ALSO:
-    %   bct.dec.* , DiscreteExteriorCalculus (DECLab)
+    %   bct.ops.dec.gradient, bct.ops.dec.divergence, bct.ops.dec.curl, 
+    %   DiscreteExteriorCalculus (DECLab)
 
     properties (SetAccess = private)
         Manifold   (1,1)              % Parent manifold (geometry authority)
@@ -40,6 +56,8 @@ classdef DEC < handle
         function obj = DEC(M)
             %DEC Construct DEC representation from a bct.Manifold
             %
+            % ⚠️  DEPRECATED: Use Manifold.DEC() to get DiscreteExteriorCalculus directly
+            %
             % Syntax:
             %   D = bct.DEC(M)
             %
@@ -49,6 +67,11 @@ classdef DEC < handle
             % Notes:
             %   - This constructor instantiates the DECLab backend.
             %   - It must not perform any DEC computations beyond backend construction.
+            
+            % Issue deprecation warning
+            warning('bct:DEC:Deprecated', ...
+                ['bct.DEC wrapper is deprecated. Use Manifold.DEC() directly to get ' ...
+                 'DiscreteExteriorCalculus backend. Operators are in bct.ops.dec.*']);
 
             arguments
                 M (1,1)
@@ -227,38 +250,43 @@ classdef DEC < handle
         
         % ---- Differential operator methods (apply to signals) ----
         
-        function a1 = gradient(obj, f0)
-            %gradient Compute gradient of scalar field (0-form → 1-form)
+        function gradF = gradient(obj, f0)
+            %gradient Compute gradient of scalar field (0-form → face vectors)
             %
             % Syntax:
-            %   a1 = dec.gradient(f0)
+            %   gradF = dec.gradient(f0)
             %
             % Inputs:
             %   f0 - [V×1] scalar field on vertices
             %
             % Returns:
-            %   a1 - [E×1] edge-based gradient (1-form)
+            %   gradF - [F×3] face-based tangent vector field
             %
-            % Note: Delegates to bct.dec.gradient
+            % Note: Delegates to bct.dec.gradient which matches
+            %       DiscreteExteriorCalculus.gradient() behavior.
+            %       For raw 1-form [E×1], use: dec.Gradient * f0
             %
-            % See also: bct.dec.gradient, divergence, curl
+            % See also: bct.dec.gradient, divergence, curl, Gradient (property)
             
             arguments
                 obj (1,1) bct.DEC
                 f0 (:,1) double
             end
             
-            a1 = bct.dec.gradient(obj, f0);
+            % Delegate to bct.dec package function
+            gradF = bct.dec.gradient(obj, f0);
         end
         
-        function f0 = divergence(obj, a1)
-            %divergence Compute divergence of vector field (1-form → 0-form)
+        function f0 = divergence(obj, U)
+            %divergence Compute divergence of vector field or 1-form
             %
             % Syntax:
-            %   f0 = dec.divergence(a1)
+            %   f0 = dec.divergence(U)
             %
             % Inputs:
-            %   a1 - [E×1] edge-based vector field (1-form)
+            %   U - [F×3] dual vector field OR
+            %       [V×3] primal vector field OR
+            %       [E×1] primal/dual 1-form
             %
             % Returns:
             %   f0 - [V×1] vertex-based divergence (0-form)
@@ -269,20 +297,22 @@ classdef DEC < handle
             
             arguments
                 obj (1,1) bct.DEC
-                a1 (:,1) double
+                U double
             end
             
-            f0 = bct.dec.divergence(obj, a1);
+            f0 = bct.dec.divergence(obj, U);
         end
         
-        function a2 = curl(obj, a1)
-            %curl Compute curl of vector field (1-form → 2-form)
+        function a2 = curl(obj, U)
+            %curl Compute curl of vector field or 1-form
             %
             % Syntax:
-            %   a2 = dec.curl(a1)
+            %   a2 = dec.curl(U)
             %
             % Inputs:
-            %   a1 - [E×1] edge-based vector field (1-form)
+            %   U - [F×3] dual vector field OR
+            %       [V×3] primal vector field OR
+            %       [E×1] primal/dual 1-form
             %
             % Returns:
             %   a2 - [F×1] face-based curl (2-form / scalar curl)
@@ -293,10 +323,10 @@ classdef DEC < handle
             
             arguments
                 obj (1,1) bct.DEC
-                a1 (:,1) double
+                U double
             end
             
-            a2 = bct.dec.curl(obj, a1);
+            a2 = bct.dec.curl(obj, U);
         end
     end
 

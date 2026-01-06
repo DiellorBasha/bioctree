@@ -1,5 +1,5 @@
 function boundFn = bind(spec, context)
-%BIND Create bound function with representation captured from context
+%BIND Create bound function with representation resolved from context
 %
 % Syntax:
 %   boundFn = bct.runtime.bind(spec, context)
@@ -14,11 +14,21 @@ function boundFn = bind(spec, context)
 % The bound function has a clean signature that hides the representation,
 % making it suitable for UI callbacks and interactive use.
 %
-% Example:
-%   % Original: bct.fem.heat(FEM, signal, t, k)
-%   % Bound:    heat_fn(signal, t, k)
+% Representation Resolution:
+%   - DEC: Resolves context.DEC or calls Manifold.DEC()
+%   - FEM: Resolves context.FEM or calls Manifold.FEM()
+%   - Graph: Resolves context.Graph or calls Manifold.Graph()
 %
-% See also: bct.runtime.operators
+% Method Handles:
+%   - Unbound method handles (e.g., @DiscreteExteriorCalculus.gradient)
+%     are called as: spec.function(rep, args...)
+%   - Regular function handles are called normally
+%
+% Example:
+%   % Registry: function = @DiscreteExteriorCalculus.gradient
+%   % Bound:    gradient_fn = @(f0) gradient(dec, f0)
+%
+% See also: bct.runtime.isApplicable, bct.runtime.operators.dictionary
 
 arguments
     spec struct
@@ -28,42 +38,104 @@ end
 % Get the base function
 baseFn = spec.function;
 
-% Bind representation based on domain
-switch spec.domain
-    case "fem"
-        rep = context.FEM;
-        % Create bound function: baseFn(FEM, ...)
-        boundFn = @(varargin) baseFn(rep, varargin{:});
-        
-    case "dec"
-        rep = context.DEC;
-        boundFn = @(varargin) baseFn(rep, varargin{:});
-        
-    case "graph"
-        rep = context.Graph;
-        boundFn = @(varargin) baseFn(rep, varargin{:});
-        
-    case "spectral"
-        % Spectral operators may work with Eigenpairs or FEM
-        if strcmp(spec.representation, "bct.Eigenpairs")
-            % These operators take Eigenpairs as first argument
-            % Don't pre-bind, let caller provide
-            boundFn = baseFn;
-        elseif strcmp(spec.representation, "bct.FEM")
-            % FEM-based spectral operators
-            rep = context.FEM;
-            boundFn = @(varargin) baseFn(rep, varargin{:});
+% =========================================================================
+% Resolve representation from context
+% =========================================================================
+rep = [];
+repType = spec.representation;
+
+switch repType
+    case "DiscreteExteriorCalculus"
+        % Resolve DEC representation
+        if isfield(context, 'DEC') && ~isempty(context.DEC)
+            rep = context.DEC;
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold.DEC();
+            % Update context for future calls
+            context.DEC = rep;
         else
-            boundFn = baseFn;
+            error('bct:runtime:NoRepresentation', ...
+                'Cannot resolve DiscreteExteriorCalculus: no DEC or Manifold in context');
         end
         
-    case "kernel"
-        % Kernels are pure generators, no binding needed
+    case "FEM"
+        % Resolve FEM representation
+        if isfield(context, 'FEM') && ~isempty(context.FEM)
+            rep = context.FEM;
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold.FEM();
+            % Update context for future calls
+            context.FEM = rep;
+        else
+            error('bct:runtime:NoRepresentation', ...
+                'Cannot resolve FEM: no FEM or Manifold in context');
+        end
+        
+    case "Graph"
+        % Resolve Graph representation
+        if isfield(context, 'Graph') && ~isempty(context.Graph)
+            rep = context.Graph;
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold.Graph();
+            % Update context for future calls
+            context.Graph = rep;
+        else
+            error('bct:runtime:NoRepresentation', ...
+                'Cannot resolve Graph: no Graph or Manifold in context');
+        end
+        
+    case "bct.Eigenpairs"
+        % Eigenpairs are passed by caller, don't pre-bind
         boundFn = baseFn;
+        return;
         
     otherwise
-        % Fallback: no binding
-        boundFn = baseFn;
+        error('bct:runtime:UnknownRepresentation', ...
+            'Unknown representation type: %s', repType);
+end
+
+% =========================================================================
+% Validate required capabilities
+% =========================================================================
+if isfield(spec, 'requires') && ~isempty(spec.requires)
+    for req = string(spec.requires)
+        hasCapability = false;
+        
+        % Check if representation has the required capability
+        if isobject(rep)
+            % For objects, check properties and methods
+            hasCapability = isprop(rep, req) || ismethod(rep, req);
+        elseif isstruct(rep)
+            % For structs, check fields
+            hasCapability = isfield(rep, req);
+        end
+        
+        if ~hasCapability
+            error('bct:runtime:MissingCapability', ...
+                'Operator "%s" requires capability "%s" which is not available in %s', ...
+                spec.id, req, repType);
+        end
+    end
+end
+
+% =========================================================================
+% Bind representation to function
+% =========================================================================
+% Detect if baseFn is an unbound method handle
+% For unbound methods (e.g., @Class.method), the function string contains a dot
+fnInfo = functions(baseFn);
+fnStr = fnInfo.function;
+
+if contains(fnStr, '.')
+    % Unbound method handle - call as method on the object instance
+    % Extract method name from "ClassName.methodName"
+    parts = split(fnStr, '.');
+    methodName = parts{end};
+    boundFn = @(varargin) rep.(methodName)(varargin{:});
+else
+    % Regular function handle - bind rep as first argument
+    % E.g., @myFunction becomes myFunction(rep, varargin{:})
+    boundFn = @(varargin) baseFn(rep, varargin{:});
 end
 
 end

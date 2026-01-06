@@ -72,98 +72,44 @@ function validate(defs)
 end
 
 function validateExecutable(spec)
-%VALIDATEEXECUTABLE  Smoke test brush execution
+%VALIDATEEXECUTABLE  Validate that brush spec has valid function handles
 %
-% Creates test manifold and validates:
-%   - DefaultParams executes and returns correct fields
-%   - ParamRanges executes and returns correct fields
-%   - Evaluate executes without critical errors
-
-    % Create small test manifold
-    try
-        [V, F] = createTestMesh();
-        M = bct.Manifold(V, F);
-    catch ME
-        warning('bct:registry:brushes:TestMeshFailed', ...
-            'Could not create test manifold: %s. Skipping executable validation.', ...
-            ME.message);
-        return;
-    end
-    
-    % Test DefaultParams
-    try
-        params = spec.DefaultParams(M);
-        
-        if ~isstruct(params)
-            error('DefaultParams must return struct, got %s', class(params));
-        end
-        
-        % Validate parameter names match
-        paramFields = string(fieldnames(params));
-        expectedParams = string(spec.ParamNames);
-        
-        if ~isequal(sort(paramFields), sort(expectedParams))
-            missingFields = setdiff(expectedParams, paramFields);
-            extraFields = setdiff(paramFields, expectedParams);
-            
-            if ~isempty(missingFields)
-                error('DefaultParams missing fields: %s', strjoin(missingFields, ', '));
-            end
-            if ~isempty(extraFields)
-                error('DefaultParams has extra fields: %s', strjoin(extraFields, ', '));
-            end
-        end
-        
-    catch ME
-        error('DefaultParams validation failed: %s', ME.message);
-    end
-    
-    % Test ParamRanges
-    try
-        ranges = spec.ParamRanges(M);
-        
-        if ~isstruct(ranges)
-            error('ParamRanges must return struct, got %s', class(ranges));
-        end
-        
-        % Validate parameter names match
-        rangeFields = string(fieldnames(ranges));
-        expectedParams = string(spec.ParamNames);
-        
-        if ~isequal(sort(rangeFields), sort(expectedParams))
-            missingFields = setdiff(expectedParams, rangeFields);
-            extraFields = setdiff(rangeFields, expectedParams);
-            
-            if ~isempty(missingFields)
-                error('ParamRanges missing fields: %s', strjoin(missingFields, ', '));
-            end
-            if ~isempty(extraFields)
-                error('ParamRanges has extra fields: %s', strjoin(extraFields, ', '));
-            end
-        end
-        
-    catch ME
-        error('ParamRanges validation failed: %s', ME.message);
-    end
-    
-    % NOTE: Execution test is DISABLED to avoid expensive computation
-    % Validation should only check schema, not run brushes on large meshes
-    % To test execution, call the brush directly in a unit test
-end
-
-function [V, F] = createTestMesh()
-%CREATETESTMESH  Create small test manifold for validation
+% Inputs
+%   spec - BrushSpec struct
 %
-% Uses bct.data.load() to get default test mesh
+% Validation (SCHEMA ONLY - NO EXECUTION)
+%   - DefaultParams is a function handle
+%   - ParamRanges is a function handle
+%   - Evaluate is a function handle
+%   - Evaluate has correct signature (2 inputs)
+%
+% NOTE: Execution tests belong in unit tests (tests/unit/test_bct_brush.m)
+%       Registry validation ONLY checks that required fields exist and are
+%       function handles. It does NOT execute them.
 
-    % Use standard bct.data.load()
+    % Check DefaultParams is function handle
+    if ~isa(spec.DefaultParams, 'function_handle')
+        error('DefaultParams must be function_handle, got %s', class(spec.DefaultParams));
+    end
+    
+    % Check ParamRanges is function handle
+    if ~isa(spec.ParamRanges, 'function_handle')
+        error('ParamRanges must be function_handle, got %s', class(spec.ParamRanges));
+    end
+    
+    % Check Evaluate is function handle
+    if ~isa(spec.Evaluate, 'function_handle')
+        error('Evaluate must be function_handle, got %s', class(spec.Evaluate));
+    end
+    
+    % Validate Evaluate signature (2 inputs: manifold, params)
     try
-        mesh = bct.data.load();
-        V = mesh.Vertices;
-        F = mesh.Faces;
+        nInputs = nargin(spec.Evaluate);
+        if nInputs ~= 2 && nInputs ~= -1  % -1 means varargs
+            warning('bct:registry:brushes:SignatureWarning', ...
+                'Evaluate should accept 2 inputs (manifold, params), got %d', nInputs);
+        end
     catch
-        % Fallback: create simple tetrahedron only if bct.data fails
-        V = [0 0 0; 1 0 0; 0.5 sqrt(3)/2 0; 0.5 sqrt(3)/6 sqrt(6)/3];
-        F = [1 2 3; 1 2 4; 2 3 4; 3 1 4];
+        % If we can't determine nargin, skip the check
     end
 end

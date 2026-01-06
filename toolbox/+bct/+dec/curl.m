@@ -1,29 +1,35 @@
-function a2 = curl(DEC, a1)
-%CURL Compute curl of 1-form (vector field → scalar curl / 2-form)
+function a2 = curl(DEC, U)
+%CURL Compute curl of vector field or 1-form
 %
 % Syntax:
-%   a2 = bct.dec.curl(DEC, a1)
+%   a2 = bct.dec.curl(DEC, U)
 %
 % Inputs:
 %   DEC - bct.DEC object
-%   a1  - [E×1] 1-form (edge-based vector field)
+%   U   - [F×3] dual vector field OR
+%         [V×3] primal vector field OR
+%         [E×1] primal 1-form OR
+%         [E×1] dual 1-form
 %
 % Returns:
-%   a2 - [F×1] 2-form (face-based curl / scalar curl)
+%   a2 - [F×1] primal 2-form (face-based curl) OR
+%        [V×1] dual 2-form (vertex-based curl)
 %
 % Notes:
-%   - Curl is the exterior derivative d1
-%   - Maps 1-forms to 2-forms (face values)
+%   - Simple wrapper around DiscreteExteriorCalculus.curl
+%   - Automatically converts vector fields to 1-forms if needed
+%   - Uses 'primal' route by default (primal 1-form → primal 2-form)
 %   - In 2D, curl is a scalar per face
 %
-% See also: bct.dec.d1, bct.dec.gradient, bct.dec.divergence
+% See also: bct.dec.gradient, bct.dec.divergence, DiscreteExteriorCalculus
 
 arguments
     DEC (1,1) bct.DEC
-    a1 (:,1) double
+    U double
 end
 
-% Curl is the exterior derivative d1
-a2 = bct.dec.d1(DEC) * a1;
+% Delegate to DiscreteExteriorCalculus backend
+Backend = DEC.backend();
+a2 = Backend.curl(U, 'primal');
 
 end

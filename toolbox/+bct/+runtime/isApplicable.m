@@ -12,10 +12,11 @@ function applicable = isApplicable(spec, context)
 %   applicable - true if operator can be used with this context
 %
 % An operator is applicable if:
-%   1. Its required representation exists in context
-%   2. All required capabilities are available
+%   1. External dependencies are available (spec.dependency.requiredSymbols)
+%   2. Required representation can be resolved from context
+%   3. All capability tokens in spec.requires are available
 %
-% See also: bct.runtime.operators
+% See also: bct.runtime.bind, bct.runtime.operators.dictionary
 
 arguments
     spec struct
@@ -24,51 +25,81 @@ end
 
 applicable = false;
 
-% Check representation requirement
+% =========================================================================
+% 1. Check dependency availability
+% =========================================================================
+if isfield(spec, 'dependency')
+    dep = spec.dependency;
+    if isstruct(dep) && isfield(dep, 'requiredSymbols') && ~isempty(dep.requiredSymbols)
+        for sym = string(dep.requiredSymbols)
+            % Check if symbol is available
+            % Try as class first, then as function/file
+            if exist(sym, "class") ~= 8 && exist(sym, "file") ~= 2
+                % Dependency not available
+                return;
+            end
+        end
+    end
+end
+
+% =========================================================================
+% 2. Check representation resolvability
+% =========================================================================
 rep = spec.representation;
 
-switch spec.domain
-    case "fem"
-        if ~isfield(context, 'FEM') || isempty(context.FEM)
-            return;
-        end
-        
-    case "dec"
-        if ~isfield(context, 'DEC') || isempty(context.DEC)
-            return;
-        end
-        
-    case "graph"
-        if ~isfield(context, 'Graph') || isempty(context.Graph)
-            return;
-        end
-        
-    case "spectral"
-        % Spectral operators work with Eigenpairs or FEM
-        if strcmp(rep, "bct.Eigenpairs")
-            % This is handled specially - Eigenpairs are created on demand
-            applicable = true;
-            return;
-        elseif strcmp(rep, "bct.FEM")
-            if ~isfield(context, 'FEM') || isempty(context.FEM)
+switch rep
+    case "DiscreteExteriorCalculus"
+        % Can resolve if:
+        % - context.DEC exists and is populated, OR
+        % - context.Manifold exists and DiscreteExteriorCalculus is available
+        if isfield(context, 'DEC') && ~isempty(context.DEC)
+            % Already resolved
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            % Can resolve via Manifold.DEC() if DECLab available
+            if exist("DiscreteExteriorCalculus", "class") ~= 8
                 return;
             end
         else
             return;
         end
         
-    case "kernel"
-        % Kernels are always applicable (pure generators)
+    case "FEM"
+        % Can resolve if:
+        % - context.FEM exists and is populated, OR
+        % - context.Manifold exists and can provide FEM
+        if isfield(context, 'FEM') && ~isempty(context.FEM)
+            % Already resolved
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            % Can resolve via Manifold.FEM()
+        else
+            return;
+        end
+        
+    case "Graph"
+        % Can resolve if context.Graph exists or Manifold can provide it
+        if isfield(context, 'Graph') && ~isempty(context.Graph)
+            % Already resolved
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            % Can resolve via Manifold.Graph()
+        else
+            return;
+        end
+        
+    case "bct.Eigenpairs"
+        % Spectral operators - Eigenpairs created on demand
         applicable = true;
         return;
         
     otherwise
-        warning('bct:runtime:UnknownDomain', ...
-            'Unknown operator domain: %s', spec.domain);
+        % Unknown representation
+        warning('bct:runtime:UnknownRepresentation', ...
+            'Unknown representation type: %s', rep);
         return;
 end
 
-% If we got here, basic representation check passed
+% =========================================================================
+% 3. All checks passed
+% =========================================================================
 applicable = true;
 
 end
