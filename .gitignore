@@ -19,5 +19,8 @@ debug.log
 /external/brainstorm3
 /docs/site
 /external/bioelectromagnetism/MINC/
+/external/toolbox_graph
+/external/toolbox_signal
+/external/toolbox_general
 # Test files
 /data

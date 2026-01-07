@@ -22,7 +22,7 @@ subsample = 1:ssf:size(COM,1);
       gr = uigridlayout(fig, [1 1]);
       gr.RowHeight    = {'1x'};
       gr.ColumnWidth  = {'1x'};
-      v = bct.ui.manifold.Viewer(gr);
+      v = bct.ui.manifold.Viewer(gr); % in bct ui library
 fprintf('=== Differential Forms Pipeline ===\n\n');
 
 %% ========================================================================

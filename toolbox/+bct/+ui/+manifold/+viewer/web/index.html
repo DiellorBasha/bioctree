@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Three Mesh Viewer</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <!-- Loader component styles -->
+  <link rel="stylesheet" href="./ui/loading-indicators/spinning/spinning.css" />
+
+  <!-- Import map: match official three.js pattern (three + three/addons) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.js",
+      "three/addons/": "./vendor/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div id="root">
+    <canvas id="canvas"></canvas>
+
+    <div id="loaderOverlay" class="loaderOverlay hidden">
+      <div id="loaderHost"></div>
+    </div>
+
+    <div id="pickerHUD" class="pickerHUD">
+      <button id="btnPickVertex" class="toolBtn" type="button">Vertex</button>
+      <button id="btnPickEdge" class="toolBtn" type="button">Edge</button>
+      <button id="btnPickFace" class="toolBtn" type="button">Face</button>
+    </div>
+
+    <div id="hud">
+      <div id="hudFileSelector">
+        <select id="fileSelect">
+          <option value="./assets/fsaverage.glb">fsaverage.glb</option>
+          <option value="./assets/fsaverage.json">fsaverage.json</option>
+        </select>
+        <button id="btnLoad" type="button">Load</button>
+      </div>
+      <div id="hudText"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
