@@ -36,7 +36,7 @@ function [comp, fig] = show(obj, options)
 %   [comp, ~] = bct.ui.show(M, "Parent", app.GridLayout);
 %
 %   % Override inspector selection
-%   [comp, fig] = bct.ui.show(M, "InspectorId", "ManifoldInspector");
+%   [comp, fig] = bct.ui.show(M, "InspectorId", "ManifoldViewer");
 %
 % See also: bct.ui.viewer, bct.runtime.ui.resolveInspector
 
@@ -136,11 +136,11 @@ function bindObject(comp, obj)
         return;
     end
     
-    % Special handling for bct.Manifold with manifold.Inspector
-    if isa(obj, 'bct.Manifold') && isa(comp, 'bct.ui.manifold.Inspector')
-        [V, F] = bct.ui.data.manifoldToMesh(obj);
-        comp.Vertices = V;
-        comp.Faces = F;
+    % Special handling for bct.Manifold with manifold.Viewer
+    if isa(obj, 'bct.Manifold') && isa(comp, 'bct.ui.manifold.Viewer')
+        % Ensure normals are computed before setMesh
+        obj.normals();
+        comp.setMesh(obj);
         return;
     end
     

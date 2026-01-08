@@ -29,7 +29,7 @@ function [X, Y, Z, U, V, W] = sampleVectors(vectorData, vertices, options)
 %   random    - Random subset
 %   magnitude - Prefer high-magnitude vectors
 %
-% See also: quiver3, bct.ui.render.ensureQuiver
+% See also: quiver3
 
     arguments
         vectorData (:,3) double

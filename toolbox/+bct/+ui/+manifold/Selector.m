@@ -28,7 +28,7 @@ classdef Selector < matlab.ui.componentcontainer.ComponentContainer
     %   - Uses bct.ui.data adapters for data extraction
     %   - Uses bct.ui.color for scalar → RGB mapping (future)
     %
-    % See also: bct.ui.manifold.Inspector, bct.ui.show
+    % See also: bct.ui.show
 
     %% Public properties
     properties (SetObservable)

@@ -15,7 +15,7 @@ function [V, F] = manifoldToMesh(M)
 %   Data adapter that extracts raw mesh geometry from Manifold
 %   for use by Inspector components that only need Vertices/Faces.
 %
-% See also: bct.Manifold, bct.ui.manifold.Inspector
+% See also: bct.Manifold
 
 arguments
     M (1,1) bct.Manifold

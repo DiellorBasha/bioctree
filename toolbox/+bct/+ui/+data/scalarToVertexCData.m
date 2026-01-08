@@ -28,7 +28,7 @@ function cdata = scalarToVertexCData(scalarData, vertices, options)
 %   - Must handle shape mismatches gracefully with clear errors
 %   - NaN/Inf handling with hardcoded fallback colors
 %
-% See also: bct.ui.color.resolve, bct.ui.render.updatePatchVertexRGB
+% See also: bct.ui.color.resolve
 
     arguments
         scalarData (:,:) double
