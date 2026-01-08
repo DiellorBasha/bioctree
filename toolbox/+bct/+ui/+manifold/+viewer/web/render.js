@@ -317,6 +317,34 @@ export function setPickingEnabled(enabled) {
   pickingSystem?.setEnabled(enabled);
 }
 
+/**
+ * Set mesh from raw data (MATLAB pathway)
+ * @param {Object} meshData - Mesh data object
+ * @param {Array} meshData.vertices - Flat array [x1,y1,z1, x2,y2,z2, ...]
+ * @param {Array} meshData.faces - Flat array of indices [i1,i2,i3, ...]
+ * @param {number} meshData.indexBase - 0 for 0-based indexing, 1 for 1-based
+ * @param {string} meshData.frame - 'matlab' or 'threejs' coordinate frame
+ */
+export function setMeshFromData(meshData) {
+  if (!meshManager) {
+    console.error('[setMeshFromData] Viewer not initialized. Call initViewer first.');
+    return;
+  }
+
+  try {
+    // Load mesh from buffers
+    meshManager.setMeshFromBuffers(meshData);
+    
+    // Run post-load setup
+    handlePostLoad();
+    
+    console.log('[setMeshFromData] Mesh loaded successfully from data');
+  } catch (err) {
+    console.error('[setMeshFromData] Error loading mesh:', err);
+    viewerUI?.showError(err);
+  }
+}
+
 /* -------------------- Pivot control -------------------- */
 
 function setPivotMode(mode) {

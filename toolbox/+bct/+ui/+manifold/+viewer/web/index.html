@@ -45,6 +45,41 @@
     </div>
   </div>
 
+  <!-- MATLAB Bridge: setup function for uihtml communication -->
+  <script type="module">
+    import { initViewer, setMeshFromData } from "./render.js";
+
+    // Global setup function for MATLAB uihtml component
+    window.setup = function(htmlComponent) {
+      console.log('[MATLAB Bridge] setup() called by MATLAB');
+      
+      const canvas = document.getElementById("canvas");
+      const hud = document.getElementById("hud");
+
+      // Initialize viewer without loading a mesh
+      initViewer({ canvasEl: canvas, hudEl: hud, glbUrl: null })
+        .then(() => {
+          console.log('[MATLAB Bridge] Viewer initialized, ready for data');
+        })
+        .catch((err) => {
+          console.error('[MATLAB Bridge] Viewer initialization failed:', err);
+        });
+
+      // Listen for data changes from MATLAB
+      htmlComponent.addEventListener("DataChanged", (event) => {
+        console.log('[MATLAB Bridge] DataChanged event received');
+        const data = htmlComponent.Data;
+        console.log('[MATLAB Bridge] Data:', data);
+
+        // Check if mesh data is present
+        if (data && data.mesh) {
+          console.log('[MATLAB Bridge] Loading mesh from MATLAB data');
+          setMeshFromData(data.mesh);
+        }
+      });
+    };
+  </script>
+
   <script type="module" src="./main.js"></script>
 </body>
 </html>

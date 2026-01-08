@@ -204,4 +204,92 @@ export class MeshManager {
 
     return { radius, box, center };
   }
+
+  /**
+   * Set mesh from raw buffers (MATLAB pathway)
+   * @param {Object} meshData - Mesh data object
+   * @param {Array} meshData.vertices - Flat array [x1,y1,z1, x2,y2,z2, ...]
+   * @param {Array} meshData.faces - Flat array of indices [i1,i2,i3, ...]
+   * @param {number} meshData.indexBase - 0 for 0-based indexing, 1 for 1-based
+   * @param {string} meshData.frame - 'matlab' or 'threejs' coordinate frame
+   * @returns {THREE.Group} - The loaded scene
+   */
+  setMeshFromBuffers(meshData) {
+    const { vertices, faces, indexBase = 0, frame = 'matlab' } = meshData;
+
+    // Validate input
+    if (!vertices || !faces) {
+      throw new Error('setMeshFromBuffers requires vertices and faces arrays');
+    }
+    if (vertices.length % 3 !== 0) {
+      throw new Error('vertices array length must be multiple of 3');
+    }
+    if (faces.length % 3 !== 0) {
+      throw new Error('faces array length must be multiple of 3');
+    }
+
+    // Clear any existing model
+    this.clearModel();
+
+    // Create BufferGeometry
+    const geometry = new THREE.BufferGeometry();
+
+    // Convert to Float32Array and Uint32Array
+    const positionArray = new Float32Array(vertices);
+    let indexArray = new Uint32Array(faces);
+
+    // Convert to 0-based indexing if needed
+    if (indexBase === 1) {
+      indexArray = new Uint32Array(faces.map(idx => idx - 1));
+    }
+
+    // Set geometry attributes
+    geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+    geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
+
+    // Ensure all geometry attributes (normals, UVs, tangents)
+    ensureGeometryAttributes(geometry);
+
+    // Create materials (match GLB/JSON loading exactly)
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: BASE_COLOR_HEX,
+      roughness: 0.85,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      side: THREE.DoubleSide,
+    });
+
+    // Create mesh with base material
+    const mesh = new THREE.Mesh(geometry, baseMat);
+    
+    // Store materials in userData
+    mesh.userData.baseMaterial = baseMat;
+    mesh.userData.wireMaterial = wireMat;
+
+    // Setup model root and loaded scene (match GLB/JSON structure)
+    this.modelRoot = new THREE.Group();
+    this.loadedScene = new THREE.Group();
+    this.loadedScene.add(mesh);
+    this.modelRoot.add(this.loadedScene);
+
+    // Add to appropriate root based on frame parameter
+    if (frame === 'threejs') {
+      this.viewerCore.roots.threejs.add(this.modelRoot);
+      console.log('[MeshManager.setMeshFromBuffers] Added to threejs frame (identity)');
+    } else {
+      // Default to matlab frame (applies Z-up → Y-up transform)
+      this.viewerCore.roots.matlab.add(this.modelRoot);
+      console.log('[MeshManager.setMeshFromBuffers] Added to matlab frame (Z→Y transform)');
+    }
+
+    console.log('[MeshManager.setMeshFromBuffers] Mesh created from buffers.');
+    console.log(`  Vertices: ${vertices.length / 3}, Faces: ${faces.length / 3}`);
+
+    return this.loadedScene;
+  }
 }

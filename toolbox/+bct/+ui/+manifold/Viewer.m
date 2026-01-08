@@ -24,6 +24,11 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
     properties (Access = private, Transient, NonCopyable)
         HTMLComponent matlab.ui.control.HTML
     end
+    
+    properties (Access = private)
+        Vertices (:,3) double = []
+        Faces (:,3) uint32 = []
+    end
 
     methods (Access = protected)
         function setup(comp)
@@ -64,6 +69,64 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             classFile = mfilename('fullpath');
             classDir  = fileparts(classFile);
             htmlPath  = fullfile(classDir, '+viewer', 'web', 'index.html');
+        end
+    end
+    
+    methods (Access = public)
+        function setMesh(comp, V, F)
+            % setMesh - Set the mesh to display in the viewer
+            %
+            % Syntax:
+            %   comp.setMesh(V, F)
+            %
+            % Inputs:
+            %   V - Vertices matrix [N×3] double, MATLAB Z-up coordinates
+            %   F - Faces matrix [M×3] uint32, 1-based indexing
+            %
+            % Notes:
+            %   - Vertices are expected in MATLAB Z-up coordinates
+            %   - Faces are converted from 1-based to 0-based indexing
+            %   - Arrays are flattened for JSON transfer
+            %   - Updates HTMLComponent.Data to trigger JavaScript viewer
+            
+            % Validate inputs
+            arguments
+                comp (1,1) bct.ui.manifold.Viewer
+                V (:,3) double {mustBeReal, mustBeFinite}
+                F (:,3) {mustBeInteger, mustBePositive}
+            end
+            
+            % Convert faces to uint32 and ensure 1-based
+            F = uint32(F);
+            
+            % Store mesh data
+            comp.Vertices = V;
+            comp.Faces = F;
+            
+            % Flatten vertices: [x1 y1 z1 x2 y2 z2 ...]
+            % IMPORTANT: Use .' to transpose then reshape to preserve XYZ order
+            verticesFlat = reshape(V.', 1, []);
+            
+            % Flatten faces and convert to 0-based indexing: [i1 i2 i3 ...] - 1
+            facesFlat = double(reshape(F.', 1, [])) - 1;
+            
+            % Create mesh data payload
+            meshData = struct(...
+                'vertices', verticesFlat, ...
+                'faces', facesFlat, ...
+                'indexBase', 0, ...
+                'frame', 'matlab' ...
+            );
+            
+            % Set HTMLComponent.Data to trigger DataChanged event in JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('mesh', meshData);
+                fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces\n', ...
+                    size(V, 1), size(F, 1));
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Mesh data stored but not sent.');
+            end
         end
     end
 end
