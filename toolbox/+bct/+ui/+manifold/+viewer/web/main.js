@@ -47,13 +47,11 @@ async function main() {
 
   // Allow loading specific asset via ?asset=... parameter (no default)
   const assetUrl = getParam("asset");
-  console.log('[main] assetUrl from URL parameter:', assetUrl);
   
   // Setup picker control event listeners
   setupPickerControls();
 
   // Initialize viewer (empty scene by default - mesh loaded via MATLAB setMesh)
-  console.log('[main] Calling initViewer with glbUrl:', assetUrl);
   initViewer({ canvasEl: canvas, hudEl: hud, glbUrl: assetUrl });
 }
 

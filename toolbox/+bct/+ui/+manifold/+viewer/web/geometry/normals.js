@@ -21,13 +21,10 @@ import * as THREE from 'three';
  * @returns {THREE.BufferGeometry} The same geometry with computed normals
  */
 export function computeVertexNormals(geometry) {
-  const t0 = performance.now();
   geometry.computeVertexNormals();
-  const t1 = performance.now();
   
   if (geometry.attributes.normal) {
     geometry.attributes.normal.needsUpdate = true;
-    console.log(`[normals] Computed vertex normals: ${(t1-t0).toFixed(2)}ms`);
   }
   
   return geometry;
@@ -72,9 +69,6 @@ export function synthesizeSphericalUVs(geometry) {
   geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
   geometry.attributes.uv.needsUpdate = true;
   
-  const t1 = performance.now();
-  console.log(`[normals] Synthesized spherical UVs: ${(t1-t0).toFixed(2)}ms`);
-  
   return geometry;
 }
 
@@ -96,13 +90,9 @@ export function computeTangents(geometry) {
     console.warn('[normals] Cannot compute tangents: missing required attributes');
     return geometry;
   }
-
-  const t0 = performance.now();
   
   try {
     geometry.computeTangents();
-    const t1 = performance.now();
-    console.log(`[normals] Computed tangents: ${(t1-t0).toFixed(2)}ms`);
   } catch (err) {
     console.warn('[normals] Failed to compute tangents:', err.message);
   }

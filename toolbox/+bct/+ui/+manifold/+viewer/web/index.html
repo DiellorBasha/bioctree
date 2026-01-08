@@ -24,103 +24,50 @@
 
   <!-- MATLAB Bridge: setup function for uihtml communication -->
   <script type="module">
-    import { initViewer, setMeshFromData, setScalarData } from "./render.js";
-
-    /**
-     * Install console forwarding bridge to MATLAB
-     * Intercepts console.log/warn/error and forwards to MATLAB via sendEventToMATLAB
-     */
-    function installConsoleBridge(htmlComponent) {
-      const levels = ["log", "info", "warn", "error", "debug"];
-
-      // Helper: stringify safely
-      const toString = (x) => {
-        if (typeof x === "string") return x;
-        try { return JSON.stringify(x); } catch { return String(x); }
-      };
-
-      levels.forEach((level) => {
-        const original = console[level].bind(console);
-
-        console[level] = (...args) => {
-          // Keep normal browser console behavior
-          original(...args);
-
-          // Forward to MATLAB
-          try {
-            const payload = {
-              level,
-              time: new Date().toISOString(),
-              msg: args.map(toString).join(" "),
-            };
-            htmlComponent.sendEventToMATLAB("JSConsole", payload);
-          } catch (e) {
-            // Avoid infinite recursion: do not console.error here
-          }
-        };
-      });
-
-      // Forward uncaught errors
-      window.addEventListener("error", (event) => {
-        try {
-          htmlComponent.sendEventToMATLAB("JSConsole", {
-            level: "error",
-            time: new Date().toISOString(),
-            msg: `${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`,
-          });
-        } catch {}
-      });
-
-      // Forward unhandled promise rejections
-      window.addEventListener("unhandledrejection", (event) => {
-        try {
-          htmlComponent.sendEventToMATLAB("JSConsole", {
-            level: "error",
-            time: new Date().toISOString(),
-            msg: `UnhandledPromiseRejection: ${toString(event.reason)}`,
-          });
-        } catch {}
-      });
-
-      console.log('[Console Bridge] Installed - forwarding to MATLAB');
-    }
+    import { initViewer, setMeshFromData, setScalarData, clearMesh } from "./render.js";
 
     // Global setup function for MATLAB uihtml component
     window.setup = function(htmlComponent) {
-      console.log('[MATLAB Bridge] setup() called by MATLAB');
-      
-      // Install console forwarding FIRST
-      installConsoleBridge(htmlComponent);
-      
-      const canvas = document.getElementById("canvas");
-      const hud = document.getElementById("hud");
-
-      // Initialize viewer without loading a mesh
-      initViewer({ canvasEl: canvas, hudEl: hud, glbUrl: null })
-        .then(() => {
-          console.log('[MATLAB Bridge] Viewer initialized, ready for data');
-        })
-        .catch((err) => {
-          console.error('[MATLAB Bridge] Viewer initialization failed:', err);
-        });
-
-      // Listen for data changes from MATLAB
-      htmlComponent.addEventListener("DataChanged", (event) => {
-        console.log('[MATLAB Bridge] DataChanged event received');
-        const data = htmlComponent.Data;
-
-        // Check if mesh data is present
-        if (data && data.mesh) {
-          console.log('[MATLAB Bridge] Loading mesh from MATLAB data');
-          setMeshFromData(data.mesh);
-        }
+      try {
+        // Get DOM elements
+        const canvas = document.getElementById('canvas');
         
-        // Check if scalar data is present
-        if (data && data.scalar) {
-          console.log('[MATLAB Bridge] Loading scalar data from MATLAB');
-          setScalarData(data.scalar);
-        }
-      });
+        // Initialize viewer without loading a mesh
+        initViewer({ canvasEl: canvas, glbUrl: null })
+          .catch((err) => {
+            console.error('[MATLAB Bridge] Viewer initialization failed:', err);
+            console.error('[MATLAB Bridge] Stack:', err.stack);
+          });
+
+        // Listen for data changes from MATLAB
+        htmlComponent.addEventListener("DataChanged", (event) => {
+          try {
+            const data = htmlComponent.Data;
+
+            // Check if clearMesh is requested
+            if (data && data.clearMesh) {
+              clearMesh();
+              return;
+            }
+
+            // Check if mesh data is present
+            if (data && data.mesh) {
+              setMeshFromData(data.mesh);
+            }
+            
+            // Check if scalar data is present
+            if (data && data.scalar) {
+              setScalarData(data.scalar);
+            }
+          } catch (err) {
+            console.error('[MATLAB Bridge] DataChanged handler error:', err);
+            console.error('[MATLAB Bridge] Stack:', err.stack);
+          }
+        });
+      } catch (err) {
+        console.error('[MATLAB Bridge] Setup error:', err);
+        console.error('[MATLAB Bridge] Stack:', err.stack);
+      }
     };
   </script>
 

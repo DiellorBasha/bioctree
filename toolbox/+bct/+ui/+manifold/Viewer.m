@@ -28,8 +28,6 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
     properties (Access = private)
         Vertices (:,3) double = []
         Faces (:,3) uint32 = []
-        LogBuffer string = strings(0,1)
-        MaxLogLines (1,1) double = 2000
     end
 
     methods (Access = protected)
@@ -39,9 +37,6 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
 
             % Point to the viewer's index.html in +viewer/web/ subdirectory.
             comp.HTMLComponent.HTMLSource = bct.ui.manifold.Viewer.resolveHTMLSource();
-            
-            % Set up event handler for JavaScript events (console forwarding)
-            comp.HTMLComponent.HTMLEventReceivedFcn = @(src, evt) comp.onHTMLEvent(src, evt);
 
             % Let the parent (e.g., uigridlayout) control sizing.
             % We will size the uihtml to fill this container in update().
@@ -77,55 +72,7 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
         end
     end
     
-    methods (Access = private)
-        function onHTMLEvent(comp, ~, evt)
-            % Handle events from JavaScript
-            switch evt.HTMLEventName
-                case "JSConsole"
-                    % Forward JavaScript console output to MATLAB
-                    d = evt.HTMLEventData;
-                    
-                    try
-                        line = "[" + string(d.time) + "] " + upper(string(d.level)) + ": " + string(d.msg);
-                    catch
-                        line = "JSConsole: (unparseable payload)";
-                    end
-                    
-                    % Append to ring buffer
-                    comp.LogBuffer(end+1,1) = line;
-                    if numel(comp.LogBuffer) > comp.MaxLogLines
-                        comp.LogBuffer = comp.LogBuffer(end-comp.MaxLogLines+1:end);
-                    end
-                    
-                    % Print to MATLAB Command Window
-                    disp(line);
-                    
-                otherwise
-                    % Handle other events (future: picking, etc.)
-            end
-        end
-    end
-    
     methods (Access = public)
-        function logs = getLogs(comp)
-            % getLogs - Get buffered console logs from JavaScript
-            %
-            % Syntax:
-            %   logs = comp.getLogs()
-            %
-            % Returns:
-            %   logs - String array of console messages
-            logs = comp.LogBuffer;
-        end
-        
-        function clearLogs(comp)
-            % clearLogs - Clear the console log buffer
-            %
-            % Syntax:
-            %   comp.clearLogs()
-            comp.LogBuffer = strings(0,1);
-        end
-        
         function setMesh(comp, varargin)
             % setMesh - Set the mesh to display in the viewer
             %
@@ -208,16 +155,33 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             % Set HTMLComponent.Data to trigger DataChanged event in JavaScript
             if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
                 comp.HTMLComponent.Data = struct('mesh', meshData);
-                if ~isempty(N)
-                    fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces, normals included\n', ...
-                        size(V, 1), size(F, 1));
-                else
-                    fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces\n', ...
-                        size(V, 1), size(F, 1));
-                end
             else
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Mesh data stored but not sent.');
+            end
+        end
+        
+        function clearMesh(comp)
+            % clearMesh - Clear the currently displayed mesh
+            %
+            % Syntax:
+            %   comp.clearMesh()
+            %
+            % Notes:
+            %   - Removes the mesh from the viewer
+            %   - Clears any associated scalar visualization
+            %   - Resets internal vertex/face storage
+            
+            % Clear internal storage
+            comp.Vertices = [];
+            comp.Faces = [];
+            
+            % Send clear command to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('clearMesh', true);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Clear command not sent.');
             end
         end
         
@@ -281,12 +245,6 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             % Send to JavaScript
             if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
                 comp.HTMLComponent.Data = struct('scalar', scalarPayload);
-                if ~isempty(scalarData)
-                    fprintf('[Viewer.setScalar] Sent scalar data: %d values\n', ...
-                        length(scalarData));
-                else
-                    fprintf('[Viewer.setScalar] Cleared scalar visualization\n');
-                end
             else
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Scalar data not sent.');

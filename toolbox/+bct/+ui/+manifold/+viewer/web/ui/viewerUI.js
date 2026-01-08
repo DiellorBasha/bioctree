@@ -44,7 +44,6 @@ export class ViewerUI {
       const response = await fetch(LOADER_COMPONENT_PATH);
       const html = await response.text();
       this.loaderElement.innerHTML = html;
-      console.log("[ViewerUI] Loader component initialized");
     } catch (err) {
       console.error("[ViewerUI] Failed to load loader component:", err);
       // Fallback: simple loading text
@@ -64,7 +63,6 @@ export class ViewerUI {
     el.classList.remove("hidden");
     el.style.display = "flex";
     this.isLoaderVisible = true;
-    console.log("[ViewerUI] Loader shown");
   }
 
   /**
@@ -75,7 +73,6 @@ export class ViewerUI {
     if (!el) return;
     el.classList.add("hidden");
     this.isLoaderVisible = false;
-    console.log("[ViewerUI] Loader hidden");
   }
 
   /**

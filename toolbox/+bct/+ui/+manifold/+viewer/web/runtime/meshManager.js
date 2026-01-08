@@ -99,9 +99,6 @@ export class MeshManager {
     // GLB files are already Y-up from MATLAB export, no transform needed
     this.viewerCore.roots.threejs.add(this.modelRoot);
 
-    console.log('[MeshManager.loadGLB] Added to scene. modelRoot:', this.modelRoot);
-    console.log('[MeshManager.loadGLB] Scene children:', this.viewerCore.roots.threejs.children.length);
-
     return this.loadedScene;
   }
 
@@ -150,9 +147,6 @@ export class MeshManager {
     // Raw JSON data is in MATLAB Z-up coordinates and needs conversion
     this.viewerCore.roots.matlab.add(this.modelRoot);
 
-    console.log('[MeshManager.loadJSON] Added to scene. modelRoot:', this.modelRoot);
-    console.log('[MeshManager.loadJSON] Scene children:', this.viewerCore.roots.matlab.children.length);
-
     return this.loadedScene;
   }
 
@@ -160,13 +154,11 @@ export class MeshManager {
    * Clear the current model and dispose of resources
    */
   clearModel() {
-    console.log('[MeshManager.clearModel] Clearing model. Current modelRoot:', this.modelRoot);
     if (this.modelRoot) {
       // Remove from both possible frame roots (could be in either depending on file type)
       this.viewerCore.roots.threejs.remove(this.modelRoot);
       this.viewerCore.roots.matlab.remove(this.modelRoot);
       disposeObject3D(this.modelRoot);
-      console.log('[MeshManager.clearModel] Model removed and disposed');
     }
     this.modelRoot = null;
     this.loadedScene = null;
@@ -236,7 +228,6 @@ export class MeshManager {
     // Clear any existing model
     this.clearModel();
     const t1 = performance.now();
-    console.log(`[MeshManager] Clear model: ${(t1-t0).toFixed(2)}ms`);
 
     // Create BufferGeometry
     const geometry = new THREE.BufferGeometry();
@@ -259,18 +250,15 @@ export class MeshManager {
     if (normals) {
       const normalArray = new Float32Array(normals);
       geometry.setAttribute('normal', new THREE.BufferAttribute(normalArray, 3));
-      console.log(`[MeshManager] Pre-computed normals provided (${normals.length / 3} vertices)`);
     }
     
     const t3 = performance.now();
-    console.log(`[MeshManager] Create typed arrays & set attributes: ${(t3-t2).toFixed(2)}ms`);
 
     // Validate geometry attributes (does NOT compute normals/UVs/tangents)
     // MATLAB (bct package) should provide pre-computed attributes via future setNormals() etc.
     const t4 = performance.now();
     validateGeometryAttributes(geometry);
     const t5 = performance.now();
-    console.log(`[MeshManager] validateGeometryAttributes: ${(t5-t4).toFixed(2)}ms`);
 
     // Create materials (match GLB/JSON loading exactly)
     const baseMat = new THREE.MeshStandardMaterial({
@@ -302,17 +290,12 @@ export class MeshManager {
     // Add to appropriate root based on frame parameter
     if (frame === 'threejs') {
       this.viewerCore.roots.threejs.add(this.modelRoot);
-      console.log('[MeshManager.setMeshFromBuffers] Added to threejs frame (identity)');
     } else {
       // Default to matlab frame (applies Z-up → Y-up transform)
       this.viewerCore.roots.matlab.add(this.modelRoot);
-      console.log('[MeshManager.setMeshFromBuffers] Added to matlab frame (Z→Y transform)');
     }
 
     const t6 = performance.now();
-    console.log('[MeshManager.setMeshFromBuffers] Mesh created from buffers.');
-    console.log(`  Vertices: ${vertices.length / 3}, Faces: ${faces.length / 3}`);
-    console.log(`[MeshManager] TOTAL TIME: ${(t6-t0).toFixed(2)}ms`);
 
     return this.loadedScene;
   }

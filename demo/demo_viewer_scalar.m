@@ -27,10 +27,17 @@ fprintf('\nCreating bct.Manifold object...\n');
 M = bct.Manifold(V, F);
 
 %% Create viewer
-fprintf('\nCreating viewer...\n');
-gr = groot;
-v = bct.ui.manifold.Viewer(gr);
-v.HTMLComponent.Position = [10 10 1200 800];
+% Create empty viewer
+fig = uifigure('Position', [1458 61 1091 1339]);
+gr = uigridlayout(fig, [1 1]);
+gr.RowHeight = {'1x'};
+gr.ColumnWidth = {'1x'};
+v = bct.ui.manifold.Viewer(gr);  % Empty - no mesh loaded
+%
+M.normals();
+v.setMesh(M);
+%v.clearMesh()
+v.setScalar(f0);
 
 %% Load mesh
 fprintf('\nLoading mesh into viewer...\n');
@@ -41,14 +48,16 @@ pause(1.0);  % Wait for rendering
 fprintf('\n=== EXAMPLE 1: Distance from Centroid ===\n');
 
 % Compute centroid
-centroid = mean(V, 1);
+centroid = M.centroids;
+ %Create a smooth test function (Gaussian bump)
+center = [0, 0, 50];  % Coordinates in mm
+sigma = 30;           % Width in mm
 
-% Compute distance from centroid
-distances = sqrt(sum((V - centroid).^2, 2));
-
+distances = sqrt(sum((M.Vertices - center).^2, 2));
+f0 = exp(-distances.^2 / (2*sigma^2));
 % Visualize with viridis colormap (default)
 fprintf('Visualizing distances with viridis colormap...\n');
-v.setScalar(distances);
+v.setScalar(f0);
 pause(2.0);
 
 %% Example 2: Change colormap

@@ -58,8 +58,6 @@ export function createLightingRig(camera) {
 
   rim.target.position.set(0, 0, 0);
   lightRig.add(rim.target);
-
-  console.log('[Lighting] Created view-locked lighting rig');
   
   return lightRig;
 }
@@ -82,6 +80,4 @@ export function disposeLightingRig(lightRig) {
       obj.dispose();
     }
   });
-  
-  console.log('[Lighting] Disposed lighting rig');
 }

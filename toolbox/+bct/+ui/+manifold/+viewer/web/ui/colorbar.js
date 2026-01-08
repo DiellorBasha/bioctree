@@ -24,7 +24,7 @@ export class Colorbar {
     
     // State
     this.visible = false;
-    this.colormap = 'viridis';
+    this.colormap = 'inferno';
     this.min = 0;
     this.max = 1;
     

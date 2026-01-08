@@ -50,27 +50,14 @@ export function validateGeometryAttributes(geometry) {
   // TEMPORARY: Compute normals if missing (required for MeshStandardMaterial)
   // TODO: Remove this once MATLAB consistently provides pre-computed normals
   if (!status.hasNormals && status.hasPosition) {
-    const t0 = performance.now();
     console.warn('[meshBuilder] WARNING: Normals missing, computing fallback (use Manifold.normals() in MATLAB!)');
     geometry.computeVertexNormals();
-    const t1 = performance.now();
-    console.log(`[meshBuilder] Computed normals (fallback): ${(t1-t0).toFixed(2)}ms`);
     status.hasNormals = !!geometry.attributes.normal;
   }
 
-  // Log attribute status
+  // Log critical missing attributes
   if (!status.hasNormals) {
     console.warn('[meshBuilder] Geometry missing normals (required for MeshStandardMaterial)');
-  }
-  if (!status.hasUVs) {
-    console.log('[meshBuilder] Geometry missing UVs (optional)');
-  }
-  if (!status.hasTangents) {
-    console.log('[meshBuilder] Geometry missing tangents (optional)');
-  }
-  
-  if (status.hasPosition && status.hasNormals) {
-    console.log('[meshBuilder] Geometry has required attributes (position, normals)');
   }
 
   return status;
@@ -148,8 +135,6 @@ export function createDownsampledGeometry(geometry, downsampleFactor = 1, includ
     sparseGeometry.setAttribute('tangent', new THREE.Float32BufferAttribute(downsampledTangents, 4));
   }
 
-  console.log(`[meshBuilder] Created downsampled geometry: ${downsampledPositions.length / 3} vertices (factor: ${downsampleFactor})`);
-  
   return sparseGeometry;
 }
 

@@ -102,8 +102,6 @@ export class ViewerCore {
     this.controls.addEventListener('change', () => {
       this.controlsChangeCallbacks.forEach(cb => cb());
     });
-
-    console.log('[ViewerCore] Initialized');
   }
 
   /**
@@ -114,7 +112,6 @@ export class ViewerCore {
     
     this.isRunning = true;
     this.renderer.setAnimationLoop(() => this._renderFrame());
-    console.log('[ViewerCore] Render loop started');
   }
 
   /**
@@ -125,7 +122,6 @@ export class ViewerCore {
     
     this.isRunning = false;
     this.renderer.setAnimationLoop(null);
-    console.log('[ViewerCore] Render loop stopped');
   }
 
   /**
@@ -179,8 +175,6 @@ export class ViewerCore {
 
     // Update renderer size (via helper)
     resizeRenderer(this.renderer, w, h);
-
-    console.log(`[ViewerCore] Resized: ${w}x${h}`);
   }
 
   /**
@@ -219,7 +213,5 @@ export class ViewerCore {
     
     this.renderCallbacks = [];
     this.controlsChangeCallbacks = [];
-    
-    console.log('[ViewerCore] Disposed');
   }
 }

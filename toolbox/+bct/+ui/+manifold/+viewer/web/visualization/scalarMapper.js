@@ -143,8 +143,6 @@ export class ScalarMapper {
     colors.needsUpdate = true;
     
     const t1 = performance.now();
-    console.log(`[ScalarMapper] Applied scalar data to ${numVertices} vertices in ${(t1-t0).toFixed(2)}ms`);
-    console.log(`[ScalarMapper] Colormap: ${this.colormapName}, Range: [${this.clim[0].toFixed(2)}, ${this.clim[1].toFixed(2)}]`);
 
     // Ensure material uses vertex colors
     if (mesh.material) {
@@ -194,7 +192,5 @@ export class ScalarMapper {
         mesh.material.needsUpdate = true;
       }
     }
-
-    console.log('[ScalarMapper] Cleared vertex colors');
   }
 }

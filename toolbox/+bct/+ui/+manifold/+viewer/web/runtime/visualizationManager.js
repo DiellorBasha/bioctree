@@ -21,13 +21,11 @@ export class VisualizationManager {
    * @param {Object} viewerCore - ViewerCore instance
    * @param {Object} meshManager - MeshManager instance
    * @param {Object} lightRig - Light rig reference (optional)
-   * @param {Object} axesGizmo - Axes gizmo reference (optional)
    */
-  constructor(viewerCore, meshManager, lightRig = null, axesGizmo = null) {
+  constructor(viewerCore, meshManager, lightRig = null) {
     this.viewerCore = viewerCore;
     this.meshManager = meshManager;
     this.lightRig = lightRig;
-    this.axesGizmo = axesGizmo;
     
     // Helper visuals owned by this manager
     this.normalsHelper = null;
@@ -39,10 +37,8 @@ export class VisualizationManager {
    * @param {Object} vizState - Visualization state object
    */
   applyState(vizState) {
-    this.updateSurface(vizState);
-    this.updateEdges(vizState);
+    this.updateMaterial(vizState);
     this.updateHelpers(vizState);
-    this.updateScene(vizState);
   }
 
   /**
@@ -71,10 +67,10 @@ export class VisualizationManager {
   }
 
   /**
-   * Update surface properties (visibility, shading)
+   * Update mesh material based on material dropdown
    * @private
    */
-  updateSurface(vizState) {
+  updateMaterial(vizState) {
     const loadedScene = this.meshManager.getLoadedScene();
     if (!loadedScene) return;
 
@@ -86,44 +82,15 @@ export class VisualizationManager {
 
       if (!baseMat || !wireMat) return;
 
-      // Apply visibility
-      obj.material.visible = vizState.surface.visible;
-      
-      // Apply shading
-      baseMat.flatShading = (vizState.surface.shading === 'flat');
-      baseMat.needsUpdate = true;
-    });
-  }
-
-  /**
-   * Update edge/wireframe properties
-   * @private
-   */
-  updateEdges(vizState) {
-    const loadedScene = this.meshManager.getLoadedScene();
-    if (!loadedScene) return;
-
-    loadedScene.traverse((obj) => {
-      if (!obj.isMesh) return;
-
-      const baseMat = obj.userData.baseMaterial;
-      const wireMat = obj.userData.wireMaterial;
-
-      if (!baseMat || !wireMat) return;
-
-      // Swap materials based on wireframe state
-      if (vizState.surface.visible) {
-        obj.material = vizState.edges.wireframe ? wireMat : baseMat;
-        obj.material.visible = true;
-      } else {
-        obj.material.visible = false;
-      }
-      
-      // Update wireframe color
-      if (vizState.edges.wireframe) {
+      // Switch material based on dropdown selection
+      if (vizState.surface.material === 'wireframe') {
+        obj.material = wireMat;
         wireMat.color.set(vizState.edges.color);
+      } else {
+        obj.material = baseMat;
       }
       
+      obj.material.visible = true;
       obj.material.needsUpdate = true;
     });
   }
@@ -140,7 +107,10 @@ export class VisualizationManager {
       this.syncNormalsVisibility(vizState);
     } else {
       if (this.normalsHelper) {
-        this.viewerCore.scene.remove(this.normalsHelper);
+        // Remove from parent (could be in matlab or threejs root)
+        if (this.normalsHelper.parent) {
+          this.normalsHelper.parent.remove(this.normalsHelper);
+        }
         this.normalsHelper = null;
       }
     }
@@ -150,37 +120,20 @@ export class VisualizationManager {
       this.syncTangentsVisibility(vizState);
     } else {
       if (this.tangentsHelper) {
-        this.viewerCore.scene.remove(this.tangentsHelper);
+        // Remove from parent (could be in matlab or threejs root)
+        if (this.tangentsHelper.parent) {
+          this.tangentsHelper.parent.remove(this.tangentsHelper);
+        }
         this.tangentsHelper = null;
       }
     }
     
-    // Restore mesh visibility if both helpers are off
-    if (!vizState.helpers.vertexNormals && !vizState.helpers.tangents) {
-      this.restoreMeshVisibility(vizState);
-    }
+    // NOTE: Removed automatic mesh hiding/showing logic.
+    // Surface visibility is controlled solely by vizState.surface.visible
+    // via updateSurface() method. Helpers and surface are now independent.
   }
 
-  /**
-   * Update scene properties (lighting, axes, background)
-   * @private
-   */
-  updateScene(vizState) {
-    // Update lighting visibility
-    if (this.lightRig) {
-      this.lightRig.visible = vizState.scene.lighting;
-    }
-    
-    // Update axes gizmo
-    if (this.axesGizmo) {
-      this.axesGizmo.setEnabled(vizState.scene.axes);
-    }
-    
-    // Update background color
-    if (this.viewerCore.renderer) {
-      this.viewerCore.renderer.setClearColor(vizState.scene.background);
-    }
-  }
+
 
   /**
    * Sync normals helper visibility
@@ -192,15 +145,25 @@ export class VisualizationManager {
 
     // Remove existing helper if present
     if (this.normalsHelper) {
-      this.viewerCore.scene.remove(this.normalsHelper);
+      // Remove from parent (could be in matlab or threejs root)
+      if (this.normalsHelper.parent) {
+        this.normalsHelper.parent.remove(this.normalsHelper);
+      }
       this.normalsHelper = null;
     }
 
-    // Hide mesh only if wireframe is NOT active
-    if (loadedScene && !vizState.edges.wireframe) {
-      this.hideMeshMaterials();
+    // Determine which frame root the mesh is in
+    const modelRoot = this.meshManager.modelRoot;
+    let frameRoot = null;
+    if (modelRoot && modelRoot.parent) {
+      // Check if mesh is in matlab or threejs frame
+      if (modelRoot.parent === this.viewerCore.roots.matlab) {
+        frameRoot = this.viewerCore.roots.matlab;
+      } else if (modelRoot.parent === this.viewerCore.roots.threejs) {
+        frameRoot = this.viewerCore.roots.threejs;
+      }
     }
-
+    
     // Create vertex normals helpers for all meshes
     let meshCount = 0;
     
@@ -211,27 +174,33 @@ export class VisualizationManager {
       const downsampleFactor = 1; // Testing: no downsampling (was 100)
       const geometry = obj.geometry;
       
-      console.log(`[Manifold3] Normals - Mesh ${meshCount}: has geometry=${!!geometry}`);
-      
       // Create downsampled geometry using meshBuilder
       const sparseGeometry = createDownsampledGeometry(geometry, downsampleFactor, false);
       if (!sparseGeometry) return;
       
-      // Create temporary mesh with transforms copied from source
-      const tempMesh = createTransformedMesh(sparseGeometry, obj);
+      // Create temporary mesh with LOCAL transforms only (no parent frame transform)
+      // The helper will inherit the frame transform from being added to frameRoot
+      const tempMesh = new THREE.Mesh(sparseGeometry);
+      tempMesh.position.copy(obj.position);
+      tempMesh.rotation.copy(obj.rotation);
+      tempMesh.scale.copy(obj.scale);
       
       // Create normals helper (red)
       const helper = new VertexNormalsHelper(tempMesh, 2, 0xff0000);
       
       if (!this.normalsHelper) {
         this.normalsHelper = new THREE.Group();
-        this.viewerCore.scene.add(this.normalsHelper);
+        // Add to the same frame root as the mesh (matlab or threejs)
+        if (frameRoot) {
+          frameRoot.add(this.normalsHelper);
+        } else {
+          // Fallback to scene if frame root not found
+          this.viewerCore.scene.add(this.normalsHelper);
+        }
       }
       
       this.normalsHelper.add(helper);
     });
-    
-    console.log(`[Manifold3] Normals: ${meshCount} meshes`);
   }
 
   /**
@@ -244,13 +213,23 @@ export class VisualizationManager {
 
     // Remove existing helper if present
     if (this.tangentsHelper) {
-      this.viewerCore.scene.remove(this.tangentsHelper);
+      // Remove from parent (could be in matlab or threejs root)
+      if (this.tangentsHelper.parent) {
+        this.tangentsHelper.parent.remove(this.tangentsHelper);
+      }
       this.tangentsHelper = null;
     }
 
-    // Hide mesh only if wireframe is NOT active
-    if (loadedScene && !vizState.edges.wireframe) {
-      this.hideMeshMaterials();
+    // Determine which frame root the mesh is in
+    const modelRoot = this.meshManager.modelRoot;
+    let frameRoot = null;
+    if (modelRoot && modelRoot.parent) {
+      // Check if mesh is in matlab or threejs frame
+      if (modelRoot.parent === this.viewerCore.roots.matlab) {
+        frameRoot = this.viewerCore.roots.matlab;
+      } else if (modelRoot.parent === this.viewerCore.roots.threejs) {
+        frameRoot = this.viewerCore.roots.threejs;
+      }
     }
 
     // Create vertex tangents helpers for all meshes
@@ -268,8 +247,6 @@ export class VisualizationManager {
       const tangents = geometry.attributes.tangent;
       const uvs = geometry.attributes.uv;
       
-      console.log(`[Manifold3] Tangents - Mesh ${meshCount}: positions=${!!positions}, normals=${!!normals}, tangents=${!!tangents}, uvs=${!!uvs}`);
-      
       if (!positions || !normals || !tangents) return;
 
       tangentCount++;
@@ -278,54 +255,28 @@ export class VisualizationManager {
       const sparseGeometry = createDownsampledGeometry(geometry, downsampleFactor, true);
       if (!sparseGeometry) return;
       
-      // Create temporary mesh with transforms copied from source
-      const tempMesh = createTransformedMesh(sparseGeometry, obj);
+      // Create temporary mesh with LOCAL transforms only (no parent frame transform)
+      // The helper will inherit the frame transform from being added to frameRoot
+      const tempMesh = new THREE.Mesh(sparseGeometry);
+      tempMesh.position.copy(obj.position);
+      tempMesh.rotation.copy(obj.rotation);
+      tempMesh.scale.copy(obj.scale);
       
       // Create tangents helper (cyan)
       const helper = new VertexTangentsHelper(tempMesh, 2, 0x00ffff);
       
       if (!this.tangentsHelper) {
         this.tangentsHelper = new THREE.Group();
-        this.viewerCore.scene.add(this.tangentsHelper);
+        // Add to the same frame root as the mesh (matlab or threejs)
+        if (frameRoot) {
+          frameRoot.add(this.tangentsHelper);
+        } else {
+          // Fallback to scene if frame root not found
+          this.viewerCore.scene.add(this.tangentsHelper);
+        }
       }
       
       this.tangentsHelper.add(helper);
-      console.log(`[Manifold3] Created tangents helper for mesh ${meshCount}`);
-    });
-    
-    console.log(`[Manifold3] Tangents: ${meshCount} meshes, ${tangentCount} with tangents`);
-  }
-
-  /**
-   * Hide mesh materials (for helper display)
-   * @private
-   */
-  hideMeshMaterials() {
-    const loadedScene = this.meshManager.getLoadedScene();
-    if (!loadedScene) return;
-    loadedScene.traverse((obj) => {
-      if (obj.isMesh && obj.material) {
-        obj.material.visible = false;
-      }
-    });
-  }
-
-  /**
-   * Restore mesh visibility
-   * @private
-   */
-  restoreMeshVisibility(vizState) {
-    const loadedScene = this.meshManager.getLoadedScene();
-    if (!loadedScene) return;
-    loadedScene.traverse((obj) => {
-      if (!obj.isMesh) return;
-      const baseMat = obj.userData.baseMaterial;
-      const wireMat = obj.userData.wireMaterial;
-      if (!baseMat || !wireMat) return;
-      
-      // Restore appropriate material based on wireframe toggle
-      obj.material = vizState.edges.wireframe ? wireMat : baseMat;
-      obj.material.visible = vizState.surface.visible;
     });
   }
 
@@ -335,12 +286,18 @@ export class VisualizationManager {
    */
   disposeHelpers() {
     if (this.normalsHelper) {
-      this.viewerCore.scene.remove(this.normalsHelper);
+      // Remove from parent (could be in matlab or threejs root)
+      if (this.normalsHelper.parent) {
+        this.normalsHelper.parent.remove(this.normalsHelper);
+      }
       this.normalsHelper = null;
     }
     
     if (this.tangentsHelper) {
-      this.viewerCore.scene.remove(this.tangentsHelper);
+      // Remove from parent (could be in matlab or threejs root)
+      if (this.tangentsHelper.parent) {
+        this.tangentsHelper.parent.remove(this.tangentsHelper);
+      }
       this.tangentsHelper = null;
     }
   }

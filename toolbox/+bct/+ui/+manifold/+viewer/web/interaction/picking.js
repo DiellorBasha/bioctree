@@ -75,8 +75,6 @@ export class PickingSystem {
       
       this.pickables.push(obj);
     });
-    
-    console.log(`[PickingSystem] Collected ${this.pickables.length} pickable meshes`);
   }
   
   /**
@@ -145,8 +143,6 @@ export class PickingSystem {
     if (this.onTrianglePick) {
       this.onTrianglePick(hit, tri);
     }
-    
-    console.log("[pick triangle]", tri, "faceIndex:", hit.faceIndex, "mesh:", mesh.name || "unnamed");
   }
   
   /**
@@ -183,8 +179,6 @@ export class PickingSystem {
     if (this.onVertexPick) {
       this.onVertexPick(hit, chosen.idx, tri);
     }
-    
-    console.log("[pick vertex] idx:", chosen.idx);
   }
   
   /**
@@ -222,8 +216,6 @@ export class PickingSystem {
     if (this.onEdgePick) {
       this.onEdgePick(hit, best.edge, tri);
     }
-    
-    console.log("[pick edge]", best.edge, "distSq:", best.d.toFixed(4));
   }
   
   /**

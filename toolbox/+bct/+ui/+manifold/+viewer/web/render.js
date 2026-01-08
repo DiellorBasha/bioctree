@@ -4,23 +4,25 @@ import { PickingSystem } from "./interaction/picking.js";
 import { SelectionFX } from "./interaction/selectionFX.js";
 import { ViewerCore } from './core/viewerCore.js';
 import { createLightingRig } from './core/lighting.js';
-import { AxesGizmo } from './core/gizmo.js';
 import { createVisualizationControls } from './ui/visualizationControls.js';
 import { MeshManager } from './runtime/meshManager.js';
 import { VisualizationManager } from './runtime/visualizationManager.js';
 import { ScalarMapper } from './visualization/scalarMapper.js';
 import { Colorbar } from './ui/colorbar.js';
+import { StateManager, StateEvent, AppState } from './core/stateManager.js';
+
+// Application state manager
+let stateManager = null;
 
 // Core rendering system
 let viewerCore = null;
 
 // Convenience accessors (populated by viewerCore)
 let renderer, scene, camera, controls;
-let canvas, hud;
+let canvas;
 
 // Core subsystems
 let lightRig = null;
-let axesGizmo = null;
 
 // Runtime managers
 let meshManager = null;
@@ -50,29 +52,19 @@ const SHOW_TARGET = false; // hide pivot marker
 // Visualization state (lil-gui contract)
 const vizState = {
   surface: {
-    visible: true,
-    shading: 'smooth',
-    colorMode: 'uniform'
+    material: 'default'  // 'default' or 'wireframe'
   },
   edges: {
-    wireframe: false,
-    width: 1.0,
     color: '#ffffff'
   },
   helpers: {
     vertexNormals: false,
-    faceNormals: false,
     tangents: false
   },
   scalar: {
-    colormap: 'viridis',
+    colormap: 'inferno',
     autoRange: true,
     colorbar: false
-  },
-  scene: {
-    lighting: true,
-    axes: true,
-    background: '#000000'
   }
 };
 
@@ -83,7 +75,15 @@ let vizGUI = null;
 
 export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   canvas = canvasEl;
-  hud = hudEl;
+
+  // Initialize state manager
+  stateManager = new StateManager();
+  
+  // Subscribe to state changes for debugging
+  stateManager.on('*', (event, currentState, previousState) => {
+    // Can be enabled for debugging
+    // console.log('[State]', event, ':', previousState.state, '→', currentState.state);
+  });
 
   // Initialize core rendering system
   viewerCore = new ViewerCore(canvas);
@@ -113,13 +113,9 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   // Initialize lighting rig
   lightRig = createLightingRig(camera);
 
-  // Initialize axes gizmo
-  axesGizmo = new AxesGizmo();
-  axesGizmo.init({ backgroundColor: 0x000000 });
-
   // Initialize runtime managers
   meshManager = new MeshManager(viewerCore);
-  vizManager = new VisualizationManager(viewerCore, meshManager, lightRig, axesGizmo);
+  vizManager = new VisualizationManager(viewerCore, meshManager, lightRig);
   scalarMapper = new ScalarMapper();
   
   // Initialize colorbar UI overlay
@@ -134,7 +130,6 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
 
   // Wire up controls change callbacks
   viewerCore.onControlsChange(() => {
-    axesGizmo.update(camera);
     updateTargetMarker();
   });
   
@@ -175,7 +170,6 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
 
   // Register render callbacks
   viewerCore.onRender(() => {
-    axesGizmo.update(camera);
     updateTargetMarker();
     
     // Update selection pulse animation
@@ -191,30 +185,39 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
     vizManager?.updateTangentsHelpers();
   });
 
-  // Register gizmo overlay render callback (after main render)
-  viewerCore.onRender(() => {
-    axesGizmo.render(renderer, canvas);
-  });
-
   // Start render loop
   viewerCore.start();
   
   // Create visualization controls GUI
-  vizGUI = createVisualizationControls({
-    vizState,
-    onChange: () => {
-      vizManager?.applyState(vizState);
-      // Update colorbar visibility
-      colorbar?.setVisible(vizState.scalar.colorbar);
-      // Re-apply scalar data if colormap changed
-      if (currentScalarData) {
-        setScalarData({ action: 'update', data: currentScalarData });
+  try {
+    vizGUI = createVisualizationControls({
+      vizState,
+      onChange: () => {
+        try {
+          vizManager?.applyState(vizState);
+          // Update colorbar visibility
+          colorbar?.setVisible(vizState.scalar.colorbar);
+          // Re-apply scalar data if colormap changed
+          if (currentScalarData) {
+            setScalarData({ action: 'update', data: currentScalarData });
+          }
+        } catch (err) {
+          console.error('[Viewer] onChange error:', err);
+        }
       }
-    }
-  });
+    });
+  } catch (err) {
+    console.error('[Viewer] GUI creation failed:', err);
+    console.error('[Viewer] Stack:', err.stack);
+  }
   
   // Initial visualization sync
-  vizManager?.applyState(vizState);
+  try {
+    vizManager?.applyState(vizState);
+  } catch (err) {
+    console.error('[Viewer] Initial applyState failed:', err);
+    console.error('[Viewer] Stack:', err.stack);
+  }
   
   // Load default mesh only if glbUrl is provided
   if (glbUrl) {
@@ -229,50 +232,32 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
  * @private
  */
 function handlePostLoad() {
-  const t0 = performance.now();
   const loadedScene = meshManager.getLoadedScene();
   const bounds = meshManager.getBounds();
 
-  // Don't log entire scene object (too expensive for large meshes)
-  console.log(`[handlePostLoad] Scene loaded, bounds radius: ${bounds.radius.toFixed(2)}`);
-
   // Set orbit pivot
-  const t1 = performance.now();
   setPivotMode(PIVOT_MODE);
-  const t2 = performance.now();
-  console.log(`[handlePostLoad] setPivotMode: ${(t2-t1).toFixed(2)}ms`);
   
   // Apply visualization state
-  const t3 = performance.now();
   vizManager?.applyState(vizState);
-  const t4 = performance.now();
-  console.log(`[handlePostLoad] applyState: ${(t4-t3).toFixed(2)}ms`);
   
   // Update debug visuals
   updateTargetMarker();
   
   // Setup picking
-  const t5 = performance.now();
   pickingSystem?.collectPickables(loadedScene);
-  const t6 = performance.now();
-  console.log(`[handlePostLoad] collectPickables: ${(t6-t5).toFixed(2)}ms`);
   
   // Scale pin to mesh size
   if (pin) {
     pin.setLength(bounds.radius * 0.1);
   }
-
-  const t7 = performance.now();
-  console.log(`[handlePostLoad] ===== Complete: ${(t7-t0).toFixed(2)}ms =====`);
 }
 
 export async function loadGLB(url) {
-  console.log('[loadGLB] Starting load:', url);
   return viewerUI.withLoadingUI(
     async () => {
       await meshManager.loadGLB(url);
       const scene = meshManager.getLoadedScene();
-      console.log('[loadGLB] Scene loaded:', scene);
       return scene;
     },
     {
@@ -288,7 +273,6 @@ export async function loadGLB(url) {
  * @param {string} url - Path to model file (.glb or .json)
  */
 export async function loadModel(url) {
-  console.log('[loadModel] Called with url:', url);
   const ext = url.split('.').pop().toLowerCase();
   
   if (ext === 'glb' || ext === 'gltf') {
@@ -305,12 +289,10 @@ export async function loadModel(url) {
  * @param {string} url - Path to JSON geometry file
  */
 export async function loadJSON(url) {
-  console.log('[loadJSON] Starting load:', url);
   return viewerUI.withLoadingUI(
     async () => {
       await meshManager.loadJSON(url);
       const scene = meshManager.getLoadedScene();
-      console.log('[loadJSON] Scene loaded:', scene);
       return scene;
     },
     {
@@ -342,31 +324,87 @@ export function setPickingEnabled(enabled) {
 export function setMeshFromData(meshData) {
   const tTotal = performance.now();
   
-  if (!meshManager) {
+  if (!meshManager || !stateManager) {
     console.error('[setMeshFromData] Viewer not initialized. Call initViewer first.');
     return;
   }
 
+  // Check if loading is allowed
+  if (!stateManager.canPerformAction(StateEvent.LOAD_MESH_REQUESTED)) {
+    console.warn('[setMeshFromData] Cannot load mesh in current state:', stateManager.getState());
+    return;
+  }
+
   try {
-    console.log('[setMeshFromData] Starting mesh load from MATLAB data');
+    // Dispatch load requested event
+    const requestId = stateManager.generateRequestId();
+    stateManager.dispatch(StateEvent.LOAD_MESH_REQUESTED, { requestId });
     
     // Load mesh from buffers
     const t0 = performance.now();
     meshManager.setMeshFromBuffers(meshData);
     const t1 = performance.now();
-    console.log(`[setMeshFromData] setMeshFromBuffers: ${(t1-t0).toFixed(2)}ms`);
+    
+    // Get mesh info for state update
+    const loadedScene = meshManager.getLoadedScene();
+    let vertexCount = 0;
+    let faceCount = 0;
+    if (loadedScene) {
+      loadedScene.traverse(obj => {
+        if (obj.isMesh && obj.geometry) {
+          const pos = obj.geometry.attributes.position;
+          if (pos) vertexCount += pos.count;
+          const idx = obj.geometry.index;
+          if (idx) faceCount += idx.count / 3;
+        }
+      });
+    }
     
     // Run post-load setup
     const t2 = performance.now();
     handlePostLoad();
     const t3 = performance.now();
-    console.log(`[setMeshFromData] handlePostLoad: ${(t3-t2).toFixed(2)}ms`);
+    
+    // Dispatch load succeeded event
+    const bounds = meshManager.getBounds();
+    stateManager.dispatch(StateEvent.LOAD_MESH_SUCCEEDED, {
+      requestId,
+      vertexCount,
+      faceCount,
+      bounds
+    });
     
     const tEnd = performance.now();
-    console.log(`[setMeshFromData] ===== TOTAL JavaScript time: ${(tEnd-tTotal).toFixed(2)}ms =====`);
   } catch (err) {
     console.error('[setMeshFromData] Error loading mesh:', err);
-    viewerUI?.showError(err);
+    stateManager.dispatch(StateEvent.LOAD_MESH_FAILED, { error: err.message });
+  }
+}
+
+/**
+ * Clear the current mesh from the viewer
+ * Called from MATLAB via HTMLComponent.Data = {clearMesh: true}
+ */
+export function clearMesh() {
+  if (!meshManager || !stateManager) {
+    console.error('[clearMesh] Viewer not initialized');
+    return;
+  }
+
+  try {
+    // Dispatch clear mesh event
+    stateManager.dispatch(StateEvent.CLEAR_MESH_REQUESTED);
+    
+    // Clear scalar data first
+    currentScalarData = null;
+    if (colorbar) {
+      colorbar.setVisible(false);
+    }
+    
+    // Clear the mesh
+    meshManager.clearModel();
+  } catch (err) {
+    console.error('[clearMesh] Error clearing mesh:', err);
   }
 }
 
@@ -378,13 +416,16 @@ export function setMeshFromData(meshData) {
  * @param {Array} [scalarData.data] - Flat array of scalar values
  */
 export function setScalarData(scalarData) {
-  if (!scalarMapper || !meshManager) {
+  if (!scalarMapper || !meshManager || !stateManager) {
     console.error('[setScalarData] Viewer not initialized');
     return;
   }
 
   try {
     if (scalarData.action === 'clear') {
+      // Dispatch clear data event
+      stateManager.dispatch(StateEvent.CLEAR_DATA_REQUESTED);
+      
       // Clear scalar visualization
       currentScalarData = null;
       const loadedScene = meshManager.getLoadedScene();
@@ -395,16 +436,25 @@ export function setScalarData(scalarData) {
           }
         });
       }
-      // Hide colorbar
+      // Hide colorbar and update vizState
       if (colorbar) {
         colorbar.setVisible(false);
+        vizState.scalar.colorbar = false;
+        // Update GUI to reflect the state change
+        if (vizGUI) {
+          vizGUI.updateDisplay();
+        }
       }
-      console.log('[setScalarData] Cleared scalar visualization');
     } else if (scalarData.action === 'update') {
+      // Dispatch load data requested event
+      const requestId = stateManager.generateRequestId();
+      stateManager.dispatch(StateEvent.LOAD_DATA_REQUESTED, { requestId });
+      
       // Apply scalar data to mesh
       const loadedScene = meshManager.getLoadedScene();
       if (!loadedScene) {
         console.error('[setScalarData] No mesh loaded. Call setMesh first.');
+        stateManager.dispatch(StateEvent.LOAD_DATA_FAILED, { error: 'No mesh loaded' });
         return;
       }
 
@@ -440,17 +490,33 @@ export function setScalarData(scalarData) {
         }
       });
       
-      // Update colorbar with range and colormap
+      // Update colorbar with range and colormap, and show it automatically
       if (colorbar && clim) {
         try {
           colorbar.update(colormap, clim[0], clim[1]);
+          // Auto-show colorbar when scalar data is applied
+          colorbar.setVisible(true);
+          vizState.scalar.colorbar = true;
+          // Update GUI to reflect the state change
+          if (vizGUI) {
+            vizGUI.updateDisplay();
+          }
         } catch (colorbarErr) {
           console.error('[setScalarData] Colorbar update failed:', colorbarErr);
         }
       }
+      
+      // Dispatch load data succeeded event
+      stateManager.dispatch(StateEvent.LOAD_DATA_SUCCEEDED, {
+        requestId,
+        type: 'scalar',
+        count: data.length,
+        range: clim
+      });
     }
   } catch (err) {
     console.error('[setScalarData] Error setting scalar data:', err);
+    stateManager.dispatch(StateEvent.LOAD_DATA_FAILED, { error: err.message });
     console.error('[setScalarData] Stack trace:', err.stack);
   }
 }
@@ -496,4 +562,30 @@ function installTargetMarker() {
 function updateTargetMarker() {
   if (!targetMarker || !controls) return;
   targetMarker.position.copy(controls.target);
+}
+
+/* -------------------- State Manager Access -------------------- */
+
+/**
+ * Get current application state (for debugging)
+ * @returns {string} Current app state
+ */
+export function getAppState() {
+  return stateManager?.getState() || 'uninitialized';
+}
+
+/**
+ * Get full state snapshot (for debugging)
+ * @returns {Object} Complete state snapshot
+ */
+export function getStateSnapshot() {
+  return stateManager?.getSnapshot() || null;
+}
+
+/**
+ * Get state transition history (for debugging)
+ * @returns {Array} State transition history
+ */
+export function getStateHistory() {
+  return stateManager?.getHistory() || [];
 }
