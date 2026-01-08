@@ -6,7 +6,6 @@ import { ViewerCore } from './core/viewerCore.js';
 import { createLightingRig } from './core/lighting.js';
 import { AxesGizmo } from './core/gizmo.js';
 import { createVisualizationControls } from './ui/visualizationControls.js';
-import { ViewerUI } from './ui/viewerUI.js';
 import { MeshManager } from './runtime/meshManager.js';
 import { VisualizationManager } from './runtime/visualizationManager.js';
 
@@ -24,9 +23,6 @@ let axesGizmo = null;
 // Runtime managers
 let meshManager = null;
 let vizManager = null;
-
-// UI system
-let viewerUI = null;
 
 // Debug visuals
 let targetMarker = null; // follows controls.target (rotation anchor)
@@ -132,13 +128,6 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
     updateTargetMarker();
   });
   
-  // Initialize UI system
-  viewerUI = new ViewerUI({
-    hudElement: hud,
-    loaderElement: document.getElementById("loaderHost"),
-    loadAnimationDuration: 1500
-  });
-  
   // Initialize picking system
   pickingSystem = new PickingSystem(camera, renderer);
   
@@ -208,15 +197,11 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   
   // Initial visualization sync
   vizManager?.applyState(vizState);
-
-  // Initialize loader component
-  await viewerUI.initLoader();
   
   // Load default mesh only if glbUrl is provided
   if (glbUrl) {
     loadGLB(glbUrl).catch((err) => {
       console.error(err);
-      viewerUI.showError(err);
     });
   }
 }
@@ -226,30 +211,41 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
  * @private
  */
 function handlePostLoad() {
+  const t0 = performance.now();
   const loadedScene = meshManager.getLoadedScene();
   const bounds = meshManager.getBounds();
 
-  console.log('[handlePostLoad] loadedScene:', loadedScene);
-  console.log('[handlePostLoad] bounds:', bounds);
+  // Don't log entire scene object (too expensive for large meshes)
+  console.log(`[handlePostLoad] Scene loaded, bounds radius: ${bounds.radius.toFixed(2)}`);
 
   // Set orbit pivot
+  const t1 = performance.now();
   setPivotMode(PIVOT_MODE);
-
+  const t2 = performance.now();
+  console.log(`[handlePostLoad] setPivotMode: ${(t2-t1).toFixed(2)}ms`);
+  
   // Apply visualization state
+  const t3 = performance.now();
   vizManager?.applyState(vizState);
+  const t4 = performance.now();
+  console.log(`[handlePostLoad] applyState: ${(t4-t3).toFixed(2)}ms`);
   
   // Update debug visuals
   updateTargetMarker();
   
   // Setup picking
+  const t5 = performance.now();
   pickingSystem?.collectPickables(loadedScene);
+  const t6 = performance.now();
+  console.log(`[handlePostLoad] collectPickables: ${(t6-t5).toFixed(2)}ms`);
   
   // Scale pin to mesh size
   if (pin) {
     pin.setLength(bounds.radius * 0.1);
   }
-  
-  console.log('[handlePostLoad] Complete');
+
+  const t7 = performance.now();
+  console.log(`[handlePostLoad] ===== Complete: ${(t7-t0).toFixed(2)}ms =====`);
 }
 
 export async function loadGLB(url) {
@@ -326,19 +322,30 @@ export function setPickingEnabled(enabled) {
  * @param {string} meshData.frame - 'matlab' or 'threejs' coordinate frame
  */
 export function setMeshFromData(meshData) {
+  const tTotal = performance.now();
+  
   if (!meshManager) {
     console.error('[setMeshFromData] Viewer not initialized. Call initViewer first.');
     return;
   }
 
   try {
+    console.log('[setMeshFromData] Starting mesh load from MATLAB data');
+    
     // Load mesh from buffers
+    const t0 = performance.now();
     meshManager.setMeshFromBuffers(meshData);
+    const t1 = performance.now();
+    console.log(`[setMeshFromData] setMeshFromBuffers: ${(t1-t0).toFixed(2)}ms`);
     
     // Run post-load setup
+    const t2 = performance.now();
     handlePostLoad();
+    const t3 = performance.now();
+    console.log(`[setMeshFromData] handlePostLoad: ${(t3-t2).toFixed(2)}ms`);
     
-    console.log('[setMeshFromData] Mesh loaded successfully from data');
+    const tEnd = performance.now();
+    console.log(`[setMeshFromData] ===== TOTAL JavaScript time: ${(tEnd-tTotal).toFixed(2)}ms =====`);
   } catch (err) {
     console.error('[setMeshFromData] Error loading mesh:', err);
     viewerUI?.showError(err);

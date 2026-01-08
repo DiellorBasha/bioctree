@@ -28,6 +28,8 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
     properties (Access = private)
         Vertices (:,3) double = []
         Faces (:,3) uint32 = []
+        LogBuffer string = strings(0,1)
+        MaxLogLines (1,1) double = 2000
     end
 
     methods (Access = protected)
@@ -37,6 +39,9 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
 
             % Point to the viewer's index.html in +viewer/web/ subdirectory.
             comp.HTMLComponent.HTMLSource = bct.ui.manifold.Viewer.resolveHTMLSource();
+            
+            % Set up event handler for JavaScript events (console forwarding)
+            comp.HTMLComponent.HTMLEventReceivedFcn = @(src, evt) comp.onHTMLEvent(src, evt);
 
             % Let the parent (e.g., uigridlayout) control sizing.
             % We will size the uihtml to fill this container in update().
@@ -72,28 +77,103 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
         end
     end
     
+    methods (Access = private)
+        function onHTMLEvent(comp, ~, evt)
+            % Handle events from JavaScript
+            switch evt.HTMLEventName
+                case "JSConsole"
+                    % Forward JavaScript console output to MATLAB
+                    d = evt.HTMLEventData;
+                    
+                    try
+                        line = "[" + string(d.time) + "] " + upper(string(d.level)) + ": " + string(d.msg);
+                    catch
+                        line = "JSConsole: (unparseable payload)";
+                    end
+                    
+                    % Append to ring buffer
+                    comp.LogBuffer(end+1,1) = line;
+                    if numel(comp.LogBuffer) > comp.MaxLogLines
+                        comp.LogBuffer = comp.LogBuffer(end-comp.MaxLogLines+1:end);
+                    end
+                    
+                    % Print to MATLAB Command Window
+                    disp(line);
+                    
+                otherwise
+                    % Handle other events (future: picking, etc.)
+            end
+        end
+    end
+    
     methods (Access = public)
-        function setMesh(comp, V, F)
+        function logs = getLogs(comp)
+            % getLogs - Get buffered console logs from JavaScript
+            %
+            % Syntax:
+            %   logs = comp.getLogs()
+            %
+            % Returns:
+            %   logs - String array of console messages
+            logs = comp.LogBuffer;
+        end
+        
+        function clearLogs(comp)
+            % clearLogs - Clear the console log buffer
+            %
+            % Syntax:
+            %   comp.clearLogs()
+            comp.LogBuffer = strings(0,1);
+        end
+        
+        function setMesh(comp, varargin)
             % setMesh - Set the mesh to display in the viewer
             %
             % Syntax:
-            %   comp.setMesh(V, F)
+            %   comp.setMesh(manifold)        % Use bct.Manifold object
+            %   comp.setMesh(V, F)            % Vertices and faces only
+            %   comp.setMesh(V, F, N)         % Vertices, faces, and normals
             %
             % Inputs:
+            %   manifold - bct.Manifold object (normals computed automatically)
             %   V - Vertices matrix [N×3] double, MATLAB Z-up coordinates
             %   F - Faces matrix [M×3] uint32, 1-based indexing
+            %   N - (Optional) Normals matrix [N×3] double, vertex normals
             %
             % Notes:
             %   - Vertices are expected in MATLAB Z-up coordinates
             %   - Faces are converted from 1-based to 0-based indexing
             %   - Arrays are flattened for JSON transfer
             %   - Updates HTMLComponent.Data to trigger JavaScript viewer
+            %   - Pre-computed normals avoid expensive JavaScript computation
+            
+            % Parse input arguments
+            if nargin == 2 && isa(varargin{1}, 'bct.Manifold')
+                % Case 1: bct.Manifold object provided
+                M = varargin{1};
+                V = M.Vertices;   % Access property (not method)
+                F = M.Faces;      % Access property (not method)
+                N = M.normals();  % Compute vertex normals (this is a method)
+            elseif nargin == 3
+                % Case 2: V, F provided
+                V = varargin{1};
+                F = varargin{2};
+                N = [];  % No normals provided
+            elseif nargin == 4
+                % Case 3: V, F, N provided
+                V = varargin{1};
+                F = varargin{2};
+                N = varargin{3};
+            else
+                error('bct:ui:manifold:Viewer:InvalidInputs', ...
+                    'Invalid inputs. Use setMesh(manifold) or setMesh(V,F) or setMesh(V,F,N).');
+            end
             
             % Validate inputs
-            arguments
-                comp (1,1) bct.ui.manifold.Viewer
-                V (:,3) double {mustBeReal, mustBeFinite}
-                F (:,3) {mustBeInteger, mustBePositive}
+            validateattributes(V, {'double'}, {'real', 'finite', 'ncols', 3}, 'setMesh', 'V');
+            validateattributes(F, {'numeric'}, {'integer', 'positive', 'ncols', 3}, 'setMesh', 'F');
+            if ~isempty(N)
+                validateattributes(N, {'double'}, {'real', 'finite', 'ncols', 3, 'nrows', size(V,1)}, 'setMesh', 'N');
             end
             
             % Convert faces to uint32 and ensure 1-based
@@ -118,11 +198,23 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 'frame', 'matlab' ...
             );
             
+            % Add normals if provided
+            if ~isempty(N)
+                % Flatten normals: [nx1 ny1 nz1 nx2 ny2 nz2 ...]
+                normalsFlat = reshape(N.', 1, []);
+                meshData.normals = normalsFlat;
+            end
+            
             % Set HTMLComponent.Data to trigger DataChanged event in JavaScript
             if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
                 comp.HTMLComponent.Data = struct('mesh', meshData);
-                fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces\n', ...
-                    size(V, 1), size(F, 1));
+                if ~isempty(N)
+                    fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces, normals included\n', ...
+                        size(V, 1), size(F, 1));
+                else
+                    fprintf('[Viewer.setMesh] Sent mesh data: %d vertices, %d faces\n', ...
+                        size(V, 1), size(F, 1));
+                end
             else
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Mesh data stored but not sent.');

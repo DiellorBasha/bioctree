@@ -1,113 +1,88 @@
 /**
  * meshBuilder.js
  * 
- * Geometry construction utilities for BufferGeometry creation,
- * attribute synthesis, and geometry preprocessing.
+ * Geometry construction utilities for BufferGeometry creation and validation.
+ * 
+ * IMPORTANT: This module does NOT compute normals, UVs, or tangents.
+ * All geometric attributes must be provided by MATLAB (bct package).
  * 
  * Responsibilities:
- * - Default normal/UV computation when missing
- * - Spherical UV parameterization
- * - Tangent computation
+ * - Validate geometry attributes
+ * - Report missing attributes (without computing them)
  * - Geometry downsampling for helper visualization
+ * - Mesh transformation utilities
  * 
  * Rules:
  * - No material creation
  * - No scene modification
- * - Pure geometry operations
+ * - No expensive computations (normals, UVs, tangents)
+ * - Pure geometry operations only
  */
 
 import * as THREE from 'three';
 
 /**
- * Synthesize spherical UVs for a geometry if UVs are missing.
- * Uses bounding sphere center for stable parameterization.
+ * Validate geometry attributes without computing them.
+ * Reports which attributes are present but does NOT create missing ones.
  * 
- * @param {THREE.BufferGeometry} geometry - Geometry to add UVs to
+ * @param {THREE.BufferGeometry} geometry - Geometry to validate
+ * @returns {Object} Status object with flags: { hasPosition, hasNormals, hasUVs, hasTangents }
  */
-export function addSphericalUVs(geometry) {
-  const pos = geometry.attributes.position;
-  if (!pos) return;
-
-  // Use bounding sphere center for stable parameterization
-  geometry.computeBoundingSphere();
-  const c = geometry.boundingSphere?.center ?? new THREE.Vector3();
-
-  const uvs = new Float32Array(pos.count * 2);
-  const v = new THREE.Vector3();
-
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).sub(c).normalize();
-
-    // longitude/latitude on unit sphere
-    const lon = Math.atan2(v.z, v.x);  // [-pi, pi]
-    const lat = Math.asin(v.y);        // [-pi/2, pi/2]
-
-    const u = (lon + Math.PI) / (2 * Math.PI);
-    const t = (lat + Math.PI / 2) / Math.PI;
-
-    uvs[2 * i + 0] = u;
-    uvs[2 * i + 1] = t;
-  }
-
-  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-  geometry.attributes.uv.needsUpdate = true;
-  console.log('[meshBuilder] Synthesized spherical UVs');
-}
-
-/**
- * Ensure a geometry has normals, UVs, and tangents (if possible).
- * Computes missing attributes using default strategies.
- * 
- * @param {THREE.BufferGeometry} geometry - Geometry to process
- * @returns {Object} Status object with flags: { hasNormals, hasUVs, hasTangents }
- */
-export function ensureGeometryAttributes(geometry) {
+export function validateGeometryAttributes(geometry) {
   const status = {
+    hasPosition: false,
     hasNormals: false,
     hasUVs: false,
     hasTangents: false
   };
 
-  if (!geometry) return status;
-
-  // Ensure normals exist
-  if (!geometry.attributes.normal) {
-    geometry.computeVertexNormals();
-    if (geometry.attributes.normal) {
-      geometry.attributes.normal.needsUpdate = true;
-      console.log('[meshBuilder] Computed vertex normals');
-    }
+  if (!geometry) {
+    console.warn('[meshBuilder] Cannot validate: geometry is null');
+    return status;
   }
+
+  // Check which attributes exist
+  status.hasPosition = !!geometry.attributes.position;
   status.hasNormals = !!geometry.attributes.normal;
-
-  // Ensure UVs exist (synthesize spherical UVs if missing)
-  if (!geometry.attributes.uv) {
-    addSphericalUVs(geometry);
-  }
   status.hasUVs = !!geometry.attributes.uv;
+  status.hasTangents = !!geometry.attributes.tangent;
 
-  // Compute tangents if we have all required attributes
-  if (!geometry.attributes.tangent) {
-    const hasRequiredAttrs = 
-      geometry.index && 
-      geometry.attributes.position && 
-      geometry.attributes.normal && 
-      geometry.attributes.uv;
-    
-    if (hasRequiredAttrs) {
-      try {
-        geometry.computeTangents();
-        console.log('[meshBuilder] Computed tangents');
-        status.hasTangents = true;
-      } catch (err) {
-        console.warn('[meshBuilder] Failed to compute tangents:', err.message);
-      }
-    }
-  } else {
-    status.hasTangents = true;
+  // TEMPORARY: Compute normals if missing (required for MeshStandardMaterial)
+  // TODO: Remove this once MATLAB consistently provides pre-computed normals
+  if (!status.hasNormals && status.hasPosition) {
+    const t0 = performance.now();
+    console.warn('[meshBuilder] WARNING: Normals missing, computing fallback (use Manifold.normals() in MATLAB!)');
+    geometry.computeVertexNormals();
+    const t1 = performance.now();
+    console.log(`[meshBuilder] Computed normals (fallback): ${(t1-t0).toFixed(2)}ms`);
+    status.hasNormals = !!geometry.attributes.normal;
+  }
+
+  // Log attribute status
+  if (!status.hasNormals) {
+    console.warn('[meshBuilder] Geometry missing normals (required for MeshStandardMaterial)');
+  }
+  if (!status.hasUVs) {
+    console.log('[meshBuilder] Geometry missing UVs (optional)');
+  }
+  if (!status.hasTangents) {
+    console.log('[meshBuilder] Geometry missing tangents (optional)');
+  }
+  
+  if (status.hasPosition && status.hasNormals) {
+    console.log('[meshBuilder] Geometry has required attributes (position, normals)');
   }
 
   return status;
+}
+
+/**
+ * @deprecated Use validateGeometryAttributes instead
+ * Legacy function kept for compatibility. Does NOT compute attributes.
+ */
+export function ensureGeometryAttributes(geometry) {
+  console.warn('[meshBuilder] ensureGeometryAttributes is deprecated. Attributes are not computed.');
+  return validateGeometryAttributes(geometry);
 }
 
 /**

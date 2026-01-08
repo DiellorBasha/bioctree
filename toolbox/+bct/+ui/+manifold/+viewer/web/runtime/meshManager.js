@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { ensureGeometryAttributes } from '../geometry/meshBuilder.js';
+import { validateGeometryAttributes } from '../geometry/meshBuilder.js';
 import { loadJSONGeometry } from '../loaders/jsonGeometryLoader.js';
 import { disposeObject3D } from '../utils/dispose.js';
 
@@ -68,8 +68,8 @@ export class MeshManager {
 
       const geom = obj.geometry;
       if (geom) {
-        // Use meshBuilder to ensure all geometry attributes
-        ensureGeometryAttributes(geom);
+        // Validate geometry attributes (does not compute)
+        validateGeometryAttributes(geom);
       }
 
       // Create and cache both base and wireframe materials
@@ -116,8 +116,8 @@ export class MeshManager {
 
     const geometry = await loadJSONGeometry(url);
 
-    // Ensure all geometry attributes (same as GLB loading)
-    ensureGeometryAttributes(geometry);
+    // Validate geometry attributes (does not compute)
+    validateGeometryAttributes(geometry);
 
     // Create materials (match GLB loading exactly)
     const baseMat = new THREE.MeshStandardMaterial({
@@ -210,12 +210,14 @@ export class MeshManager {
    * @param {Object} meshData - Mesh data object
    * @param {Array} meshData.vertices - Flat array [x1,y1,z1, x2,y2,z2, ...]
    * @param {Array} meshData.faces - Flat array of indices [i1,i2,i3, ...]
+   * @param {Array} [meshData.normals] - (Optional) Flat array [nx1,ny1,nz1, nx2,ny2,nz2, ...]
    * @param {number} meshData.indexBase - 0 for 0-based indexing, 1 for 1-based
    * @param {string} meshData.frame - 'matlab' or 'threejs' coordinate frame
    * @returns {THREE.Group} - The loaded scene
    */
   setMeshFromBuffers(meshData) {
-    const { vertices, faces, indexBase = 0, frame = 'matlab' } = meshData;
+    const t0 = performance.now();
+    const { vertices, faces, normals, indexBase = 0, frame = 'matlab' } = meshData;
 
     // Validate input
     if (!vertices || !faces) {
@@ -227,14 +229,20 @@ export class MeshManager {
     if (faces.length % 3 !== 0) {
       throw new Error('faces array length must be multiple of 3');
     }
+    if (normals && normals.length !== vertices.length) {
+      throw new Error('normals array length must match vertices array length');
+    }
 
     // Clear any existing model
     this.clearModel();
+    const t1 = performance.now();
+    console.log(`[MeshManager] Clear model: ${(t1-t0).toFixed(2)}ms`);
 
     // Create BufferGeometry
     const geometry = new THREE.BufferGeometry();
 
     // Convert to Float32Array and Uint32Array
+    const t2 = performance.now();
     const positionArray = new Float32Array(vertices);
     let indexArray = new Uint32Array(faces);
 
@@ -246,9 +254,23 @@ export class MeshManager {
     // Set geometry attributes
     geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
     geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
+    
+    // Add normals if provided (pre-computed from MATLAB)
+    if (normals) {
+      const normalArray = new Float32Array(normals);
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normalArray, 3));
+      console.log(`[MeshManager] Pre-computed normals provided (${normals.length / 3} vertices)`);
+    }
+    
+    const t3 = performance.now();
+    console.log(`[MeshManager] Create typed arrays & set attributes: ${(t3-t2).toFixed(2)}ms`);
 
-    // Ensure all geometry attributes (normals, UVs, tangents)
-    ensureGeometryAttributes(geometry);
+    // Validate geometry attributes (does NOT compute normals/UVs/tangents)
+    // MATLAB (bct package) should provide pre-computed attributes via future setNormals() etc.
+    const t4 = performance.now();
+    validateGeometryAttributes(geometry);
+    const t5 = performance.now();
+    console.log(`[MeshManager] validateGeometryAttributes: ${(t5-t4).toFixed(2)}ms`);
 
     // Create materials (match GLB/JSON loading exactly)
     const baseMat = new THREE.MeshStandardMaterial({
@@ -287,8 +309,10 @@ export class MeshManager {
       console.log('[MeshManager.setMeshFromBuffers] Added to matlab frame (Z→Y transform)');
     }
 
+    const t6 = performance.now();
     console.log('[MeshManager.setMeshFromBuffers] Mesh created from buffers.');
     console.log(`  Vertices: ${vertices.length / 3}, Faces: ${faces.length / 3}`);
+    console.log(`[MeshManager] TOTAL TIME: ${(t6-t0).toFixed(2)}ms`);
 
     return this.loadedScene;
   }

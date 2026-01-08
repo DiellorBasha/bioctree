@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Three Mesh Viewer</title>
   <link rel="stylesheet" href="./styles.css" />
-  <!-- Loader component styles -->
-  <link rel="stylesheet" href="./ui/loading-indicators/spinning/spinning.css" />
 
   <!-- Import map: match official three.js pattern (three + three/addons) -->
   <script type="importmap">
@@ -22,36 +20,77 @@
 <body>
   <div id="root">
     <canvas id="canvas"></canvas>
-
-    <div id="loaderOverlay" class="loaderOverlay hidden">
-      <div id="loaderHost"></div>
-    </div>
-
-    <div id="pickerHUD" class="pickerHUD">
-      <button id="btnPickVertex" class="toolBtn" type="button">Vertex</button>
-      <button id="btnPickEdge" class="toolBtn" type="button">Edge</button>
-      <button id="btnPickFace" class="toolBtn" type="button">Face</button>
-    </div>
-
-    <div id="hud">
-      <div id="hudFileSelector">
-        <select id="fileSelect">
-          <option value="./assets/fsaverage.glb">fsaverage.glb</option>
-          <option value="./assets/fsaverage.json">fsaverage.json</option>
-        </select>
-        <button id="btnLoad" type="button">Load</button>
-      </div>
-      <div id="hudText"></div>
-    </div>
   </div>
 
   <!-- MATLAB Bridge: setup function for uihtml communication -->
   <script type="module">
     import { initViewer, setMeshFromData } from "./render.js";
 
+    /**
+     * Install console forwarding bridge to MATLAB
+     * Intercepts console.log/warn/error and forwards to MATLAB via sendEventToMATLAB
+     */
+    function installConsoleBridge(htmlComponent) {
+      const levels = ["log", "info", "warn", "error", "debug"];
+
+      // Helper: stringify safely
+      const toString = (x) => {
+        if (typeof x === "string") return x;
+        try { return JSON.stringify(x); } catch { return String(x); }
+      };
+
+      levels.forEach((level) => {
+        const original = console[level].bind(console);
+
+        console[level] = (...args) => {
+          // Keep normal browser console behavior
+          original(...args);
+
+          // Forward to MATLAB
+          try {
+            const payload = {
+              level,
+              time: new Date().toISOString(),
+              msg: args.map(toString).join(" "),
+            };
+            htmlComponent.sendEventToMATLAB("JSConsole", payload);
+          } catch (e) {
+            // Avoid infinite recursion: do not console.error here
+          }
+        };
+      });
+
+      // Forward uncaught errors
+      window.addEventListener("error", (event) => {
+        try {
+          htmlComponent.sendEventToMATLAB("JSConsole", {
+            level: "error",
+            time: new Date().toISOString(),
+            msg: `${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`,
+          });
+        } catch {}
+      });
+
+      // Forward unhandled promise rejections
+      window.addEventListener("unhandledrejection", (event) => {
+        try {
+          htmlComponent.sendEventToMATLAB("JSConsole", {
+            level: "error",
+            time: new Date().toISOString(),
+            msg: `UnhandledPromiseRejection: ${toString(event.reason)}`,
+          });
+        } catch {}
+      });
+
+      console.log('[Console Bridge] Installed - forwarding to MATLAB');
+    }
+
     // Global setup function for MATLAB uihtml component
     window.setup = function(htmlComponent) {
       console.log('[MATLAB Bridge] setup() called by MATLAB');
+      
+      // Install console forwarding FIRST
+      installConsoleBridge(htmlComponent);
       
       const canvas = document.getElementById("canvas");
       const hud = document.getElementById("hud");
@@ -69,7 +108,6 @@
       htmlComponent.addEventListener("DataChanged", (event) => {
         console.log('[MATLAB Bridge] DataChanged event received');
         const data = htmlComponent.Data;
-        console.log('[MATLAB Bridge] Data:', data);
 
         // Check if mesh data is present
         if (data && data.mesh) {
