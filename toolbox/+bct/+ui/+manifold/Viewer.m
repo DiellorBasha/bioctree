@@ -220,5 +220,77 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                     'HTMLComponent not ready. Mesh data stored but not sent.');
             end
         end
+        
+        function setScalar(comp, scalarData)
+            % setScalar - Map scalar data to vertex colors
+            %
+            % Syntax:
+            %   comp.setScalar(scalarData)
+            %
+            % Inputs:
+            %   scalarData - [N×1] vector of scalar values (one per vertex)
+            %
+            % Examples:
+            %   % Visualize scalar field
+            %   viewer.setScalar(scalarData);
+            %
+            %   % Clear scalar visualization
+            %   viewer.setScalar([]);
+            %
+            % Notes:
+            %   - Scalar data must match number of vertices from last setMesh call
+            %   - Colormap can be changed via viewer UI controls
+            %   - Call without arguments or empty array to clear visualization
+            
+            arguments
+                comp (1,1) bct.ui.manifold.Viewer
+                scalarData (:,1) double = []
+            end
+            
+            % Validate scalar data is real and finite if not empty
+            if ~isempty(scalarData)
+                if ~all(isfinite(scalarData))
+                    error('bct:ui:manifold:Viewer:InvalidScalarData', ...
+                        'Scalar data must contain only finite values');
+                end
+                
+                % Validate scalar data size
+                if ~isempty(comp.Vertices)
+                    if length(scalarData) ~= size(comp.Vertices, 1)
+                        error('bct:ui:manifold:Viewer:ScalarSizeMismatch', ...
+                            'Scalar data length (%d) must match number of vertices (%d)', ...
+                            length(scalarData), size(comp.Vertices, 1));
+                    end
+                end
+            end
+            
+            % Build scalar payload
+            if isempty(scalarData)
+                % Clear scalar visualization
+                scalarPayload = struct('action', 'clear');
+            else
+                % Flatten scalar data
+                scalarFlat = reshape(scalarData, 1, []);
+                
+                scalarPayload = struct(...
+                    'action', 'update', ...
+                    'data', scalarFlat ...
+                );
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('scalar', scalarPayload);
+                if ~isempty(scalarData)
+                    fprintf('[Viewer.setScalar] Sent scalar data: %d values\n', ...
+                        length(scalarData));
+                else
+                    fprintf('[Viewer.setScalar] Cleared scalar visualization\n');
+                end
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Scalar data not sent.');
+            end
+        end
     end
 end

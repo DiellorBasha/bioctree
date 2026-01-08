@@ -24,7 +24,7 @@
 
   <!-- MATLAB Bridge: setup function for uihtml communication -->
   <script type="module">
-    import { initViewer, setMeshFromData } from "./render.js";
+    import { initViewer, setMeshFromData, setScalarData } from "./render.js";
 
     /**
      * Install console forwarding bridge to MATLAB
@@ -113,6 +113,12 @@
         if (data && data.mesh) {
           console.log('[MATLAB Bridge] Loading mesh from MATLAB data');
           setMeshFromData(data.mesh);
+        }
+        
+        // Check if scalar data is present
+        if (data && data.scalar) {
+          console.log('[MATLAB Bridge] Loading scalar data from MATLAB');
+          setScalarData(data.scalar);
         }
       });
     };

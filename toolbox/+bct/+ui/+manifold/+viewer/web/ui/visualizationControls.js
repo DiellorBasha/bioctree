@@ -40,7 +40,6 @@ export function createVisualizationControls({ vizState, onChange }) {
   // Surface folder
   const surfaceFolder = gui.addFolder('Surface');
   surfaceFolder.add(vizState.surface, 'visible').name('Visible').onChange(onChange);
-  surfaceFolder.add(vizState.surface, 'opacity', 0, 1, 0.01).name('Opacity').onChange(onChange);
   surfaceFolder.add(vizState.surface, 'shading', ['smooth', 'flat']).name('Shading').onChange(onChange);
   surfaceFolder.add(vizState.surface, 'colorMode', ['uniform', 'vertex', 'face']).name('Color Mode').onChange(onChange);
   
@@ -49,17 +48,20 @@ export function createVisualizationControls({ vizState, onChange }) {
   edgesFolder.add(vizState.edges, 'wireframe').name('Wireframe').onChange(onChange);
   edgesFolder.addColor(vizState.edges, 'color').name('Color').onChange(onChange);
   
+  // Field folder
+  const fieldFolder = gui.addFolder('Field');
+  fieldFolder.add(vizState.scalar, 'colormap', [
+    'viridis', 'plasma', 'inferno', 'magma', 'turbo',
+    'rainbow', 'hot', 'cool', 'cooltowarm'
+  ]).name('Colormap').onChange(onChange);
+  fieldFolder.add(vizState.scalar, 'autoRange').name('Auto Range').onChange(onChange);
+  fieldFolder.add(vizState.scalar, 'colorbar').name('Show Colorbar').onChange(onChange);
+  
   // Geometry Helpers folder
   const helpersFolder = gui.addFolder('Geometry Helpers');
   helpersFolder.add(vizState.helpers, 'vertexNormals').name('Vertex Normals').onChange(onChange);
   helpersFolder.add(vizState.helpers, 'faceNormals').name('Face Normals').onChange(onChange);
   helpersFolder.add(vizState.helpers, 'tangents').name('Tangents').onChange(onChange);
-  
-  // Overlays folder
-  const overlaysFolder = gui.addFolder('Overlays');
-  overlaysFolder.add(vizState.overlays, 'scalarField', ['none', 'curvature', 'depth']).name('Scalar Field').onChange(onChange);
-  overlaysFolder.add(vizState.overlays, 'colormap', ['viridis', 'plasma', 'inferno', 'magma', 'turbo']).name('Colormap').onChange(onChange);
-  overlaysFolder.add(vizState.overlays, 'autoRange').name('Auto Range').onChange(onChange);
   
   // Scene folder
   const sceneFolder = gui.addFolder('Scene');

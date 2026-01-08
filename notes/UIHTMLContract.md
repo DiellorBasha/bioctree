@@ -1,4 +1,4 @@
-I have read the MATLAB tutorial carefully and internalized its execution model, data model, and constraints. Below is a **precise, workflow-oriented explanation** of how you should use `uihtml` in *your* system, grounded directly in the tutorial’s rules and examples .
+ Below is a **precise, workflow-oriented explanation** of how you should use `uihtml` in *your* system, grounded directly in the tutorial’s rules and examples .
 
 I will not restate the tutorial; instead, I will translate it into **operational guidance** for your three.js viewer.
 

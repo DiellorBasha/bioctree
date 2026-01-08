@@ -8,6 +8,8 @@ import { AxesGizmo } from './core/gizmo.js';
 import { createVisualizationControls } from './ui/visualizationControls.js';
 import { MeshManager } from './runtime/meshManager.js';
 import { VisualizationManager } from './runtime/visualizationManager.js';
+import { ScalarMapper } from './visualization/scalarMapper.js';
+import { Colorbar } from './ui/colorbar.js';
 
 // Core rendering system
 let viewerCore = null;
@@ -23,6 +25,11 @@ let axesGizmo = null;
 // Runtime managers
 let meshManager = null;
 let vizManager = null;
+let scalarMapper = null;
+let colorbar = null;
+
+// Scalar data cache (for re-applying when colormap changes)
+let currentScalarData = null;
 
 // Debug visuals
 let targetMarker = null; // follows controls.target (rotation anchor)
@@ -44,7 +51,6 @@ const SHOW_TARGET = false; // hide pivot marker
 const vizState = {
   surface: {
     visible: true,
-    opacity: 1.0,
     shading: 'smooth',
     colorMode: 'uniform'
   },
@@ -58,10 +64,10 @@ const vizState = {
     faceNormals: false,
     tangents: false
   },
-  overlays: {
-    scalarField: 'none',
+  scalar: {
     colormap: 'viridis',
-    autoRange: true
+    autoRange: true,
+    colorbar: false
   },
   scene: {
     lighting: true,
@@ -114,6 +120,10 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   // Initialize runtime managers
   meshManager = new MeshManager(viewerCore);
   vizManager = new VisualizationManager(viewerCore, meshManager, lightRig, axesGizmo);
+  scalarMapper = new ScalarMapper();
+  
+  // Initialize colorbar UI overlay
+  colorbar = new Colorbar(canvas.parentElement);
 
   // Pivot marker (optional)
   if (SHOW_TARGET) installTargetMarker();
@@ -192,7 +202,15 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   // Create visualization controls GUI
   vizGUI = createVisualizationControls({
     vizState,
-    onChange: () => vizManager?.applyState(vizState)
+    onChange: () => {
+      vizManager?.applyState(vizState);
+      // Update colorbar visibility
+      colorbar?.setVisible(vizState.scalar.colorbar);
+      // Re-apply scalar data if colormap changed
+      if (currentScalarData) {
+        setScalarData({ action: 'update', data: currentScalarData });
+      }
+    }
   });
   
   // Initial visualization sync
@@ -349,6 +367,91 @@ export function setMeshFromData(meshData) {
   } catch (err) {
     console.error('[setMeshFromData] Error loading mesh:', err);
     viewerUI?.showError(err);
+  }
+}
+
+/**
+ * Set scalar data for color mapping
+ * Called from MATLAB via HTMLComponent.Data = {scalar: scalarData}
+ * @param {Object} scalarData - Scalar field configuration
+ * @param {string} scalarData.action - 'update' or 'clear'
+ * @param {Array} [scalarData.data] - Flat array of scalar values
+ */
+export function setScalarData(scalarData) {
+  if (!scalarMapper || !meshManager) {
+    console.error('[setScalarData] Viewer not initialized');
+    return;
+  }
+
+  try {
+    if (scalarData.action === 'clear') {
+      // Clear scalar visualization
+      currentScalarData = null;
+      const loadedScene = meshManager.getLoadedScene();
+      if (loadedScene) {
+        loadedScene.traverse(obj => {
+          if (obj.isMesh) {
+            scalarMapper.clearFromMesh(obj);
+          }
+        });
+      }
+      // Hide colorbar
+      if (colorbar) {
+        colorbar.setVisible(false);
+      }
+      console.log('[setScalarData] Cleared scalar visualization');
+    } else if (scalarData.action === 'update') {
+      // Apply scalar data to mesh
+      const loadedScene = meshManager.getLoadedScene();
+      if (!loadedScene) {
+        console.error('[setScalarData] No mesh loaded. Call setMesh first.');
+        return;
+      }
+
+      const { data } = scalarData;
+      
+      if (!data || data.length === 0) {
+        console.error('[setScalarData] No scalar data provided');
+        return;
+      }
+
+      // Cache the data for colormap updates
+      currentScalarData = data;
+      
+      // Use colormap from vizState
+      const colormap = vizState.scalar.colormap;
+      
+      // Auto-compute clim if autoRange is enabled
+      let clim = null;
+      if (vizState.scalar.autoRange) {
+        let min = Infinity;
+        let max = -Infinity;
+        for (let i = 0; i < data.length; i++) {
+          if (data[i] < min) min = data[i];
+          if (data[i] > max) max = data[i];
+        }
+        clim = [min, max];
+      }
+
+      // Apply to all meshes in scene
+      loadedScene.traverse(obj => {
+        if (obj.isMesh) {
+          scalarMapper.applyToMesh(obj, data, { colormap, clim });
+        }
+      });
+      
+      // Update colorbar with range and colormap
+      if (colorbar && clim) {
+        try {
+          colorbar.update(colormap, clim[0], clim[1]);
+        } catch (colorbarErr) {
+          console.error('[setScalarData] Colorbar update failed:', colorbarErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[setScalarData] Error setting scalar data:', err);
+    console.error('[setScalarData] Stack trace:', err.stack);
   }
 }
 

@@ -2,6 +2,10 @@
  * @file visualizationManager.js
  * VisualizationManager - Owns visualization state application and helper visuals
  * Extracted from render.js as part of runtime refactor
+ * 
+ * NOTE: Geometry helpers (vertex normals, tangents) are currently placeholders.
+ * They will be populated with data from MATLAB via future Viewer.m methods.
+ * The renderer does NOT compute these attributes.
  */
 
 import * as THREE from "three";
@@ -67,7 +71,7 @@ export class VisualizationManager {
   }
 
   /**
-   * Update surface properties (visibility, opacity, shading)
+   * Update surface properties (visibility, shading)
    * @private
    */
   updateSurface(vizState) {
@@ -84,10 +88,6 @@ export class VisualizationManager {
 
       // Apply visibility
       obj.material.visible = vizState.surface.visible;
-      
-      // Apply opacity
-      baseMat.opacity = vizState.surface.opacity;
-      baseMat.transparent = vizState.surface.opacity < 1.0;
       
       // Apply shading
       baseMat.flatShading = (vizState.surface.shading === 'flat');

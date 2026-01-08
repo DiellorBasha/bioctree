@@ -24,3 +24,8 @@ debug.log
 /external/toolbox_general
 # Test files
 /data
+/external/TrivialConnectionsMATLAB
+/external/fieldgen
+/external/geometry-processing-js
+/external/code_stripes
+/external/code_comb

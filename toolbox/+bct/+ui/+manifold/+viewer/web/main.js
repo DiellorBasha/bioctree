@@ -41,20 +41,6 @@ function setupPickerControls() {
   setPickingEnabled(false);
 }
 
-function setupFileLoader() {
-  const btnLoad = document.getElementById("btnLoad");
-  const fileSelect = document.getElementById("fileSelect");
-
-  if (btnLoad && fileSelect) {
-    btnLoad.addEventListener("click", () => {
-      const selectedFile = fileSelect.value;
-      loadModel(selectedFile).catch((err) => {
-        console.error("Load error:", err);
-      });
-    });
-  }
-}
-
 async function main() {
   const canvas = document.getElementById("canvas");
   const hud = document.getElementById("hud");
@@ -66,10 +52,7 @@ async function main() {
   // Setup picker control event listeners
   setupPickerControls();
 
-  // Setup file loader controls
-  setupFileLoader();
-
-  // Initialize viewer (empty scene by default - use Load button to load mesh)
+  // Initialize viewer (empty scene by default - mesh loaded via MATLAB setMesh)
   console.log('[main] Calling initViewer with glbUrl:', assetUrl);
   initViewer({ canvasEl: canvas, hudEl: hud, glbUrl: assetUrl });
 }
