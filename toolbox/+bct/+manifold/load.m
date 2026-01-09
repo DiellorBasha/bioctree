@@ -58,7 +58,7 @@ elseif isstruct(data)
     M = bct.Manifold(data);
     
 elseif isa(data, 'surfaceMesh') || isa(data, 'triangulation') || ...
-       isa(data, 'matlab.graphics.primitive.Patch') || strcmp(class(data), 'patch')
+       isa(data, 'matlab.graphics.primitive.Patch')
     % MATLAB geometry object - use bct.manifold.in
     M = bct.manifold.in(data);
     
