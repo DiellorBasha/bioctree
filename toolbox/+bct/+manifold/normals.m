@@ -18,7 +18,7 @@ function N = normals(varargin)
 %
 % Description:
 %   Computes vertex or face normals. For Manifold objects, uses cached
-%   frames from bct.manifold.frame() for efficiency. For V,F inputs,
+%   frames from bct.geometry.frame() for efficiency. For V,F inputs,
 %   uses surfaceMesh.computeNormals().
 %
 % Examples:
@@ -39,7 +39,7 @@ function N = normals(varargin)
 %   VN = bct.manifold.normals(M);
 %   quiver3(V(:,1), V(:,2), V(:,3), VN(:,1), VN(:,2), VN(:,3));
 %
-% See also: bct.manifold.frame, bct.manifold.centroids, bct.manifold.tangents
+% See also: bct.geometry.frame, bct.geometry.centroids, bct.geometry.tangents
 
 % Parse inputs
 normalType = 'Vertex';  % Default to vertex normals
@@ -80,7 +80,7 @@ end
 % Compute normals
 if ~isempty(M)
     % Use cached frames for Manifold objects (efficient)
-    fr = bct.manifold.frame(M);
+    fr = bct.geometry.frame(M);
     
     switch normalType
         case 'Vertex'

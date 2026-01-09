@@ -1,8 +1,11 @@
 function [C, he] = cotan(V, F)
-%COTAN Cotangents per face (triangle mesh) using bct.manifold.halfedge connectivity.
+%COTAN Cotangents per face (triangle mesh) [DEPRECATED - Use bct.geometry.cotan]
 %
 %   C = cotan(V,F)
-%   [C,he] = cotangent_bct.manifold.halfedge(V,F)
+%   [C,he] = cotan(V,F)
+%
+% DEPRECATED: This function has been moved to bct.geometry.cotan
+%             Please update your code to use: bct.geometry.cotan(V, F)
 %
 % This matches the *triangle* behavior of gptoolbox cotangent(V,F):
 %   - Output C is #F x 3
@@ -13,14 +16,21 @@ function [C, he] = cotan(V, F)
 %   C(:,1) = (1/2)*cot(angle at v1)  opposite edge (v2,v3)
 %   C(:,2) = (1/2)*cot(angle at v2)  opposite edge (v3,v1)
 %   C(:,3) = (1/2)*cot(angle at v3)  opposite edge (v1,v2)
+%
+% See also: bct.geometry.cotan
+
+  warning('bct:manifold:cotan:deprecated', ...
+      ['bct.manifold.cotan is deprecated and will be removed in a future release.\n', ...
+       'Use bct.geometry.cotan instead.']);
 
   if size(F,2) ~= 3
-    error('cotangent_bct.manifold.halfedge: only triangular faces (#F x 3) are supported.');
+    error('bct:manifold:cotan', ...
+        'Only triangular faces (#F x 3) are supported.');
   end
 
-  he = bct.manifold.halfedge(V,F);
+  he = bct.topology.halfedge(V,F);
 
-  % For each bct.manifold.halfedge h = i->j in face, the vertex opposite this edge is:
+  % For each halfedge h = i->j in face, the vertex opposite this edge is:
   %   k = head( next(h) )
   % (Given ordering h12->h23->h31->h12)
   i = he.v;                  % tail
@@ -45,9 +55,9 @@ function [C, he] = cotan(V, F)
   cot_half = 0.5 * cot_full;       % match gptoolbox (/dblA/4 equivalent)
 
   % Now place into face-local columns matching gptoolbox:
-  %   Column 1 corresponds to edge 23 -> bct.manifold.halfedge h23 (v2->v3) = he.fh(:,2)
-  %   Column 2 corresponds to edge 31 -> bct.manifold.halfedge h31 (v3->v1) = he.fh(:,3)
-  %   Column 3 corresponds to edge 12 -> bct.manifold.halfedge h12 (v1->v2) = he.fh(:,1)
+  %   Column 1 corresponds to edge 23 -> halfedge h23 (v2->v3) = he.fh(:,2)
+  %   Column 2 corresponds to edge 31 -> halfedge h31 (v3->v1) = he.fh(:,3)
+  %   Column 3 corresponds to edge 12 -> halfedge h12 (v1->v2) = he.fh(:,1)
   h12 = he.fh(:,1);
   h23 = he.fh(:,2);
   h31 = he.fh(:,3);

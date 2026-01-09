@@ -29,7 +29,7 @@ function C = centroids(varargin)
 %   C = bct.manifold.centroids(M);
 %   plot3(C(:,1), C(:,2), C(:,3), 'r.');
 %
-% See also: bct.manifold.normals, bct.manifold.tangents
+% See also: bct.geometry.normals, bct.geometry.tangents
 
 % Parse inputs
 if nargin == 1

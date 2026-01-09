@@ -29,7 +29,7 @@ function [N, e1, e2] = tangents(varargin)
 %   - e1: first tangent basis vector (orthogonal to N)
 %   - e2: second tangent basis vector (orthogonal to both N and e1)
 %
-%   For Manifold objects, uses cached frames from bct.manifold.frame() for
+%   For Manifold objects, uses cached frames from bct.geometry.frame() for
 %   efficiency. For V,F inputs, computes frames directly.
 %
 %   Face tangents are computed per triangle using the first edge (v2-v1).
@@ -57,7 +57,7 @@ function [N, e1, e2] = tangents(varargin)
 %   [N, e1, e2] = bct.manifold.tangents(M, 'Domain', 'vertex');
 %   quiver3(V(:,1), V(:,2), V(:,3), e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
 %
-% See also: bct.manifold.frame, bct.manifold.normals, bct.manifold.centroids
+% See also: bct.geometry.frame, bct.geometry.normals, bct.geometry.centroids
 
 % -------- Parse args: allow (M, nv) or (V,F,nv) --------
 if nargin == 0
@@ -88,7 +88,7 @@ haveVF       = (numel(pos) == 2);
 if haveManifold
     % Use cached frames for Manifold objects (efficient)
     M = pos{1};
-    fr = bct.manifold.frame(M);
+    fr = bct.geometry.frame(M);
     
     if domain == "face"
         N  = fr.Face.N;
