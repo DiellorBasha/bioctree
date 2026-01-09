@@ -146,16 +146,16 @@ classdef Manifold < handle
             %
             % See also: bct.runtime.operators.femGradient, bct.runtime.operators.femDivergence
             
-            if ~isKey(obj.Cache, "FEM")
+            if ~isKey(obj.Cache, 'FEM')
                 fem = struct();
                 fem.V = obj.Vertices;
                 fem.F = obj.Faces;
                 fem.Manifold = obj;
                 fem.G = [];  % Lazy-computed gradient matrix
                 fem.D = [];  % Lazy-computed divergence matrix
-                obj.Cache("FEM") = fem;
+                obj.Cache('FEM') = fem;
             end
-            fem = obj.Cache("FEM");
+            fem = obj.Cache('FEM');
         end
 
         function dec = DEC(obj)
@@ -174,7 +174,7 @@ classdef Manifold < handle
             %
             % See also: DiscreteExteriorCalculus, bct.runtime.operators
             
-            if ~isKey(obj.Cache, "DEC")
+            if ~isKey(obj.Cache, 'DEC')
                 % Check for DECLab availability
                 if exist("DiscreteExteriorCalculus", "class") ~= 8
                     error("bct:MissingDependency", ...
@@ -184,9 +184,9 @@ classdef Manifold < handle
                 
                 F = double(obj.Faces);
                 V = double(obj.Vertices);
-                obj.Cache("DEC") = DiscreteExteriorCalculus(F, V);
+                obj.Cache('DEC') = DiscreteExteriorCalculus(F, V);
             end
-            dec = obj.Cache("DEC");
+            dec = obj.Cache('DEC');
         end
 
         function g = Graph(obj)
@@ -202,10 +202,10 @@ classdef Manifold < handle
             %
             % See also: bct.Graph
             
-            if ~isKey(obj.Cache, "Graph")
-                obj.Cache("Graph") = bct.Graph(obj);
+            if ~isKey(obj.Cache, 'Graph')
+                obj.Cache('Graph') = bct.Graph(obj);
             end
-            g = obj.Cache("Graph");
+            g = obj.Cache('Graph');
         end
         
         % ===============================================================

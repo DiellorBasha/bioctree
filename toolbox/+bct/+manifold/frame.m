@@ -36,7 +36,9 @@ end
 
 % Delegate to bct.geometry.frame
 out = bct.geometry.frame(M);
-end
+
+% Legacy implementation below (kept for reference but not executed)
+return;
 
 % Compute geometry hash for cache validation
 V = M.Vertices;
@@ -102,8 +104,6 @@ if needsCompute
     M.setGeometry(geomCache);
 end
 
-end
-
 % ===== Helper: normalize each row safely =====
 function X = normalizeRows(X)
     n = vecnorm(X, 2, 2);
@@ -111,4 +111,6 @@ function X = normalizeRows(X)
     n(bad) = 1;          % Prevent divide-by-zero
     X = X ./ n;
     X(bad,:) = 0;        % Zero-out degenerate results
+end
+
 end

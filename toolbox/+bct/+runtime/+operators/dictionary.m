@@ -1,54 +1,87 @@
-function ops = dictionary(ctx)
-%DICTIONARY Create dictionary of bound operator handles for context
+function ops = dictionary(ctx, options)
+%DICTIONARY Create dictionary of operator artifacts for context
 %
 % Syntax:
 %   ops = bct.runtime.operators.dictionary(ctx)
+%   ops = bct.runtime.operators.dictionary(ctx, Name=Value)
 %
 % Inputs:
 %   ctx - Runtime context struct (must contain Manifold or representations)
 %
+% Name-Value Arguments:
+%   LegacyHandles - logical (default: false)
+%                   If true, returns dictionary(string → function_handle)
+%                   for backward compatibility. If false, returns
+%                   dictionary(string → OperatorStruct).
+%
 % Returns:
-%   ops - dictionary (string → function_handle) of bound operators
+%   ops - dictionary of operator artifacts
+%         Default: string → OperatorStruct
+%         Legacy:  string → function_handle
 %
 % The dictionary contains only operators that are:
-%   1. Applicable to the context (dependencies + representation available)
+%   1. Available in the context (dependencies + representation exist)
 %   2. Successfully bound to the context's representations
 %
-% Example:
+% OperatorStruct Fields:
+%   id, name, meshId, backend, domain, codomain, params, requires,
+%   dependency, purity, applyFcn, matrix, isLinear, provenance, cacheKey
+%
+% Example (new API):
 %   M = bct.Manifold(struct('V', V, 'F', F));
 %   ctx = bct.runtime.context(M);
 %   ops = bct.runtime.operators.dictionary(ctx);
 %   
-%   % Use bound operators
+%   % Use operator struct
 %   if isKey(ops, "gradient.dec")
-%       grad_fn = ops("gradient.dec");
-%       gradF = grad_fn(f0);  % No need to pass DEC backend
+%       op = ops("gradient.dec");
+%       gradF = op.applyFcn(f0);
 %   end
 %
-% See also: bct.registry.operators.defs, bct.runtime.bind, bct.runtime.isApplicable
+% Example (legacy mode):
+%   ops = bct.runtime.operators.dictionary(ctx, LegacyHandles=true);
+%   grad_fn = ops("gradient.dec");
+%   gradF = grad_fn(f0);
+%
+% See also: bct.registry.operators.defs, bct.runtime.operators.bind, 
+%           bct.runtime.operators.isAvailable
 
 arguments
     ctx struct
+    options.LegacyHandles (1,1) logical = false
 end
 
 % Initialize output dictionary
-ops = dictionary(string.empty, @() []);
+if options.LegacyHandles
+    ops = dictionary(string.empty, @() []);
+else
+    ops = dictionary(string.empty, struct.empty);
+end
 
 % Load operator specifications
 specs = bct.registry.operators.defs();
 
-% Filter and bind applicable operators
+% Filter and bind available operators
 allIds = keys(specs);
 for i = 1:length(allIds)
     id = allIds(i);
     spec = specs(id);
     
-    % Check if operator is applicable to this context
-    if bct.runtime.isApplicable(spec, ctx)
+    % Check if operator is available for this context
+    [available, reason] = bct.runtime.operators.isAvailable(spec, ctx);
+    
+    if available
         try
-            % Bind operator to context
-            boundFn = bct.runtime.bind(spec, ctx);
-            ops(id) = boundFn;
+            % Bind operator to context -> returns Operator struct
+            opStruct = bct.runtime.operators.bind(spec, ctx);
+            
+            if options.LegacyHandles
+                % Extract function handle for legacy mode
+                ops(id) = opStruct.applyFcn;
+            else
+                % Store full Operator struct
+                ops(id) = opStruct;
+            end
         catch ME
             % Binding failed - skip this operator
             warning('bct:runtime:BindFailed', ...
