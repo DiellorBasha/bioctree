@@ -46,15 +46,18 @@ catalog = bct.data.index();
 mask = true(size(catalog));
 
 if options.Dataset ~= ""
-    mask = mask & strcmp({catalog.Dataset}, options.Dataset);
+    datasets = [catalog.Dataset];  % Convert to string array
+    mask = mask & (datasets == options.Dataset);
 end
 
 if options.Hemi ~= ""
-    mask = mask & strcmp({catalog.Hemi}, options.Hemi);
+    hemis = [catalog.Hemi];  % Convert to string array
+    mask = mask & (hemis == options.Hemi);
 end
 
 if options.Surface ~= ""
-    mask = mask & strcmp({catalog.Surface}, options.Surface);
+    surfaces = [catalog.Surface];  % Convert to string array
+    mask = mask & (surfaces == options.Surface);
 end
 
 if ~isempty(options.Tags)

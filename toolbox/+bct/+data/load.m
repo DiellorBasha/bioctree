@@ -10,9 +10,9 @@ function mesh = load(id, options)
 %   id - Asset ID string (e.g., "fsaverage6_hemi-lh_surf-pial")
 %
 % Optional Parameters (for attribute-based selection):
-%   Dataset  - Dataset name (e.g., "fsaverage6")
-%   Hemi     - Hemisphere: "lh" | "rh"
-%   Surface  - Surface type: "pial" | "white" | "inflated"
+%   Dataset  - Dataset name (e.g., "fsaverage6", "brainstorm")
+%   Hemi     - Hemisphere: "lh" | "rh" | "both"
+%   Surface  - Surface type: "pial" | "white" | "mid" | "head" | "innerskull" | "outerskull"
 %
 % Outputs:
 %   mesh - Struct with fields:
@@ -21,6 +21,8 @@ function mesh = load(id, options)
 %          .Meta     - Metadata struct with dataset info
 %          .V        - Alias for Vertices (backward compatibility)
 %          .F        - Alias for Faces (backward compatibility)
+%          .VertNormals - [N×3] vertex normals (Brainstorm only)
+%          .Curvature   - [N×1] curvature values (Brainstorm only)
 %
 % Examples:
 %   % Load default (fsaverage6 left hemisphere pial)
@@ -29,9 +31,11 @@ function mesh = load(id, options)
 %
 %   % Load by ID
 %   mesh = bct.data.load("fsaverage6_hemi-rh_surf-pial");
+%   mesh = bct.data.load("brainstorm_default_cortex_pial_low");
 %
 %   % Load by attributes
 %   mesh = bct.data.load(Dataset="fsaverage6", Hemi="lh", Surface="pial");
+%   mesh = bct.data.load(Dataset="brainstorm", Surface="pial");
 %
 % See also: bct.data.index, bct.data.list, bct.Manifold
 
@@ -161,6 +165,20 @@ elseif isfield(data, 'meta')
     end
 end
 
+% Add Brainstorm-specific metadata if present
+if isfield(data, 'Comment')
+    meta.BrainstormComment = data.Comment;
+end
+if isfield(data, 'VertNormals')
+    meta.HasVertexNormals = true;
+end
+if isfield(data, 'Curvature')
+    meta.HasCurvature = true;
+end
+if isfield(data, 'Atlas')
+    meta.HasAtlas = true;
+end
+
 % Construct output struct
 mesh = struct();
 mesh.Vertices = V;
@@ -170,5 +188,13 @@ mesh.Meta = meta;
 % Add aliases for backward compatibility
 mesh.V = V;
 mesh.F = F;
+
+% Optionally include Brainstorm-specific fields if present
+if isfield(data, 'VertNormals')
+    mesh.VertNormals = data.VertNormals;
+end
+if isfield(data, 'Curvature')
+    mesh.Curvature = data.Curvature;
+end
 
 end
