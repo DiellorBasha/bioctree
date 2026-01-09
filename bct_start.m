@@ -190,27 +190,6 @@ for i = 1:size(toolboxes, 1)
 end
 
 %% Summary
-fprintf('\n╔══════════════════════════════════════════════════════════╗\n');
-fprintf('║  Quick Start Guide                                       ║\n');
-fprintf('╠══════════════════════════════════════════════════════════╣\n');
-fprintf('║  Load test mesh:                                         ║\n');
-fprintf('║    data = load(''data/mesh/fsaverage_rh_pial.mat'');       ║\n');
-fprintf('║    M = bct.Manifold(data.V, data.F);                     ║\n');
-fprintf('║                                                          ║\n');
-fprintf('║  Create representations:                                 ║\n');
-fprintf('║    F = M.FEM();      %% Finite Element Method            ║\n');
-fprintf('║    G = M.Graph();    %% Graph/Network                    ║\n');
-fprintf('║    D = M.DEC();      %% Discrete Exterior Calculus       ║\n');
-fprintf('║                                                          ║\n');
-fprintf('║  Use operator registry/runtime:                          ║\n');
-fprintf('║    specs = bct.registry.operators();                     ║\n');
-fprintf('║    ctx = bct.runtime.context(M, ''FEM'', true);            ║\n');
-fprintf('║    ops = bct.runtime.operators(ctx);                     ║\n');
-fprintf('║                                                          ║\n');
-fprintf('║  Run tests:                                              ║\n');
-fprintf('║    cd tests; test_fem_refactor                           ║\n');
-fprintf('╚══════════════════════════════════════════════════════════╝\n');
-
 fprintf('\n✓ BCT initialization complete!\n\n');
 
 end
