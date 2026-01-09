@@ -18,13 +18,15 @@ function w = spectral(manifold, params)
     %
     % Description:
     %   Creates a brush using spectral filtering:
-    %   1. Creates FEM-correct Dirac delta at seed vertex: delta = M \ ei
-    %   2. Transforms to spectral domain using MFT
-    %   3. Applies spectral kernel (heat, gaussian, etc.)
-    %   4. Transforms back to spatial domain using IMFT
+    %   1. Gets FEM representation and computes eigenpairs (cached)
+    %   2. Creates FEM-correct Dirac delta at seed vertex: delta = M \ ei
+    %   3. Projects to spectral domain using Eigenpairs.project()
+    %   4. Applies spectral kernel (heat, gaussian, etc.)
+    %   5. Reconstructs to spatial domain using Eigenpairs.reconstruct()
     %
     %   This approach respects the manifold geometry through the eigenmodes
-    %   and provides smooth, geodesic-aware brushes.
+    %   and provides smooth, geodesic-aware brushes. The FEM eigenpairs are
+    %   computed on-demand and cached for subsequent calls.
     %
     % Example:
     %   % Heat kernel brush
@@ -76,30 +78,29 @@ function w = spectral(manifold, params)
             'Source vertex %d out of range [1, %d]', i, Nv);
     end
     
-    % Step 1: Create FEM-correct Dirac delta at seed vertex
-    ei = zeros(Nv, 1);
-    ei(i) = 1;
+    % Step 1: Get FEM representation and compute eigenpairs
+    fem = manifold.FEM();
     
-    M = manifold.MassMatrix;  % Mass matrix
-    delta_i = M \ ei;         % Correct FEM delta
-    
-    % Step 2: Create Signal and transform to spectral domain
-    sig_spatial = bct.Signal(delta_i, manifold);
-    sig_spectral = sig_spatial.mft();
-    
-    % Get Lambda domain and eigenvalues
-    lambda_domain = sig_spectral.Domain;  % Get Lambda from the transformed signal
-    
-    % Verify dual relationship is set
-    if isempty(lambda_domain.dual)
-        error('bct:brush:spectral:NoDual', ...
-            'Lambda domain has no dual Manifold reference. Ensure bct object was properly constructed.');
+    % Determine number of modes
+    if isfield(params, 'bandwidth') && ~isempty(params.bandwidth)
+        numModes = params.bandwidth;
+    else
+        numModes = min(100, Nv);  % Default to 100 modes or mesh size
     end
     
-    eigenvalues = lambda_domain.axis;  % Eigenvalues
-    K = length(eigenvalues);
+    % Get eigenpairs (uses caching internally)
+    E = fem.eigenpairs(numModes);
+    eigenvalues = E.Values;
     
-    % Step 3: Build spectral kernel
+    % Step 2: Create FEM-correct Dirac delta at seed vertex
+    ei = zeros(Nv, 1);
+    ei(i) = 1;
+    delta_i = fem.Mass \ ei;  % Correct FEM delta
+    
+    % Step 3: Project to spectral domain using Eigenpairs
+    spectral_coeffs = E.project(delta_i);
+    
+    % Step 4: Build spectral kernel
     % Map sigma to appropriate scale for eigenvalues
     switch lower(params.kernel)
         case 'heat'
@@ -138,15 +139,14 @@ function w = spectral(manifold, params)
         otherwise
             % Try to get kernel from registry
             try
-                % Construct kernel from registry
-                kernel_params = params;
-                kernel_params.domain = lambda_domain;
-                
                 % Get kernel constructor from registry
                 kernel_fn = bct.kernel.registry(params.kernel);
-                kernel_obj = kernel_fn(kernel_params);
                 
-                % Evaluate kernel
+                % Build kernel parameters (eigenvalues as domain axis)
+                kernel_params = params;
+                kernel_params.axis = eigenvalues;
+                
+                kernel_obj = kernel_fn(kernel_params);
                 kernel_response = kernel_obj.response;
                 
             catch ME
@@ -155,19 +155,11 @@ function w = spectral(manifold, params)
             end
     end
     
-    % Apply bandwidth limit if specified
-    if isfield(params, 'bandwidth') && ~isempty(params.bandwidth)
-        bw = min(params.bandwidth, K);
-        kernel_response(bw+1:end) = 0;
-    end
+    % Step 5: Apply kernel in spectral domain
+    filtered_coeffs = spectral_coeffs .* kernel_response;
     
-    % Step 4: Apply kernel in spectral domain
-    filtered_coeffs = sig_spectral.Data .* kernel_response;
-    sig_spectral_filtered = bct.Signal(filtered_coeffs, lambda_domain);
-    
-    % Step 5: Transform back to spatial domain
-    sig_spatial_filtered = sig_spectral_filtered.imft();
-    w = sig_spatial_filtered.Data;
+    % Step 6: Reconstruct to spatial domain using Eigenpairs
+    w = E.reconstruct(filtered_coeffs);
     
     % Normalize to [0, 1]
     w = w - min(w);

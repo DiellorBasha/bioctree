@@ -672,3 +672,22 @@ ui.initialize();
 
 % Evaluate brush
 w = model.evaluate();
+
+%%
+fig = uifigure;
+root = uigridlayout(fig);
+root.RowHeight = {'1x'};
+root.ColumnWidth = {'1x'};
+ui = bct.ui.Manifold('Parent', root);
+%%
+fig = uifigure('Name','BCT Kernel Plot');
+root = uigridlayout(fig);
+root.RowHeight = {'1x'};
+root.ColumnWidth = {'1x'};
+
+fp = bct.ui.component.Fplot('Parent', root);
+
+%%
+
+bct.ui.show.kernel("Gaussian");
+bct.ui.showKernel("Heat", "Axis", linspace(0, 30, 512));

@@ -19,5 +19,16 @@ debug.log
 /external/brainstorm3
 /docs/site
 /external/bioelectromagnetism/MINC/
+/external/toolbox_graph
+/external/toolbox_signal
+/external/toolbox_general
 # Test files
-test_*.py
+/data
+/external/TrivialConnectionsMATLAB
+/external/fieldgen
+/external/geometry-processing-js
+/external/code_stripes
+/external/code_comb
+/toolbox/+bct/+data/assets/brainstorm/data
+/experimental
+/.github

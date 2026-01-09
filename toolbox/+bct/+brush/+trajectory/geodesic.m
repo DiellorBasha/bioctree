@@ -52,8 +52,10 @@ function w = geodesic(manifold, params)
         % Create corridor by finding all vertices within width distance
         % from any point on the path
         idx_all = [];
+        graphObj = manifold.Graph();
         for i = 1:numel(path)
-            idx_i = manifold.Graph.nearest(path(i), width, metric);
+            d = graphObj.distances(metric);
+            idx_i = find(d(:, path(i)) <= width);
             idx_all = [idx_all; idx_i]; %#ok<AGROW>
         end
         
@@ -61,9 +63,13 @@ function w = geodesic(manifold, params)
         idx_all = unique(idx_all);
         
         % Binary selection field
-        w = bct.brush.embed(idx_all, manifold.N);
+        N = manifold.numVertices;
+        w = zeros(N, 1);
+        w(idx_all) = 1;
     else
         % No corridor - just the path
-        w = bct.brush.embed(path, manifold.N);
+        N = manifold.numVertices;
+        w = zeros(N, 1);
+        w(path) = 1;
     end
 end

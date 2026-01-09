@@ -9,10 +9,10 @@ bioctree_start
 % Load cortical manifold
 % ------------------------------------------------------------------------
 fs6 = bct_fsaverage('lh', 'saved');
-Manifold = fs6.Manifold;
+M = fs6.M;
 
-F = double(Manifold.Faces);
-V = Manifold.Vertices;
+F = double(M.Faces);
+V = M.Vertices;
 
 TR = triangulation(F, V);
 
@@ -36,7 +36,7 @@ params.source = 1000;
 params.sigma  = 4;
 params.metric = "geometry";
 
-w = bct.brush.apply('patch_gaussian', Manifold, params);
+w = bct.brush.apply('patch_gaussian', M, params);
 w = full(w(:));   % enforce column
 
 
@@ -560,7 +560,7 @@ set(hPatch, ...
 %%
 
 app.fig = uifigure( ...
-    'Name','Manifold DEC Viewer', ...
+    'Name','M DEC Viewer', ...
     'Color','k', ...
     'Position',[100 100 800 800]);
 

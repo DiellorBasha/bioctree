@@ -1,26 +1,26 @@
 function registry = registry()
-%BCT.KERNEL.REGISTRY  Declarative kernel & signal registry
+%BCT.KERNEL.REGISTRY  Declarative kernel registry (façade)
 %
 %   registry = bct.kernel.registry()
 %
-%   Returns a struct whose fields are kernel or signal definitions.
-%   Each entry is pure data describing:
-%     - parameters
-%     - defaults
-%     - ranges
-%     - function handles
+% Purpose
+%   User-facing wrapper that delegates to bct.registry.kernels.defs().
+%   Returns kernel definitions as struct array.
 %
-%   Kernels:
-%     - Provide Function : @(params) @(axis) values
-%     - Used by bct.filter.design.kernel
+% Output
+%   registry - struct array of kernel definitions
 %
-%   Signal generators:
-%     - Provide Evaluate : @(axis,params) values
-%     - Used by bct.generate.signal
+% Note
+%   This is a façade function. The authoritative registry is:
+%   bct.registry.kernels.defs()
 %
-%   No domain logic. No state. No UI.
+%   For new code, prefer:
+%     defs = bct.registry.kernels.defs();
+%
+% See also: bct.registry.kernels.defs, bct.kernel.dictionary, bct.kernel.list
 
-    registry = struct();
+    % Delegate to authoritative registry
+    registry = bct.registry.kernels.defs();
 
     %% =========================================================
     % Heat kernel (diffusion / low-pass)

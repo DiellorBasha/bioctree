@@ -47,16 +47,20 @@ function w = gaussian(manifold, params)
     % (beyond 3*sigma, Gaussian weight < 1% anyway)
     
     cutoff = 3 * sigma;
-    N = manifold.N;
+    N = manifold.numVertices;
     w = zeros(N, 1);
+    
+    % Get graph object
+    graphObj = manifold.Graph();
     
     % For each vertex on the path, find nearby vertices and weight them
     for i = 1:numel(path)
-        % Get vertices within cutoff distance from this path vertex
-        idx = manifold.Graph.nearest(path(i), cutoff, metric);
+        % Get distances from this path vertex to all vertices
+        d = graphObj.distances(metric);
+        idx = find(d(:, path(i)) <= cutoff);
         
-        % Compute shortest path distances to these vertices
-        [~, dists] = manifold.Graph.shortestPath(path(i), idx, metric);
+        % Get distances to these vertices
+        dists = d(idx, path(i));
         
         % Apply Gaussian: w = exp(-d^2 / (2*sigma^2))
         % Take maximum weight if vertex is near multiple path points
