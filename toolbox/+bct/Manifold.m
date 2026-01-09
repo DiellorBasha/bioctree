@@ -213,12 +213,12 @@ classdef Manifold < handle
         % ===============================================================
         
         function geom = getGeometry(obj)
-            %GETGEOMETRY Get geometry cache (internal use by bct.manifold.*)
+            %GETGEOMETRY Get geometry cache (internal use by bct.geometry.*)
             geom = obj.Geometry;
         end
         
         function setGeometry(obj, geom)
-            %SETGEOMETRY Set geometry cache (internal use by bct.manifold.*)
+            %SETGEOMETRY Set geometry cache (internal use by bct.geometry.*)
             obj.Geometry = geom;
         end
         
@@ -355,7 +355,7 @@ classdef Manifold < handle
             % Description:
             %   Computes the geometric center (centroid) of each triangular face
             %   as the average of its three vertex positions. This is a wrapper
-            %   for bct.manifold.centroids().
+            %   for bct.geometry.centroids().
             %
             % Examples:
             %   % Compute centroids
@@ -366,9 +366,9 @@ classdef Manifold < handle
             %   C = M.centroids();
             %   plot3(C(:,1), C(:,2), C(:,3), 'r.', 'MarkerSize', 10);
             %
-            % See also: bct.manifold.centroids
+            % See also: bct.geometry.centroids
             
-            C = bct.manifold.centroids(obj);
+            C = bct.geometry.centroids(obj);
         end
         
         function N = normals(obj, type)
@@ -387,7 +387,7 @@ classdef Manifold < handle
             % Description:
             %   Computes vertex or face normals using MATLAB's surfaceMesh object.
             %   By default returns vertex normals. Specify 'Face' to get face normals.
-            %   This is a wrapper for bct.manifold.normals().
+            %   This is a wrapper for bct.geometry.normals().
             %
             % Examples:
             %   % Compute vertex normals (default)
@@ -401,14 +401,14 @@ classdef Manifold < handle
             %   VN = M.normals();
             %   quiver3(V(:,1), V(:,2), V(:,3), VN(:,1), VN(:,2), VN(:,3), 0.5);
             %
-            % See also: bct.manifold.normals, centroids
+            % See also: bct.geometry.normals, centroids
             
             arguments
                 obj
                 type {mustBeTextScalar} = 'Vertex'
             end
             
-            N = bct.manifold.normals(obj, type);
+            N = bct.geometry.normals(obj, type);
         end
         
         function [N, e1, e2] = tangents(obj, options)
@@ -438,7 +438,7 @@ classdef Manifold < handle
             %
             %   Face tangents are computed per triangle using the first edge.
             %   Vertex tangents use a robust reference axis projection method.
-            %   This is a wrapper for bct.manifold.tangents().
+            %   This is a wrapper for bct.geometry.tangents().
             %
             % Examples:
             %   % Face tangent frame
@@ -462,14 +462,14 @@ classdef Manifold < handle
             %   quiver3(M.Vertices(:,1), M.Vertices(:,2), M.Vertices(:,3), ...
             %           e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
             %
-            % See also: bct.manifold.tangents, normals, centroids
+            % See also: bct.geometry.tangents, normals, centroids
             
             arguments
                 obj bct.Manifold
                 options.Domain {mustBeMember(options.Domain, ["face", "vertex", "Face", "Vertex"])} = "face"
             end
             
-            [N, e1, e2] = bct.manifold.tangents(obj, 'Domain', options.Domain);
+            [N, e1, e2] = bct.geometry.tangents(obj, 'Domain', options.Domain);
         end
         
         function write(obj, fileName, options)
