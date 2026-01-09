@@ -37,8 +37,21 @@ arguments
 end
 
 % =========================================================================
-% Resolve representation from context
+% Check if this is a Field-native operator
 % =========================================================================
+isFieldNative = isfield(spec, 'input') || isfield(spec, 'inputs');
+
+if isFieldNative
+    % Field-native operator: wrap with Field validation and packaging
+    op = bindFieldNative(spec, context);
+    return;
+end
+
+% =========================================================================
+% Legacy raw-array operator binding
+% =========================================================================
+
+% Resolve representation from context
 repType = spec.representation;
 backend = spec.domain;  % Domain usually indicates backend
 
@@ -180,4 +193,98 @@ function merged = mergeParams(base, overrides)
             merged.(fields{i}) = overrides.(fields{i});
         end
     end
+end
+% =========================================================================
+% Field-Native Operator Binding
+% =========================================================================
+function op = bindFieldNative(spec, context)
+%BINDFIELDNATIVE Bind Field-native operator with validation/packaging wrapper
+
+% Resolve representation (same as legacy)
+repType = spec.representation;
+backend = spec.domain;
+
+switch repType
+    case "DiscreteExteriorCalculus"
+        if isfield(context, 'DEC') && ~isempty(context.DEC)
+            rep = context.DEC;
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold.DEC();
+        else
+            error('bct:runtime:NoRepresentation', 'Cannot resolve DEC');
+        end
+        backend = "DECLab";
+        
+    case "FEM"
+        if isfield(context, 'FEM') && ~isempty(context.FEM)
+            rep = context.FEM;
+        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold.FEM();
+        else
+            error('bct:runtime:NoRepresentation', 'Cannot resolve FEM');
+        end
+        backend = "gptoolbox";
+        
+    otherwise
+        error('bct:runtime:UnknownRepresentation', ...
+            'Unknown representation type for Field operator: %s', repType);
+end
+
+% Add representation to context
+ctxWithRep = context;
+ctxWithRep.DEC = rep;  % Make rep available as ctx.DEC
+ctxWithRep.Representation = rep;  % Generic accessor
+
+% Get implementation function
+implFn = spec.implementation;
+
+% Create Field-aware wrapper using the wrapFieldOperator utility
+applyFcn = bct.runtime.operators.wrapFieldOperator(spec, implFn, ctxWithRep);
+
+% Get meshId
+meshId = "";
+if isfield(context, 'Manifold') && ~isempty(context.Manifold)
+    meshId = context.Manifold.ID;
+end
+
+% Determine domain/codomain from Field signatures
+if isfield(spec, 'input')
+    domainDesc = sprintf("%s %s", spec.input.support, spec.input.valueType);
+    codomainDesc = sprintf("%s %s", spec.output.support, spec.output.valueType);
+else
+    % Multi-input
+    domainDesc = sprintf("%d inputs", length(spec.inputs));
+    codomainDesc = sprintf("%s %s", spec.output.support, spec.output.valueType);
+end
+
+% Resolve parameters
+params = spec.parameters;
+if isfield(context, 'OperatorOverrides') && isfield(context.OperatorOverrides, spec.id)
+    overrides = context.OperatorOverrides.(spec.id);
+    params = mergeParams(params, overrides);
+end
+
+% Compute provenance and cache key
+prov = bct.runtime.operators.provenance(spec, context);
+ckey = bct.runtime.operators.cacheKey(spec, context);
+
+% Assemble Operator struct
+op = struct(...
+    'id', spec.id, ...
+    'name', spec.name, ...
+    'meshId', meshId, ...
+    'backend', backend, ...
+    'domain', domainDesc, ...
+    'codomain', codomainDesc, ...
+    'params', params, ...
+    'requires', spec.requires, ...
+    'dependency', spec.dependency, ...
+    'purity', spec.purity, ...
+    'applyFcn', applyFcn, ...
+    'matrix', [], ...
+    'isLinear', false, ...
+    'provenance', prov, ...
+    'cacheKey', ckey, ...
+    'fieldSignature', struct('input', spec.input, 'output', spec.output));
+
 end

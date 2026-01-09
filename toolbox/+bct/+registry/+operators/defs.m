@@ -30,6 +30,32 @@ function specs = defs()
 % Initialize dictionary
 specs = dictionary(string.empty, struct.empty);
 
+% Load legacy operator specs (raw array interfaces)
+specsLegacy = loadLegacySpecs();
+
+% Load Field-native operator specs
+specsField = bct.registry.operators.defsField();
+
+% Merge dictionaries (Field-native takes precedence)
+allKeys = keys(specsLegacy);
+for i = 1:length(allKeys)
+    specs(allKeys(i)) = specsLegacy(allKeys(i));
+end
+
+fieldKeys = keys(specsField);
+for i = 1:length(fieldKeys)
+    specs(fieldKeys(i)) = specsField(fieldKeys(i));
+end
+
+end
+
+function specs = loadLegacySpecs()
+%LOADLEGACYSPECS Load legacy raw-array operator specifications
+% These remain for backward compatibility but should migrate to Field-native
+
+% Initialize dictionary
+specs = dictionary(string.empty, struct.empty);
+
 % =========================================================================
 % DEC OPERATORS (DiscreteExteriorCalculus from DECLab)
 % =========================================================================
@@ -164,4 +190,4 @@ specs("divergence.fem") = struct(...
     'purity', "pure", ...
     'description', "Compute divergence using FEM");
 
-end
+end % End of loadLegacySpecs() function
