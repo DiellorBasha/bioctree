@@ -41,8 +41,9 @@ end
 % Get catalog
 catalog = bct.data.index();
 
-% Find entry
-idx = find(strcmp({catalog.Id}, id), 1);
+% Find entry - use string array for comparison
+ids = [catalog.Id];  % Convert to string array
+idx = find(ids == id, 1);
 if isempty(idx)
     error('bct:data:UnknownID', ...
         'Asset ID "%s" not found in catalog', id);
