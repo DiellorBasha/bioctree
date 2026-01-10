@@ -1,4 +1,4 @@
-# Initial Release: Bioctree (BCT) v1.0
+# Bioctree (BCT) v1.0
 
 ## Summary
 
@@ -215,8 +215,4 @@ N/A — This is the initial release.
 
 ## License
 
-[Specify your license here]
 
----
-
-**This PR represents ~7.1M lines of new code across 1,503 files**, establishing the complete BCT framework from the ground up.
