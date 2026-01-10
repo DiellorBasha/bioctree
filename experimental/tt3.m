@@ -7,7 +7,7 @@ B.Omega = B.Time.dual;
 B = B.createJoint('Lambda', 'Omega');
 
 % Access joint coordinates
-[M, N] = B.Joint.size();  % [100, 50]
+[M, N] = B.Joint.N;  % [100, 50]
 lambda_grid = B.Joint.A_grid;  % [100×50]
 omega_grid = B.Joint.B_grid;   % [100×50]
 B.Manifold.Resolution;
