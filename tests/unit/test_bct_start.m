@@ -1,7 +1,7 @@
 classdef test_bct_start < BaseBctTest
-    % TEST_BCT_START Unit tests for bct_start initialization
+    % TEST_BCT_START Unit tests for bct.start initialization
     %
-    % Tests that bct_start properly initializes the BCT package:
+    % Tests that bct.start properly initializes the BCT package:
     % - Adds required paths
     % - Loads external dependencies (DECLab, GSPBox, GPToolbox)
     % - Sets up configuration
@@ -10,9 +10,9 @@ classdef test_bct_start < BaseBctTest
     methods (Test)
         %% Basic Initialization Tests
         function testBctStartCompletes(testCase)
-            % Verify bct_start runs without error (idempotent)
-            testCase.verifyWarningFree(@() bct_start(), ...
-                'bct_start should run without warnings when called again');
+            % Verify bct.start runs without error (idempotent)
+            testCase.verifyWarningFree(@() bct.start(), ...
+                'bct.start should run without warnings when called again');
         end
         
         function testBctPackageOnPath(testCase)
@@ -47,52 +47,57 @@ classdef test_bct_start < BaseBctTest
         end
         
         function testConfigAccessible(testCase)
-            % Verify bct_config is accessible
-            testCase.verifyTrue(exist('bct_config', 'file') > 0, ...
-                'bct_config should be on path');
+            % Verify bct.config.load is accessible
+            testCase.verifyTrue(exist('bct.config.load', 'file') > 0, ...
+                'bct.config.load should be accessible');
             
-            cfg = bct_config();
+            cfg = bct.config.load();
             testCase.verifyTrue(isstruct(cfg), ...
-                'bct_config should return a struct');
+                'bct.config.load should return a struct');
         end
         
         %% Configuration Tests
         function testConfigHasRequiredFields(testCase)
             % Verify configuration has core fields
-            cfg = bct_config();
+            cfg = bct.config.load();
             
             testCase.verifyTrue(isfield(cfg, 'root'), ...
                 'Config should have root field');
-            testCase.verifyTrue(isfield(cfg, 'toolbox'), ...
-                'Config should have toolbox field');
-            testCase.verifyTrue(isfield(cfg, 'external'), ...
-                'Config should have external field');
-            testCase.verifyTrue(isfield(cfg, 'deps'), ...
-                'Config should have deps field');
-            testCase.verifyTrue(isfield(cfg, 'mesh'), ...
-                'Config should have mesh field');
+            testCase.verifyTrue(isfield(cfg, 'packageRoot'), ...
+                'Config should have packageRoot field');
+            testCase.verifyTrue(isfield(cfg, 'configRoot'), ...
+                'Config should have configRoot field');
+            testCase.verifyTrue(isfield(cfg, 'depsManifest'), ...
+                'Config should have depsManifest field');
         end
         
         function testConfigPathsAreAbsolute(testCase)
             % Verify paths are absolute
-            cfg = bct_config();
+            cfg = bct.config.load();
             
             testCase.verifyTrue(isfolder(cfg.root), ...
                 'Root path should exist');
-            testCase.verifyTrue(isfolder(cfg.toolbox), ...
-                'Toolbox path should exist');
-            testCase.verifyTrue(isfolder(cfg.external), ...
-                'External path should exist');
+            testCase.verifyTrue(isfolder(cfg.packageRoot), ...
+                'Package root path should exist');
+            testCase.verifyTrue(isfolder(cfg.configRoot), ...
+                'Config root path should exist');
         end
         
-        function testMeshPathsDefined(testCase)
-            % Verify mesh paths are defined in config
-            cfg = bct_config();
+        function testDepsManifestLoaded(testCase)
+            % Verify deps manifest is loaded in config
+            cfg = bct.config.load();
             
-            testCase.verifyTrue(isfield(cfg.mesh, 'fsaverage_lh_pial'), ...
-                'Config should have fsaverage_lh_pial path');
-            testCase.verifyTrue(isfield(cfg.mesh, 'fsaverage_rh_pial'), ...
-                'Config should have fsaverage_rh_pial path');
+            testCase.verifyTrue(isstruct(cfg.depsManifest), ...
+                'Config should have depsManifest struct');
+            
+            % Check for expected dependencies
+            depNames = fieldnames(cfg.depsManifest);
+            testCase.verifyTrue(ismember('declab', depNames), ...
+                'DECLab should be in manifest');
+            testCase.verifyTrue(ismember('gspbox', depNames), ...
+                'GSPBox should be in manifest');
+            testCase.verifyTrue(ismember('gptoolbox', depNames), ...
+                'gptoolbox should be in manifest');
         end
         
         %% External Dependencies Tests
@@ -120,8 +125,8 @@ classdef test_bct_start < BaseBctTest
         %% Package Structure Tests
         function testCoreSubpackagesExist(testCase)
             % Verify core subpackages are accessible via bct namespace
-            cfg = bct_config();
-            toolbox_path = cfg.toolbox;
+            cfg = bct.config.load();
+            toolbox_path = cfg.packageRoot;
             
             subpackages = {'kernel', 'filter', 'graph', 'fem', ...
                           'data', 'registry', 'runtime', 'eigenpairs'};

@@ -17,8 +17,8 @@ classdef test_bct_data < matlab.unittest.TestCase
     methods (TestClassSetup)
         function initBct(testCase)
             % Initialize BCT package before tests
-            if exist('bct_start', 'file')
-                bct_start();
+            if exist('bct.start', 'file')
+                bct.start();
             end
         end
     end

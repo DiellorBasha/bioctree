@@ -2,267 +2,266 @@
 
 You are working inside a MATLAB-based scientific computing toolbox called bioctree, whose core computational engine is the bct package.
 
-Your purpose is to write and maintain code for a spectral signal-processing system that analyzes spatiotemporal signals defined on a mesh, using finite element methods (FEM) and Laplace–Beltrami operators.
-This system is designed specifically for cortical mesh data (e.g., MEG/EEG source maps).
+Your purpose is to write and maintain code for a spatiotemporal signal-processing system that analyzes fields (signals) defined on triangulated surfaces (manifolds), using finite element methods (FEM) and spectral graph theory with the Laplace–Beltrami operator.
+
+**Core Philosophy:**
+- Surfaces are **manifolds** over which dynamics evolve
+- Signals are **fields** living on those manifolds (scalar, vector, or tensor)
+- Workflow parallels temporal signal processing in electrophysiology
+- Designed for cortical surface analysis (MEG/EEG, fMRI on surfaces) but generalizes to any 2-manifold
 
 📦 PACKAGE STRUCTURE
 
 The main package is:
 
+```
 toolbox/+bct/
-
+```
 
 It contains:
 
-Core orchestrator class: @bct
+**Core Classes:**
 
-Abstract base class for all domains: @Domain
+- `Manifold` — Triangulated surface with integrated FEM capabilities
+- `Graph` — Sparse graph representation with algorithms  
+- `FEM` — Finite element matrices (stiffness, mass, gradient, divergence)
+- `Eigenpairs` — Eigendecomposition with metadata and spectral operations
+- `operators` — Operator application interface
 
-Domain subclasses:
+**Subpackages:**
 
-@Manifold
+- `+data` — Catalog system and bundled mesh/field assets
+- `+fields` — Field artifact management with validation
+- `+manifold` — Mesh I/O and format conversion
+- `+geometry` — Geometric computations (normals, frames, cotangent weights)
+- `+topology` — Topological analysis (halfedge, edges, adjacency)
+- `+graph` — Graph-theoretic operations (eigensolve, distances, paths)
+- `+operators` — Differential and transform operators
+- `+registry` — Artifact registration (operators, kernels, colormaps, brushes)
+- `+runtime` — Runtime resolution and caching
+- `+kernel` — Spectral kernel generators
+- `+ui` — Visualization and interaction tools
 
-@Lambda
+📚 CORE ARCHITECTURAL PRINCIPLES
 
-@Time
+### 1. Manifold-Centric Design
 
-@Omega
+The `bct.Manifold` class is the foundation. It represents a triangulated 2-manifold with:
+- Vertices (V) and Faces (F) defining the mesh topology
+- Integrated FEM computation (Laplacian, mass matrix, eigenmodes)
+- Geometric properties (normals, frames, areas, cotangent weights)
+- Metadata (name, source, hemisphere, etc.)
 
-@Joint
-
-Other classes:
-
-@Graph
-
-@Signal
-
-Subpackages:
-
-+filters — filter kernels on domains
-
-+io — load/save operations
-
-+internal — utilities
-
-+show — visualization subsystem
-
-+sim — simulations
-
-📚 CORE ARCHITECTURAL PRINCIPLE — DOMAIN INHERITANCE
-✔ Every domain class inherits from a shared abstract class:
-bct.Domain   (abstract)
-
-
-All domain subclasses must:
-
-extend bct.Domain
-
-implement required abstract methods (e.g., size, axes, dual relationships)
-
-define their transform behavior relative to their dual domain
-
-Domain inheritance structure:
-
-bct.Domain (abstract)
- ├── bct.Manifold   (mesh-based domain)
- ├── bct.Lambda     (dual of Manifold via eigenbasis)
- ├── bct.Time       (1D temporal domain)
- ├── bct.Omega      (dual of Time via Fourier transform)
- └── bct.Joint      (tensor product of 1D domains)
-
-
-The coding agent must always respect this inheritance hierarchy.
-
-📚 MAJOR CONCEPTS
-1. Domains and Duals
-Domain	Dual	Description
-Manifold	Lambda	FEM mesh ↔ spatial eigenbasis
-Time	Omega	time axis ↔ frequency axis
-
-Transforms move signals between domains.
-
-2. Transforms
-
-Each dual pair defines a numerical transform:
-
-Manifold ↔ Lambda using LB eigenvectors
-
-Time ↔ Omega using FFT
-
-All transforms must operate through domain objects, not ad-hoc code.
-
-3. Signal Class
-
-A signal is defined as:
-
-S = bct.Signal(domain, data)
-
-
-Signals are always associated with exactly one domain.
-
-4. Filter Classes
-
-Filters define kernels on a specific domain, or a joint domain.
-Examples:
-
-spatial low-pass filter on Lambda
-
-temporal band-pass filter on Omega
-
-spatiotemporal filter on Joint(Lambda, Omega)
-
-time-varying spatial filter on Joint(Lambda, Time)
-
-5. Joint Domain
-
-A joint domain is a tensor product of 1D domains:
-
-Joint = bct.Joint(Time, Lambda)
-
-
-The visualizer and filter system must respect this structure when plotting or applying filters.
-
-6. Bct Class (Orchestrator)
-
-The bct class is the main entry point for:
-
-constructing domains
-
-computing eigenbasis
-
-defining signals
-
-performing transforms
-
-building filters
-
-orchestrating joint domain operations
-
-saving/loading data
-
-All operations across domains must run through bct.
-
-📂 DATA LOCATIONS
-Mesh test data:
-data/mesh/fsaverage_rh_pial.mat  (or fsaverage_lh_pial.mat)
-
-Contains variables:
-- V  — vertices [N×3] double
-- F  — faces [M×3] int32
-
-Correct initialization:
 ```matlab
-data = load('data/mesh/fsaverage_rh_pial.mat');
-B = bct.bct.fromMesh(data.V, data.F);
+M = bct.manifold.load();  % Load from catalog
+E = bct.graph.eigensolve(M, 100);  % Compute eigenpairs
 ```
 
-Signal test data
+### 2. Field Abstraction
 
-Can be generated using the Signal class.
+Fields are signals defined on manifolds. The `bct.fields` package manages:
+- **Support**: `vertex` (values at mesh vertices) or `face` (values at face centers)
+- **Value type**: `scalar` (one value per location) or `vector` (tangent vectors)
+- **Validation**: Schema checking and manifold compatibility
+
+```matlab
+F = bct.fields.load();  % Load field from catalog
+F = bct.fields.make(M, values, 'support', 'vertex', 'valueType', 'scalar');
+```
+
+### 3. Operator System
+
+Operators are registered artifacts that transform fields. The `bct.operators` system provides:
+- **Differential operators**: gradient, divergence, Laplacian, curl
+- **Domain/codomain resolution**: Automatic type inference based on input field
+- **Registry-based**: All operators registered in `+registry/+operators/`
+
+```matlab
+gradF = bct.operators.apply('gradient', F);  % ∇: scalar(vertex) → vector(face)
+divF = bct.operators.apply('divergence', gradF);  % ∇·: vector(face) → scalar(vertex)
+lapF = bct.operators.apply('laplacian', F);  % Δ: scalar(vertex) → scalar(vertex)
+```
+
+### 4. Spectral Analysis
+
+Eigenmodes of the Laplace-Beltrami operator form a natural basis for the manifold:
+- `bct.graph.eigensolve()` computes eigenpairs
+- `bct.Eigenpairs` class encapsulates vectors, values, and metadata
+- Spectral filtering applies kernels in eigenmode domain
+
+```matlab
+E = bct.graph.eigensolve(M, 100);
+spectrum = E.vectors' * F.value;  % Project field onto eigenmodes
+filtered = E.vectors * (kernel .* spectrum);  % Spectral filtering
+```
+
+### 5. Registry System
+
+Extensibility through registries for:
+- **Operators** (`+registry/+operators/`) — Differential, transform, field operators
+- **Kernels** (`+registry/+kernels/`) — Spectral filter kernels
+- **Colormaps** (`+registry/+colormaps/`) — Visualization color schemes
+- **Brushes** (`+registry/+brushes/`) — Localization windows
+
+Each registry has:
+- `defs.m` — Registry definitions
+- `schema.m` — Validation schema
+- `list.m` — Query registered items
+- `validate.m` — Schema validation
+
+### 6. Runtime Resolution
+
+The `+runtime` package handles:
+- Lazy loading and caching of registered artifacts
+- Provenance tracking for operators
+- Dynamic binding of kernels to manifolds
+- Inspector resolution for UI components
+
+```matlab
+op = bct.runtime.operators('gradient');  % Resolve operator
+kernel = bct.runtime.kernels('heat', M, 't', 10);  % Bind kernel to manifold
+```
+
+📂 DATA LOCATIONS
+
+**Mesh catalog:**
+```
+toolbox/+bct/+data/assets/mesh/
+├── fsaverage_lh_white.mat
+├── fsaverage_rh_white.mat
+├── fsaverage_lh_pial.mat
+├── fsaverage_rh_pial.mat
+├── fsaverage_lh_inflated.mat
+├── fsaverage_rh_inflated.mat
+└── fsaverage_lh_sphere.mat
+```
+
+**Field catalog:**
+```
+toolbox/+bct/+data/assets/fields/
+└── scalarField.mat
+```
+
+**Catalog index:**
+```
+toolbox/+bct/+data/index.m
+```
+
+Contains struct array with mesh and field metadata. Access via:
+```matlab
+catalog = bct.data.index();
+M = bct.data.load('Id', 'fsaverage_rh_pial');
+F = bct.fields.load('Id', 'test_scalarField_vertex');
+```
 
 🧪 TESTING FRAMEWORK
 
 All tests must go under:
 
+```
 tests/
+```
 
-
-Use MATLAB’s matlab.unittest framework.
+Use MATLAB's `matlab.unittest` framework.
 
 Requirements:
-
-create a BaseBctTest shared test superclass
-
-BaseBctTest must run bioctree_start
-
-all test classes must subclass BaseBctTest
-
-Test categories:
-
-unit tests for all domain subclasses
-
-unit tests for transforms
-
-unit tests for filters
-
-unit tests for Signal class behavior
-
-integration tests for pipeline (Manifold → Lambda → Omega → Joint)
-
-performance tests (e.g., eigensolver speed)
+- Unit tests for core classes (Manifold, Graph, FEM, Eigenpairs)
+- Unit tests for operators (gradient, divergence, curl)
+- Unit tests for data loading (manifold.load, fields.load)
+- Integration tests for complete workflows
+- Performance tests (eigensolver, FEM assembly)
 
 📚 DOCUMENTATION REQUIREMENTS
 
 All documentation must go under:
 
+```
 docs/
-
+```
 
 Documentation must describe:
+- Manifold-field paradigm
+- FEM and spectral methods
+- Operator system and registry
+- Field types and validation
+- Visualization tools
+- API references
+- Usage examples
 
-domain inheritance hierarchy
+Additional notes in:
+```
+notes/
+```
 
-dual mappings
-
-transforms
-
-signals
-
-filters
-
-visualizer usage
-
-examples
-
-API references
+Contains contract specifications for subsystems (see `notes/*.md`).
 
 ⚙ DEPENDENCIES
 
-Bioctree uses external dependencies listed in:
+Bioctree builds upon:
 
-config/bioctree_dependencies.json
+- **gptoolbox** — Geometry processing (mesh operations, cotangent Laplacian, discrete differential geometry)
+- **DECLab** — Discrete Exterior Calculus (differential operators on simplicial complexes)
+- **GSPBox** — Graph Signal Processing (spectral graph theory, eigensolvers, spectral filtering)
 
+Dependencies are bundled in:
+```
+external/
+```
 
-The coding agent must handle these dependencies properly for imports and path setup.
+And listed in:
+```
+config/bct_dependencies.json
+```
 
-🖥 FRONTEND / BACKEND DESIGN
+Initialize via:
+```matlab
+bct_start  % Adds all paths and initializes dependencies
+```
 
-The user interface lives in:
+🖥 VISUALIZATION
 
-apps/app_code/BctFrontend.m
+**3D Viewer:**
+```
+toolbox/+bct/+ui/+manifold/Viewer.m
+```
 
+WebGL-based Three.js rendering with:
+- Interactive 3D mesh visualization
+- Field mapping with colormaps
+- Eigenmode inspection
+- Brush-based localization
 
-It calls:
+```matlab
+V = bct.ui.manifold.Viewer(M);
+V.show(fieldData);  % Display scalar field on manifold
+```
 
-apps/app_code/BctBackend.m
+**Eigenspectrum Inspector:**
+```
+toolbox/+bct/+ui/+eigenspectrum/Viewer.m
+```
 
-
-The backend must communicate with the bct class and all domain, signal, and filter classes.
-
-No UI code should directly manipulate domain or signal objects — it must call the backend.
+Visualize eigenmodes and eigenvalue spectrum.
 
 🎯 CODING AGENT EXPECTATIONS
 
 When generating code, you must:
 
-Respect the abstract Domain inheritance hierarchy
+1. **Use Manifold-centric design**: All geometry operations start with `bct.Manifold`
+2. **Respect field abstraction**: Use `bct.fields` for all field operations
+3. **Use operator registry**: Apply operators via `bct.operators.apply()`, not direct computation
+4. **Follow package structure**: Place code in correct subpackage (+geometry, +topology, +graph, etc.)
+5. **Validate schemas**: All registered artifacts must pass schema validation
+6. **Write unit tests**: Test all new functions in `tests/`
+7. **Document in notes/**: Add contract specifications for new subsystems
+8. **Maintain clean OOP style**: Use MATLAB classes with properties, methods, and validation
+9. **Avoid duplication**: Leverage existing FEM, Graph, and Eigenpairs functionality
+10. **Handle metadata**: Preserve provenance and metadata through all operations
 
-Use bct.Domain as the base for all domain subclasses
+**Deprecated concepts (DO NOT USE):**
+- `@Domain`, `@Lambda`, `@Omega`, `@Time`, `@Joint` classes (removed)
+- `@Signal` class (replaced by field abstraction)
+- `@bct` orchestrator class (replaced by package-level functions)
+- Domain dual relationships (replaced by spectral projection)
 
-Use transforms to move signals between dual domains
-
-Use the bct class as the orchestrator of all operations
-
-Place code in the correct package
-
-Write correct unit tests in tests/
-
-Add or update documentation in docs/
-
-Maintain clean, modular, MATLAB OOP style
-
-Avoid code duplication by leveraging inheritance and domain polymorphism
-
-Keep transform logic inside domain subclasses where appropriate
-
-You must write code that integrates CLEANLY with the entire system described above.
+You must write code that integrates CLEANLY with the current Manifold-Field architecture described above.

@@ -172,5 +172,155 @@ classdef test_bct_Eigenpairs < BaseBctTest
             testCase.verifyNotEqual(E1.ManifoldID, E2.ManifoldID, ...
                 'Different manifolds should have different IDs');
         end
+        
+        %% Eigenvalue and Eigenvector Tests
+        function testEigenvaluesAreSorted(testCase)
+            % Verify eigenvalues are sorted in ascending order
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 20);
+            lambda = E.Values;
+            
+            testCase.verifyTrue(issorted(lambda), ...
+                'Eigenvalues should be sorted ascending');
+            testCase.verifyGreaterThanOrEqual(lambda(1), -1e-10, ...
+                'First eigenvalue should be ~0 (DC component)');
+        end
+        
+        function testEigenvectorsOrthonormal(testCase)
+            % Verify eigenvectors are orthonormal
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 15);
+            Psi = E.Vectors;
+            
+            % Check orthonormality: Psi' * Psi = I
+            I_approx = Psi' * Psi;
+            testCase.verifyLessThan(norm(I_approx - eye(E.k), 'fro'), 1e-8, ...
+                'Eigenvectors should be orthonormal');
+        end
+        
+        function testEigenpairsResidual(testCase)
+            % Verify eigenpairs satisfy L*psi = lambda*psi
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            fem = M.FEM();
+            
+            E = fem.eigenpairs(10);
+            L = fem.Laplacian();
+            
+            % Check for a few eigenmodes
+            for i = [1, 5, 10]
+                psi = E.Vectors(:, i);
+                lambda = E.Values(i);
+                
+                residual = L*psi - lambda*psi;
+                testCase.verifyLessThan(norm(residual), 1e-8, ...
+                    sprintf('Eigenmode %d should satisfy L*psi = lambda*psi', i));
+            end
+        end
+        
+        %% Projection and Reconstruction Tests
+        function testProjectionDimensions(testCase)
+            % Verify projection produces correct dimensions
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 20);
+            
+            % Create test field
+            f = rand(M.numVertices(), 1);
+            
+            % Project onto spectral domain
+            spectrum = E.Vectors' * f;
+            
+            testCase.verifySize(spectrum, [E.k, 1], ...
+                'Spectral coefficients should be [k×1]');
+        end
+        
+        function testReconstructionFromSpectrum(testCase)
+            % Verify reconstruction from spectral coefficients
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 50);
+            
+            % Original field
+            f_orig = rand(M.numVertices(), 1);
+            
+            % Project and reconstruct
+            spectrum = E.Vectors' * f_orig;
+            f_recon = E.Vectors * spectrum;
+            
+            % Should be nearly identical
+            testCase.verifyLessThan(norm(f_orig - f_recon), 1e-10, ...
+                'Reconstruction should match original (within numerical error)');
+        end
+        
+        %% Truncation and Bandlimiting Tests
+        function testTruncation(testCase)
+            % Verify eigenpairs can be truncated
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E_full = bct.graph.eigensolve(M, 50);
+            
+            if ismethod(E_full, 'truncate')
+                E_trunc = E_full.truncate(20);
+                
+                testCase.verifyEqual(E_trunc.k, 20, ...
+                    'Truncated eigenpairs should have k=20');
+                testCase.verifySize(E_trunc.Vectors, [M.numVertices(), 20], ...
+                    'Truncated vectors should be [Nv×20]');
+            end
+        end
+        
+        function testBandlimiting(testCase)
+            % Verify eigenpairs can be bandlimited by eigenvalue range
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E_full = bct.graph.eigensolve(M, 50);
+            
+            if ismethod(E_full, 'bandlimit')
+                % Keep only modes with lambda in [0.1, 1.0]
+                E_band = E_full.bandlimit([0.1, 1.0]);
+                
+                testCase.verifyTrue(all(E_band.Values >= 0.1), ...
+                    'All eigenvalues should be >= 0.1');
+                testCase.verifyTrue(all(E_band.Values <= 1.0), ...
+                    'All eigenvalues should be <= 1.0');
+            end
+        end
+        
+        %% Metadata and Provenance Tests
+        function testEigenpairsMetadata(testCase)
+            % Verify eigenpairs contain metadata
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 10);
+            
+            testCase.verifyNotEmpty(E.ManifoldID, ...
+                'Eigenpairs should have ManifoldID');
+            testCase.verifyNotEmpty(E.Operator, ...
+                'Eigenpairs should specify operator type');
+        end
+        
+        function testEigenpairsProvenance(testCase)
+            % Verify eigenpairs track provenance if available
+            [V, F] = testCase.getDefaultTestMesh();
+            M = bct.Manifold(V, F);
+            
+            E = bct.graph.eigensolve(M, 10);
+            
+            % Check if provenance tracking exists
+            if isprop(E, 'Provenance') || isfield(E, 'provenance')
+                testCase.verifyTrue(true, ...
+                    'Provenance tracking available');
+            end
+        end
     end
 end

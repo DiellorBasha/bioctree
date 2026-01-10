@@ -2,7 +2,7 @@ classdef BaseBctTest < matlab.unittest.TestCase
     % BASEBCTTEST Base class for all BCT unit tests
     %
     % This class provides common setup for all BCT tests including:
-    % - Running bct_start to initialize the package
+    % - Running bct.start to initialize the package
     % - Setting up test fixtures
     % - Common test utilities
     
@@ -10,14 +10,15 @@ classdef BaseBctTest < matlab.unittest.TestCase
         function initializeBct(testCase)
             % Initialize BCT package before running tests
             try
-                % Get BCT root and add to path if bct_start not found
-                if ~exist('bct_start', 'file')
+                % Get BCT root and add to path if bct.start not found
+                if ~exist('bct.start', 'file')
                     bctRoot = testCase.getBctRoot();
                     addpath(bctRoot);
+                    addpath(fullfile(bctRoot, 'toolbox'));
                 end
                 
                 % Initialize BCT
-                bct_start();
+                bct.start();
             catch ME
                 testCase.verifyFail(sprintf('Failed to initialize BCT: %s', ME.message));
             end
@@ -35,7 +36,7 @@ classdef BaseBctTest < matlab.unittest.TestCase
         
         function cfg = getConfig()
             % Get BCT configuration
-            cfg = bct_config();
+            cfg = bct.config.load();
         end
         
         function mesh = loadTestMesh(meshType)

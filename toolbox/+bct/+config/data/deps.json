@@ -1,0 +1,41 @@
+{
+  "declab": {
+    "name": "DECLab",
+    "repo": "https://github.com/DillonCislo/DECLab.git",
+    "folder": "DECLab",
+    "ref": "bace86c2797025644d6b714c0ed02ff468d8374d",
+    "requiredSymbols": ["DiscreteExteriorCalculus"],
+    "zip": {
+      "type": "github",
+      "owner": "DillonCislo",
+      "repo": "DECLab",
+      "defaultBranch": "master"
+    }
+  },
+  "gspbox": {
+    "name": "GSPBox",
+    "repo": "https://github.com/epfl-lts2/gspbox.git",
+    "folder": "gspbox",
+    "ref": "a7d9aac5e239f1bcb37a9bb09998cc161be2732f",
+    "requiredSymbols": ["gsp_start"],
+    "zip": {
+      "type": "github",
+      "owner": "epfl-lts2",
+      "repo": "gspbox",
+      "defaultBranch": "master"
+    }
+  },
+  "gptoolbox": {
+    "name": "gptoolbox",
+    "repo": "https://github.com/alecjacobson/gptoolbox.git",
+    "folder": "gptoolbox",
+    "ref": "7c2838115799ab2736930158ce507a18c4961f4d",
+    "requiredSymbols": ["cotmatrix", "grad"],
+    "zip": {
+      "type": "github",
+      "owner": "alecjacobson",
+      "repo": "gptoolbox",
+      "defaultBranch": "master"
+    }
+  }
+}
