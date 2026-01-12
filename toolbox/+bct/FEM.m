@@ -42,6 +42,17 @@ classdef FEM < handle
         function obj = FEM(M, options)
             %FEM Constructor for FEM object from Manifold
             %
+            % WARNING: DEPRECATED - Use bct.Manifold methods directly
+            %
+            %   The bct.FEM class is deprecated and will be removed in a future release.
+            %   Use bct.Manifold methods for direct access to FEM matrices and eigenmodes:
+            %
+            %   Old: fem = bct.FEM(M); K = fem.Stiffness; Mass = fem.Mass;
+            %   New: K = M.cotmatrix(); Mass = M.massmatrix();
+            %
+            %   Old: E = fem.eigenpairs(100);
+            %   New: E = M.eigenmodes(100);
+            %
             % Syntax:
             %   fem = FEM(M)
             %   fem = FEM(M, 'MassType', type)
@@ -54,6 +65,16 @@ classdef FEM < handle
             %
             % Outputs:
             %   fem - FEM object
+            %
+            % See also: bct.Manifold.massmatrix, bct.Manifold.cotmatrix, bct.Manifold.eigenmodes
+            
+            % Deprecation warning
+            warning('bct:FEM:Deprecated', ...
+                sprintf(['bct.FEM class is deprecated and will be removed in a future release.\n' ...
+                         'Use bct.Manifold methods directly:\n' ...
+                         '  Mass matrix:  M.massmatrix()\n' ...
+                         '  Stiffness:    M.cotmatrix()\n' ...
+                         '  Eigenmodes:   M.eigenmodes(k)']));
             
             arguments
                 M (1,1) bct.Manifold

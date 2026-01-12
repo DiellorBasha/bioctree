@@ -31,6 +31,10 @@ classdef Manifold < handle
     properties (Access = private)
         Cache            % containers.Map for lazy representation creation
         Geometry         % Struct for cached geometric computations (frames, etc.)
+        CachedMass       % Cached mass matrix (computed on first access)
+        CachedStiffness  % Cached stiffness/cotangent matrix (computed on first access)
+        CachedMassType   % Type of mass matrix cached ('voronoi', 'barycentric', 'full')
+        CachedEigen      % Cached eigenmode structure (values, vectors, metadata)
     end
 
     methods
@@ -119,6 +123,14 @@ classdef Manifold < handle
             
             % Initialize geometry cache for frames
             obj.Geometry = struct();
+            
+            % Initialize FEM matrix cache
+            obj.CachedMass = [];
+            obj.CachedStiffness = [];
+            obj.CachedMassType = "";
+            
+            % Initialize eigenmode cache
+            obj.CachedEigen = struct();
         end
 
         % ===============================================================
@@ -189,6 +201,94 @@ classdef Manifold < handle
             dec = obj.Cache('DEC');
         end
 
+        function M = massmatrix(obj, options)
+            %MASSMATRIX Get or compute FEM mass matrix (lazy creation with caching)
+            %
+            % Syntax:
+            %   M = manifold.massmatrix()
+            %   M = manifold.massmatrix('Type', massType)
+            %
+            % Name-Value Parameters:
+            %   Type - Mass matrix type (default: 'voronoi')
+            %          'voronoi'     - Voronoi area cells (diagonal, default)
+            %          'barycentric' - Equal area distribution (diagonal)
+            %          'full'        - Consistent FEM mass matrix (sparse)
+            %
+            % Outputs:
+            %   M - [N×N] sparse mass matrix
+            %
+            % Description:
+            %   Returns the FEM mass matrix for the manifold. Matrix is computed
+            %   on first call and cached for subsequent calls with same type.
+            %   Different mass types are cached independently.
+            %
+            %   Note: Default 'voronoi' matches bct.FEM class convention.
+            %
+            % Examples:
+            %   M = manifold.massmatrix();  % Default voronoi
+            %   M = manifold.massmatrix('Type', 'barycentric');
+            %
+            % See also: bct.manifold.massmatrix, massmatrix, cotmatrix
+            
+            arguments
+                obj
+                options.Type (1,1) string {mustBeMember(options.Type, ["voronoi","barycentric","full"])} = "voronoi"
+            end
+            
+            massType = options.Type;
+            
+            % Check if we have cached mass matrix of requested type
+            if ~isempty(obj.CachedMass) && obj.CachedMassType == massType
+                M = obj.CachedMass;
+                return;
+            end
+            
+            % Compute mass matrix using bct.manifold.massmatrix
+            M = bct.manifold.massmatrix(obj, 'Type', massType);
+            
+            % Cache for future use
+            obj.CachedMass = M;
+            obj.CachedMassType = massType;
+        end
+        
+        function K = cotmatrix(obj)
+            %COTMATRIX Get or compute FEM stiffness/cotangent matrix (lazy creation with caching)
+            %
+            % Syntax:
+            %   K = manifold.cotmatrix()
+            %
+            % Outputs:
+            %   K - [N×N] sparse stiffness matrix (cotangent Laplacian)
+            %
+            % Description:
+            %   Returns the FEM stiffness matrix (cotangent Laplacian) for the
+            %   manifold. Matrix is computed on first call and cached for
+            %   subsequent calls.
+            %
+            %   The cotangent matrix represents:
+            %   - Discrete Dirichlet energy: E(u) = u' * K * u
+            %   - Laplace-Beltrami operator: Δu = M^(-1) * K * u
+            %   - Positive semidefinite form (λ ≥ 0)
+            %
+            % Examples:
+            %   K = manifold.cotmatrix();
+            %   energy = u' * K * u;  % Dirichlet energy
+            %
+            % See also: bct.manifold.cotmatrix, cotmatrix, massmatrix
+            
+            % Check if we have cached stiffness matrix
+            if ~isempty(obj.CachedStiffness)
+                K = obj.CachedStiffness;
+                return;
+            end
+            
+            % Compute stiffness matrix using bct.manifold.cotmatrix
+            K = bct.manifold.cotmatrix(obj);
+            
+            % Cache for future use
+            obj.CachedStiffness = K;
+        end
+
         function g = Graph(obj)
             %GRAPH Get Graph representation (lazy creation with caching)
             %
@@ -226,8 +326,141 @@ classdef Manifold < handle
         % SPECTRAL ANALYSIS
         % ===============================================================
         
+        function Eigen = eigenmodes(obj, varargin)
+            %EIGENMODES Get or compute eigenmodes of Laplace-Beltrami operator
+            %
+            % Syntax:
+            %   Eigen = M.eigenmodes()          % Get cached or compute with k=50
+            %   Eigen = M.eigenmodes(k)         % Recompute with k modes
+            %   Eigen = M.eigenmodes('k', k)    % Recompute with k modes (named)
+            %   Eigen = M.eigenmodes('k', k, 'RemoveDC', false)  % Additional options
+            %
+            % Inputs:
+            %   k - Number of eigenmodes (default: 50 if not cached)
+            %
+            % Optional Parameters:
+            %   k         - Number of modes (can be positional or named)
+            %   RemoveDC  - Remove DC mode (default: true)
+            %   MassType  - Mass matrix type: 'voronoi' (default), 'barycentric', 'full'
+            %   EigsOpts  - Additional eigs options (struct)
+            %   Force     - Force recomputation even if cached (default: false)
+            %
+            % Outputs:
+            %   Eigen - Structure with fields:
+            %           .values    - [k×1] eigenvalues (sorted ascending)
+            %           .vectors   - [N×k] eigenvectors (M-orthonormal)
+            %           .k         - Number of modes
+            %           .operator  - 'Laplace-Beltrami'
+            %           .basis     - 'P1-FEM'
+            %           .ordering  - 'ascending'
+            %           .massType  - Mass matrix type used
+            %           .removedDC - Whether DC mode was removed
+            %
+            % Description:
+            %   Returns cached eigenmode structure if available, or computes
+            %   using bct.manifold.eigenmodes() with specified parameters.
+            %   Result is cached for future calls.
+            %
+            %   When called without arguments, returns cached Eigen structure
+            %   or computes with default k=50 modes if not cached.
+            %
+            %   When called with arguments (k value), recomputes eigenmodes
+            %   and updates the cache.
+            %
+            % Examples:
+            %   % Get cached or compute with default k=50
+            %   E = M.eigenmodes();
+            %   lambda = E.values;
+            %   U = E.vectors;
+            %
+            %   % Compute with 100 modes (updates cache)
+            %   E = M.eigenmodes(100);
+            %
+            %   % Named parameter
+            %   E = M.eigenmodes('k', 100);
+            %
+            %   % With additional options
+            %   E = M.eigenmodes(100, 'MassType', 'barycentric');
+            %
+            %   % Force recomputation
+            %   E = M.eigenmodes('Force', true);
+            %
+            % See also: bct.manifold.eigenmodes, eigensolve
+            
+            % Parse input arguments
+            p = inputParser;
+            p.addOptional('k', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
+            p.addParameter('RemoveDC', true, @islogical);
+            p.addParameter('MassType', "voronoi", @(x) isstring(x) || ischar(x));
+            p.addParameter('EigsOpts', struct(), @isstruct);
+            p.addParameter('Force', false, @islogical);
+            p.parse(varargin{:});
+            
+            k_requested = p.Results.k;
+            removeDC = p.Results.RemoveDC;
+            massType = string(p.Results.MassType);
+            eigsOpts = p.Results.EigsOpts;
+            force = p.Results.Force;
+            
+            % Determine if we need to compute
+            needsCompute = false;
+            
+            if force
+                % Forced recomputation
+                needsCompute = true;
+                if isempty(k_requested)
+                    % Use cached k if available, otherwise default
+                    if isfield(obj.CachedEigen, 'k') && ~isempty(obj.CachedEigen.k)
+                        k_requested = obj.CachedEigen.k;
+                    else
+                        k_requested = 50;  % Default
+                    end
+                end
+            elseif ~isempty(k_requested)
+                % k specified, need to recompute
+                needsCompute = true;
+            elseif isempty(fieldnames(obj.CachedEigen))
+                % No cache exists, compute with default k=50
+                k_requested = 50;
+                needsCompute = true;
+            else
+                % Return cached
+                Eigen = obj.CachedEigen;
+                return;
+            end
+            
+            % Compute eigenmodes using bct.manifold.eigenmodes
+            [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(...
+                obj, k_requested, ...
+                'RemoveDC', removeDC, ...
+                'MassType', massType, ...
+                'EigsOpts', eigsOpts);
+            
+            % Build Eigen structure
+            Eigen = struct();
+            Eigen.values = eigenvalues;
+            Eigen.vectors = eigenvectors;
+            Eigen.k = length(eigenvalues);
+            Eigen.operator = "Laplace-Beltrami";
+            Eigen.basis = "P1-FEM";
+            Eigen.ordering = "ascending";
+            Eigen.massType = massType;
+            Eigen.removedDC = removeDC;
+            
+            % Cache for future use
+            obj.CachedEigen = Eigen;
+        end
+
         function [Psi, Lambda] = eigensolve(obj, k, options)
             %EIGENSOLVE Compute eigenpairs of Laplace-Beltrami operator
+            %
+            % WARNING: DEPRECATED - Use M.eigenmodes() instead
+            %
+            %   This method is deprecated and will be removed in a future release.
+            %   Use M.eigenmodes() for direct eigenmode computation:
+            %
+            %   Old: [Psi, Lambda] = M.eigensolve(100);
+            %   New: E = M.eigenmodes(100); Psi = E.vectors; Lambda = E.values;
             %
             % Syntax:
             %   [Psi, Lambda] = M.eigensolve(k)
@@ -256,7 +489,7 @@ classdef Manifold < handle
             %   % Use FEM method explicitly
             %   [Psi, Lambda] = M.eigensolve(100, 'Method', 'FEM');
             %
-            % See also: bct.FEM.eigenpairs, bct.Eigenpairs
+            % See also: bct.Manifold.eigenmodes, bct.FEM.eigenpairs, bct.Eigenpairs
             
             arguments
                 obj
@@ -264,6 +497,14 @@ classdef Manifold < handle
                 options.Method (1,1) string {mustBeMember(options.Method, ["FEM"])} = "FEM"
                 options.Force (1,1) logical = false
             end
+            
+            % Deprecation warning
+            warning('bct:Manifold:eigensolve:Deprecated', ...
+                sprintf(['M.eigensolve() is deprecated and will be removed in a future release.\n' ...
+                         'Use M.eigenmodes() instead:\n' ...
+                         '  Old: [Psi, Lambda] = M.eigensolve(%d);\n' ...
+                         '  New: E = M.eigenmodes(%d); Psi = E.vectors; Lambda = E.values;'], ...
+                        k, k));
             
             % Delegate to appropriate method
             switch options.Method

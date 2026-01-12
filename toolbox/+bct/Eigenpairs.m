@@ -63,6 +63,18 @@ classdef Eigenpairs < handle
         function obj = Eigenpairs(varargin)
             %EIGENPAIRS Constructor for Eigenpairs object
             %
+            % WARNING: DEPRECATED - Use bct.Manifold.eigenmodes() instead
+            %
+            %   The bct.Eigenpairs class is deprecated and will be removed in a future release.
+            %   Use bct.Manifold.eigenmodes() for direct eigenmode computation:
+            %
+            %   Old: E = bct.eigenpairs.fromFEM(fem, 100);
+            %   New: E = M.eigenmodes(100);
+            %
+            %   The returned structure contains:
+            %     E.values    - [k×1] eigenvalues
+            %     E.vectors   - [N×k] eigenvectors
+            %
             % Syntax (precomputed):
             %   E = bct.Eigenpairs(values, vectors, M, ...
             %           'operator', op, 'basis', basis, 'manifoldID', id)
@@ -88,6 +100,15 @@ classdef Eigenpairs < handle
             %   manifoldID - String identifier for safety checks
             %   RemoveDC   - Remove DC component (default: true)
             %   EigsOpts   - Options struct passed to eigs
+            %
+            % See also: bct.Manifold.eigenmodes
+            
+            % Deprecation warning
+            warning('bct:Eigenpairs:Deprecated', ...
+                sprintf(['bct.Eigenpairs class is deprecated and will be removed in a future release.\n' ...
+                         'Use bct.Manifold.eigenmodes() instead:\n' ...
+                         '  Old: E = bct.eigenpairs.fromFEM(fem, k);\n' ...
+                         '  New: E = M.eigenmodes(k); % Returns struct with .values and .vectors']));
             
             % Parse inputs to determine mode
             if nargin >= 3 && isnumeric(varargin{1}) && isnumeric(varargin{2}) && ...
