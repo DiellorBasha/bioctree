@@ -1,7 +1,7 @@
 function validateTime_(time, numSamples)
 %VALIDATETIME_ Validate time struct fields and consistency
 %
-% Private helper for bct.fields.validate
+% Private helper for bct.field.validate
 
 arguments
     time struct

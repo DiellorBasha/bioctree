@@ -1,7 +1,7 @@
 function validate(F, varargin)
 %VALIDATE Validate Field struct against schema
 %
-% VALIDATE(F) validates Field struct F against bct.fields.schema
+% VALIDATE(F) validates Field struct F against bct.field.schema
 %
 % VALIDATE(F, M) additionally validates meshId consistency with Manifold M
 %
@@ -17,11 +17,11 @@ function validate(F, varargin)
 %
 % Examples:
 %   % Validate without Manifold check
-%   bct.fields.validate(F);
+%   bct.field.validate(F);
 %
 %   % Validate with Manifold consistency check
 %   M = bct.Manifold(...);
-%   bct.fields.validate(F, M);
+%   bct.field.validate(F, M);
 
 arguments
     F struct
@@ -42,7 +42,7 @@ if ~isempty(varargin)
 end
 
 % Get schema
-schema = bct.fields.schema();
+schema = bct.field.schema();
 
 % Check required fields
 requiredFields = ["schemaVersion", "support", "valueType", "value"];
@@ -70,7 +70,7 @@ validateSupport_(F.support, schema);
 
 % Get support size
 if ~isempty(M)
-    supportSize = bct.fields.sizeOfSupport(F.support, M);
+    supportSize = bct.field.sizeOfSupport(F.support, M);
 else
     % Cannot validate size without Manifold, just check shape consistency
     supportSize = size(F.value, 1);

@@ -19,7 +19,7 @@ function specs = defsField()
 %   metaPolicy    - "inherit" | "inheritAndAugment" | "new"
 %   implementation - Function handle expecting (ctx, rawInputs...)
 %
-% See also: bct.registry.operators.defs, bct.fields.schema
+% See also: bct.registry.operators.defs, bct.field.schema
 
 specs = dictionary(string.empty, struct.empty);
 

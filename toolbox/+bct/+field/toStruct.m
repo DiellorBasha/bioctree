@@ -8,7 +8,7 @@ function S = toStruct(F)
 % all nested structures are plain structs.
 %
 % Examples:
-%   S = bct.fields.toStruct(F);
+%   S = bct.field.toStruct(F);
 %   save('field.mat', '-struct', 'S');
 
 arguments
@@ -16,7 +16,7 @@ arguments
 end
 
 % Validate input
-bct.fields.validate(F);
+bct.field.validate(F);
 
 % For now, just return a copy (Field is already a struct)
 S = F;

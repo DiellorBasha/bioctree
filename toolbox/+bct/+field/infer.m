@@ -23,14 +23,14 @@ function F = infer(support, value, varargin)
 %
 % Examples:
 %   % Infer scalar field
-%   F = bct.fields.infer('vertex', rand(1000, 1));
+%   F = bct.field.infer('vertex', rand(1000, 1));
 %
 %   % Infer time-varying vector field
-%   F = bct.fields.infer('face', rand(500, 3, 100), ...
+%   F = bct.field.infer('face', rand(500, 3, 100), ...
 %                        'time', struct('dt', 0.01, 'unit', 's'));
 %
 %   % Infer tangent field
-%   F = bct.fields.infer('vertex', rand(1000, 2), ...
+%   F = bct.field.infer('vertex', rand(1000, 2), ...
 %                        'frame', rand(1000, 2, 3));
 
 arguments
@@ -133,6 +133,6 @@ if ~isempty(fieldnames(opts.metadata))
 end
 
 % Create Field using make()
-F = bct.fields.make(makeArgs{:});
+F = bct.field.make(makeArgs{:});
 
 end

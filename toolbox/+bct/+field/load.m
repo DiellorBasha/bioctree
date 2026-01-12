@@ -1,10 +1,10 @@
 function F = load(id, options)
-%BCT.FIELDS.LOAD Load bundled field test data
+%bct.field.LOAD Load bundled field test data
 %
 % Syntax:
-%   F = bct.fields.load()                    % Load default
-%   F = bct.fields.load(id)                  % Load by ID
-%   F = bct.fields.load(Name=Value)          % Load by attributes
+%   F = bct.field.load()                    % Load default
+%   F = bct.field.load(id)                  % Load by ID
+%   F = bct.field.load(Name=Value)          % Load by attributes
 %
 % Inputs:
 %   id - Field asset ID string (e.g., "scalarField_test_vertex")
@@ -16,7 +16,7 @@ function F = load(id, options)
 %   MeshId     - Associated mesh ID (optional)
 %
 % Outputs:
-%   F - Field struct conforming to bct.fields.schema
+%   F - Field struct conforming to bct.field.schema
 %       .schemaVersion - Schema version string
 %       .support       - Support type
 %       .valueType     - Value type
@@ -28,16 +28,16 @@ function F = load(id, options)
 %
 % Examples:
 %   % Load default field
-%   F = bct.fields.load();
+%   F = bct.field.load();
 %   
 %   % Load by ID
-%   F = bct.fields.load("scalarField_test_vertex");
+%   F = bct.field.load("scalarField_test_vertex");
 %   
 %   % Load by attributes
-%   F = bct.fields.load(Support="vertex", ValueType="scalar");
-%   F = bct.fields.load(Dataset="test", Support="face");
+%   F = bct.field.load(Support="vertex", ValueType="scalar");
+%   F = bct.field.load(Dataset="test", Support="face");
 %
-% See also: bct.fields.make, bct.data.load, bct.data.index
+% See also: bct.field.make, bct.data.load, bct.data.index
 
 arguments
     id (1,1) string = ""
@@ -169,7 +169,7 @@ if isempty(valueArray)
         'Could not find numeric value array in file: %s', full_path);
 end
 
-% Build Field struct using bct.fields.make
+% Build Field struct using bct.field.make
 makeArgs = {
     'support', support, ...
     'valueType', valueType, ...
@@ -217,7 +217,7 @@ makeArgs = [makeArgs, {'metadata', metadata}];
 
 % Create validated Field struct
 try
-    F = bct.fields.make(makeArgs{:});
+    F = bct.field.make(makeArgs{:});
 catch ME
     error('bct:fields:ValidationFailed', ...
         'Failed to validate loaded field "%s": %s', entry.Id, ME.message);

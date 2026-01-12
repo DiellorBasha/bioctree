@@ -9,16 +9,16 @@ function tf = isTimeVarying(F)
 %
 % Examples:
 %   % Static scalar field
-%   F = bct.fields.make('support', 'vertex', ...
+%   F = bct.field.make('support', 'vertex', ...
 %                       'valueType', 'scalar', ...
 %                       'value', rand(1000, 1));
-%   bct.fields.isTimeVarying(F)  % false
+%   bct.field.isTimeVarying(F)  % false
 %
 %   % Time-varying scalar field
-%   F = bct.fields.make('support', 'vertex', ...
+%   F = bct.field.make('support', 'vertex', ...
 %                       'valueType', 'scalar', ...
 %                       'value', rand(1000, 100));
-%   bct.fields.isTimeVarying(F)  % true
+%   bct.field.isTimeVarying(F)  % true
 
 arguments
     F struct

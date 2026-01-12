@@ -59,14 +59,14 @@ E = bct.graph.eigensolve(M, 100);  % Compute eigenpairs
 
 ### 2. Field Abstraction
 
-Fields are signals defined on manifolds. The `bct.fields` package manages:
+Fields are signals defined on manifolds. The `bct.field` package manages:
 - **Support**: `vertex` (values at mesh vertices) or `face` (values at face centers)
 - **Value type**: `scalar` (one value per location) or `vector` (tangent vectors)
 - **Validation**: Schema checking and manifold compatibility
 
 ```matlab
-F = bct.fields.load();  % Load field from catalog
-F = bct.fields.make(M, values, 'support', 'vertex', 'valueType', 'scalar');
+F = bct.field.load();  % Load field from catalog
+F = bct.field.make(M, values, 'support', 'vertex', 'valueType', 'scalar');
 ```
 
 ### 3. Operator System
@@ -151,7 +151,7 @@ Contains struct array with mesh and field metadata. Access via:
 ```matlab
 catalog = bct.data.index();
 M = bct.data.load('Id', 'fsaverage_rh_pial');
-F = bct.fields.load('Id', 'test_scalarField_vertex');
+F = bct.field.load('Id', 'test_scalarField_vertex');
 ```
 
 🧪 TESTING FRAMEWORK
@@ -248,7 +248,7 @@ Visualize eigenmodes and eigenvalue spectrum.
 When generating code, you must:
 
 1. **Use Manifold-centric design**: All geometry operations start with `bct.Manifold`
-2. **Respect field abstraction**: Use `bct.fields` for all field operations
+2. **Respect field abstraction**: Use `bct.field` for all field operations
 3. **Use operator registry**: Apply operators via `bct.operators.apply()`, not direct computation
 4. **Follow package structure**: Place code in correct subpackage (+geometry, +topology, +graph, etc.)
 5. **Validate schemas**: All registered artifacts must pass schema validation

@@ -1,7 +1,7 @@
 function validateSupport_(support, schema)
 %VALIDATESUPPORT_ Validate support field
 %
-% Private helper for bct.fields.validate
+% Private helper for bct.field.validate
 
 arguments
     support

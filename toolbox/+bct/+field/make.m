@@ -20,12 +20,12 @@ function F = make(varargin)
 %
 % Examples:
 %   % Static scalar vertex field
-%   F = bct.fields.make('support', 'vertex', ...
+%   F = bct.field.make('support', 'vertex', ...
 %                       'valueType', 'scalar', ...
 %                       'value', rand(1000, 1));
 %
 %   % Time-varying vector face field
-%   F = bct.fields.make('support', 'face', ...
+%   F = bct.field.make('support', 'face', ...
 %                       'valueType', 'vector3', ...
 %                       'value', rand(500, 3, 100), ...
 %                       'time', struct('t0', 0, 'dt', 0.01, 'unit', 's'));
@@ -33,7 +33,7 @@ function F = make(varargin)
 %   % Tangent field with frame
 %   tangents = rand(1000, 2);
 %   frames = rand(1000, 2, 3);
-%   F = bct.fields.make('support', 'vertex', ...
+%   F = bct.field.make('support', 'vertex', ...
 %                       'valueType', 'tangent2', ...
 %                       'value', tangents, ...
 %                       'frame', frames);
@@ -75,7 +75,7 @@ F.valueType = char(args.valueType);
 F.value = args.value;
 
 % Get schema for validation
-schema = bct.fields.schema();
+schema = bct.field.schema();
 
 % Validate support
 validateSupport_(F.support, schema);
@@ -167,6 +167,6 @@ if ~isempty(fieldnames(args.metadata))
 end
 
 % Final validation
-bct.fields.validate(F);
+bct.field.validate(F);
 
 end

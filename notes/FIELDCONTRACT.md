@@ -2,7 +2,7 @@ Below is a comprehensive, document for adding a **Field** artifact to bct. It is
 
 ---
 
-# bct.fields Design Document (Contract + Implementation Plan)
+# bct.field Design Document (Contract + Implementation Plan)
 
 ## 0. Objective
 
@@ -56,7 +56,7 @@ toolbox/+bct/+fields/
         supportCardinality_.m
 ```
 
-**Design choice:** Field is a **struct**, not a class. The `bct.fields` package provides constructors, validators, utilities, and conversions.
+**Design choice:** Field is a **struct**, not a class. The `bct.field` package provides constructors, validators, utilities, and conversions.
 
 ---
 
@@ -170,18 +170,18 @@ Normalization rules:
 
 ## 3. Core API
 
-### 3.1 `bct.fields.schema()`
+### 3.1 `bct.field.schema()`
 
 Returns the schema definition (struct describing allowed supports, valueTypes, required fields, and shape rules). Used by validators and by documentation.
 
-### 3.2 `bct.fields.make(...)` (Primary constructor)
+### 3.2 `bct.field.make(...)` (Primary constructor)
 
 Creates a Field struct with strong validation.
 
 Signature (recommended):
 
 ```matlab
-F = bct.fields.make( ...
+F = bct.field.make( ...
     'meshId', meshId, ...
     'support', support, ...
     'value', value, ...
@@ -197,7 +197,7 @@ Rules:
 * Must normalize time struct via `private/normalizeTime_.m`.
 * Must inject defaults: `schemaVersion`, empty `meta` if omitted.
 
-### 3.3 `bct.fields.validate(F, options)`
+### 3.3 `bct.field.validate(F, options)`
 
 Validates a Field struct. Returns `ok` and optionally throws.
 
@@ -215,14 +215,14 @@ Validation checks:
 * `meshId` is a string scalar
 * If `frame` exists, validate it is compatible and normalized
 
-### 3.4 `bct.fields.infer(...)` (Convenience constructor)
+### 3.4 `bct.field.infer(...)` (Convenience constructor)
 
 Build Field given a Manifold and a value matrix, infer support and valueType where possible.
 
 Example:
 
 ```matlab
-F = bct.fields.infer(M, value, 'support',"vertex", 'time',tStruct);
+F = bct.field.infer(M, value, 'support',"vertex", 'time',tStruct);
 ```
 
 Rules:
@@ -232,7 +232,7 @@ Rules:
 
 ### 3.5 Support cardinality helpers
 
-* `n = bct.fields.sizeOfSupport(M, support)`
+* `n = bct.field.sizeOfSupport(M, support)`
   Computes S for support using `M`:
 
   * `"vertex"` -> size(M.Vertices,1)
@@ -243,18 +243,18 @@ Rules:
 
 ### 3.6 Time utilities
 
-* `tf = bct.fields.isTimeVarying(F)`
-* `F2 = bct.fields.selectTime(F, idxOrRange)`
-* `F2 = bct.fields.withTime(F, timeStruct)` (replaces time metadata, validates)
+* `tf = bct.field.isTimeVarying(F)`
+* `F2 = bct.field.selectTime(F, idxOrRange)`
+* `F2 = bct.field.withTime(F, timeStruct)` (replaces time metadata, validates)
 
 ### 3.7 Meta utilities
 
-* `F2 = bct.fields.withMeta(F, patchStruct)` merges metadata safely.
+* `F2 = bct.field.withMeta(F, patchStruct)` merges metadata safely.
 
 ### 3.8 Conversions
 
-* `S = bct.fields.toStruct(F)` (identity for now, but used for future file export)
-* `F = bct.fields.fromStruct(S)` validates and normalizes.
+* `S = bct.field.toStruct(F)` (identity for now, but used for future file export)
+* `F = bct.field.fromStruct(S)` validates and normalizes.
 
 ---
 
@@ -269,7 +269,7 @@ A Field should not store `Manifold` itself, only:
 
 ### 4.2 Validation with a Manifold
 
-`bct.fields.validate(F, 'Manifold', M)` must check:
+`bct.field.validate(F, 'Manifold', M)` must check:
 
 * `F.meshId == M.ID` (or accept override option `AllowMeshIdMismatch` for migration tools)
 * `size(value,1) == sizeOfSupport(M, F.support)`
@@ -429,7 +429,7 @@ x = randn(M.numVertices(), 1000);
 
 time = struct('fs', 2400, 't0', 0, 'nSamples', 1000, 'units', "s");
 
-Fv = bct.fields.make( ...
+Fv = bct.field.make( ...
   'meshId', M.ID, ...
   'support', "vertex", ...
   'valueType', "scalar", ...
@@ -443,7 +443,7 @@ Fv = bct.fields.make( ...
 ```matlab
 vf = randn(M.numFaces(), 3, 1000);
 
-Ff = bct.fields.make( ...
+Ff = bct.field.make( ...
   'meshId', M.ID, ...
   'support', "face", ...
   'valueType', "vector3", ...
@@ -460,7 +460,7 @@ u2 = randn(M.numVertices(),2,1000);
 
 frame = struct('domain',"vertex",'e1',e1,'e2',e2,'convention',"right-handed");
 
-Ft = bct.fields.make( ...
+Ft = bct.field.make( ...
   'meshId', M.ID, ...
   'support', "vertex", ...
   'valueType', "tangent2", ...
@@ -498,7 +498,7 @@ A “FieldSet” for multi-band or multi-modal collections, optionally.
 2. Field introduction is additive only.
 3. Avoid introducing circular dependencies:
 
-   * `bct.fields` may accept Manifold for validation, but must not depend on UI or runtime.
+   * `bct.field` may accept Manifold for validation, but must not depend on UI or runtime.
 4. Do not embed Manifold handle into Field.
 5. Do not silently coerce shapes; always validate and throw.
 

@@ -2,7 +2,7 @@ function n = sizeOfSupport(support, M)
 %SIZEOFSUPPORT Compute cardinality of a discrete support on manifold
 %
 % Syntax:
-%   n = bct.fields.sizeOfSupport(support, M)
+%   n = bct.field.sizeOfSupport(support, M)
 %
 % Inputs:
 %   support - Support type string: "vertex"|"face"|"edge"|"halfedge"|"dualFace"|"dualVertex"
@@ -21,11 +21,11 @@ function n = sizeOfSupport(support, M)
 %
 % Examples:
 %   M = bct.Manifold(V, F);
-%   nV = bct.fields.sizeOfSupport("vertex", M);
-%   nF = bct.fields.sizeOfSupport("face", M);
-%   nHE = bct.fields.sizeOfSupport("halfedge", M);
+%   nV = bct.field.sizeOfSupport("vertex", M);
+%   nF = bct.field.sizeOfSupport("face", M);
+%   nHE = bct.field.sizeOfSupport("halfedge", M);
 %
-% See also: bct.fields.make, bct.fields.validate
+% See also: bct.field.make, bct.field.validate
 
 arguments
     support (1,1) string

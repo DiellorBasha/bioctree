@@ -8,14 +8,14 @@ function F = fromStruct(S)
 %
 % Examples:
 %   S = load('field.mat');
-%   F = bct.fields.fromStruct(S);
+%   F = bct.field.fromStruct(S);
 
 arguments
     S struct
 end
 
 % Validate the input struct
-bct.fields.validate(S);
+bct.field.validate(S);
 
 % Return validated Field (already a struct)
 F = S;

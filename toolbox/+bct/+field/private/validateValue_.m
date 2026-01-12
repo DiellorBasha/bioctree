@@ -1,7 +1,7 @@
 function validateValue_(value, valueType, support, supportSize, schema)
 %VALIDATEVALUE_ Validate value field shape and type
 %
-% Private helper for bct.fields.validate
+% Private helper for bct.field.validate
 
 arguments
     value

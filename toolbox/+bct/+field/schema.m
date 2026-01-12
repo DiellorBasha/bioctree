@@ -2,7 +2,7 @@ function s = schema()
 %SCHEMA Return Field schema definition
 %
 % Syntax:
-%   s = bct.fields.schema()
+%   s = bct.field.schema()
 %
 % Returns:
 %   s - Struct describing Field schema v1
@@ -14,7 +14,7 @@ function s = schema()
 %   - Time structure schema
 %   - Required/optional fields
 %
-% See also: bct.fields.validate, bct.fields.make
+% See also: bct.field.validate, bct.field.make
 
 s = struct();
 

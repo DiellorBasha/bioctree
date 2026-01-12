@@ -154,7 +154,7 @@ V = bct.ui.manifold.Viewer(M);
 V.show(E.vectors(:, 10));
 
 % Load or define a field on the manifold
-F = bct.fields.load();  % scalar field on vertices
+F = bct.field.load();  % scalar field on vertices
 
 % Apply differential operators
 gradF = bct.operators.apply('gradient', F);    % ∇F: vertex→face vector field

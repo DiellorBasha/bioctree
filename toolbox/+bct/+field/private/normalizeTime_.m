@@ -1,7 +1,7 @@
 function timeNorm = normalizeTime_(time, numSamples)
 %NORMALIZETIME_ Normalize time struct with default/inferred fields
 %
-% Private helper for bct.fields.make
+% Private helper for bct.field.make
 
 arguments
     time struct

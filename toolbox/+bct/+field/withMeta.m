@@ -13,11 +13,11 @@ function Fout = withMeta(F, metaStruct)
 % Examples:
 %   % Add provenance metadata
 %   meta = struct('source', 'simulation', 'date', datestr(now));
-%   Fout = bct.fields.withMeta(F, meta);
+%   Fout = bct.field.withMeta(F, meta);
 %
 %   % Update existing metadata
 %   meta = struct('processed', true, 'filter', 'lowpass');
-%   Fout = bct.fields.withMeta(F, meta);
+%   Fout = bct.field.withMeta(F, meta);
 
 arguments
     F struct
@@ -54,6 +54,6 @@ else
 end
 
 % Validate result
-bct.fields.validate(Fout);
+bct.field.validate(Fout);
 
 end

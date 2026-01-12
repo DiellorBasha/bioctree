@@ -1,4 +1,4 @@
-# bct.fields Package
+# bct.field Package
 
 Provides a structured, validated Field artifact for representing signals defined on discrete supports of a manifold/mesh.
 
@@ -55,7 +55,7 @@ M = bct.Manifold(V, F);
 x = randn(M.numVertices(), 1000);
 time = struct('fs', 2400, 't0', 0, 'nSamples', 1000, 'units', "s");
 
-F = bct.fields.make( ...
+F = bct.field.make( ...
     'meshId', M.ID, ...
     'support', "vertex", ...
     'valueType', "scalar", ...
@@ -64,14 +64,14 @@ F = bct.fields.make( ...
     'meta', struct('band', "alpha"));
 
 % Validate against manifold
-bct.fields.validate(F, 'Manifold', M);
+bct.field.validate(F, 'Manifold', M);
 
 % Query
-isTV = bct.fields.isTimeVarying(F);  % true
-n = bct.fields.sizeOfSupport(M, F.support);  % numVertices
+isTV = bct.field.isTimeVarying(F);  % true
+n = bct.field.sizeOfSupport(M, F.support);  % numVertices
 
 % Time selection
-F_slice = bct.fields.selectTime(F, 1:100);
+F_slice = bct.field.selectTime(F, 1:100);
 ```
 
 ## Core Functions

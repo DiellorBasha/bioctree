@@ -1,7 +1,7 @@
-# bct.fields Package Implementation Summary
+# bct.field Package Implementation Summary
 
 ## Overview
-Successfully implemented complete **bct.fields** package for structured Field artifact system. The package provides support-type safety, time-aware signal representation, and seamless integration with `bct.Manifold`.
+Successfully implemented complete **bct.field** package for structured Field artifact system. The package provides support-type safety, time-aware signal representation, and seamless integration with `bct.Manifold`.
 
 ## Package Structure
 
@@ -49,53 +49,53 @@ toolbox/+bct/+fields/
 ### Construction
 ```matlab
 % Primary constructor with explicit types
-F = bct.fields.make('support', 'vertex', ...
+F = bct.field.make('support', 'vertex', ...
                     'valueType', 'scalar', ...
                     'value', data);
 
 % Type-inferring constructor
-F = bct.fields.infer('vertex', data);
+F = bct.field.infer('vertex', data);
 ```
 
 ### Validation
 ```matlab
 % Validate against schema
-bct.fields.validate(F);
+bct.field.validate(F);
 
 % Validate with Manifold consistency check
-bct.fields.validate(F, M);
+bct.field.validate(F, M);
 
 % Get schema definition
-schema = bct.fields.schema();
+schema = bct.field.schema();
 
 % Compute support cardinality
-n = bct.fields.sizeOfSupport('vertex', M);
+n = bct.field.sizeOfSupport('vertex', M);
 ```
 
 ### Time Operations
 ```matlab
 % Check if time-varying
-tf = bct.fields.isTimeVarying(F);
+tf = bct.field.isTimeVarying(F);
 
 % Extract temporal subset
-Fsub = bct.fields.selectTime(F, 1:10);      % Range
-Fsnap = bct.fields.selectTime(F, 5);        % Single (becomes static)
+Fsub = bct.field.selectTime(F, 1:10);      % Range
+Fsnap = bct.field.selectTime(F, 5);        % Single (becomes static)
 
 % Update time metadata
-Fnew = bct.fields.withTime(F, struct('t0', 0, 'dt', 0.001, 'unit', 'ms'));
+Fnew = bct.field.withTime(F, struct('t0', 0, 'dt', 0.001, 'unit', 'ms'));
 ```
 
 ### Metadata & Conversion
 ```matlab
 % Merge metadata
-F = bct.fields.withMeta(F, struct('source', 'simulation'));
+F = bct.field.withMeta(F, struct('source', 'simulation'));
 
 % Convert numeric types
-Fsingle = bct.fields.cast(F, 'single');
+Fsingle = bct.field.cast(F, 'single');
 
 % Serialization
-S = bct.fields.toStruct(F);
-F = bct.fields.fromStruct(S);
+S = bct.field.toStruct(F);
+F = bct.field.fromStruct(S);
 ```
 
 ## Field Struct Schema
@@ -194,12 +194,12 @@ Descriptive errors with consistent identifiers:
 M = bct.Manifold(V, F);
 
 % Validate Field against Manifold
-F = bct.fields.make('support', 'vertex', ...
+F = bct.field.make('support', 'vertex', ...
                     'value', rand(M.numVertices(), 1), ...
                     'valueType', 'scalar', ...
                     'meshId', M.ID);
 
-bct.fields.validate(F, M);  % Checks meshId matches M.ID
+bct.field.validate(F, M);  % Checks meshId matches M.ID
 ```
 
 ### Future Integration
@@ -215,7 +215,7 @@ bct.fields.validate(F, M);  % Checks meshId matches M.ID
 M = bct.Manifold(V, F);
 data = rand(M.numVertices(), 1);
 
-F = bct.fields.make('support', 'vertex', ...
+F = bct.field.make('support', 'vertex', ...
                     'valueType', 'scalar', ...
                     'value', data, ...
                     'meshId', M.ID, ...
@@ -228,14 +228,14 @@ nf = M.numFaces();
 T = 100;
 vectors = randn(nf, 3, T);
 
-F = bct.fields.make('support', 'face', ...
+F = bct.field.make('support', 'face', ...
                     'valueType', 'vector3', ...
                     'value', vectors, ...
                     'time', struct('t0', 0, 'dt', 0.01, 'unit', 's'), ...
                     'meshId', M.ID);
 
 % Extract subset
-Fsub = bct.fields.selectTime(F, 1:10);
+Fsub = bct.field.selectTime(F, 1:10);
 ```
 
 ### Tangent Field with Frame
@@ -244,7 +244,7 @@ nv = M.numVertices();
 tangents = randn(nv, 2);
 frames = randn(nv, 2, 3);
 
-F = bct.fields.make('support', 'vertex', ...
+F = bct.field.make('support', 'vertex', ...
                     'valueType', 'tangent2', ...
                     'value', tangents, ...
                     'frame', frames);
@@ -253,14 +253,14 @@ F = bct.fields.make('support', 'vertex', ...
 ### Type Inference
 ```matlab
 % Infer scalar from [S×1]
-F = bct.fields.infer('vertex', rand(M.numVertices(), 1));
+F = bct.field.infer('vertex', rand(M.numVertices(), 1));
 
 % Infer time-varying vector3 from [S×3×T]
-F = bct.fields.infer('face', rand(M.numFaces(), 3, 100), ...
+F = bct.field.infer('face', rand(M.numFaces(), 3, 100), ...
                      'time', struct('dt', 0.01, 'unit', 's'));
 
 % Infer tangent2 (requires frame)
-F = bct.fields.infer('vertex', rand(M.numVertices(), 2), ...
+F = bct.field.infer('vertex', rand(M.numVertices(), 2), ...
                      'frame', rand(M.numVertices(), 2, 3));
 ```
 
@@ -281,7 +281,7 @@ F = bct.fields.infer('vertex', rand(M.numVertices(), 2), ...
 
 **Branch**: feature/manifold-refactor
 **Commit**: 93864d3
-**Message**: Add bct.fields package for structured Field artifact system
+**Message**: Add bct.field package for structured Field artifact system
 **Files**: 19 files changed, 1732 insertions(+)
 
 ## Next Steps
@@ -298,4 +298,4 @@ Future enhancements could include:
 
 ## Summary
 
-The `bct.fields` package provides a robust, type-safe foundation for signal analysis on manifolds. All 25 tests pass, the API is clean and documented, and the implementation follows best practices for MATLAB package development. The package integrates seamlessly with the existing bct.Manifold system and is ready for use in spectral analysis workflows.
+The `bct.field` package provides a robust, type-safe foundation for signal analysis on manifolds. All 25 tests pass, the API is clean and documented, and the implementation follows best practices for MATLAB package development. The package integrates seamlessly with the existing bct.Manifold system and is ready for use in spectral analysis workflows.

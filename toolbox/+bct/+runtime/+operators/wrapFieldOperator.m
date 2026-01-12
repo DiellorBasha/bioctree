@@ -25,7 +25,7 @@ function wrapped = wrapFieldOperator(spec, implFn, ctx)
 %   wrapped = wrapFieldOperator(spec, impl, ctx);
 %   outputField = wrapped(inputField);
 %
-% See also: bct.fields.validate, bct.fields.make
+% See also: bct.field.validate, bct.field.make
 
 % Determine if single input or multiple inputs
 multiInput = isfield(spec, 'inputs');
@@ -74,7 +74,7 @@ wrapped = @wrapperFunction;
             end
             
             % Validate against schema
-            bct.fields.validate(F);
+            bct.field.validate(F);
             
             % Validate with Manifold if meshId present
             if isfield(F, 'meshId')
@@ -100,7 +100,7 @@ wrapped = @wrapperFunction;
             end
             
             % Validate time policy
-            isTimeVarying = bct.fields.isTimeVarying(F);
+            isTimeVarying = bct.field.isTimeVarying(F);
             if strcmp(sigSpec.time, 'require') && ~isTimeVarying
                 error('bct:runtime:TimeRequired', ...
                     'Input %d to operator "%s" must be time-varying', i, spec.id);
@@ -123,8 +123,8 @@ wrapped = @wrapperFunction;
                 if strcmp(spec.inputs(i).time, 'align')
                     % Check all time-varying inputs have same nSamples
                     for j = (i+1):length(Fins)
-                        if bct.fields.isTimeVarying(Fins{i}) && ...
-                           bct.fields.isTimeVarying(Fins{j})
+                        if bct.field.isTimeVarying(Fins{i}) && ...
+                           bct.field.isTimeVarying(Fins{j})
                             if size(Fins{i}.value, ndims(Fins{i}.value)) ~= ...
                                size(Fins{j}.value, ndims(Fins{j}.value))
                                 error('bct:runtime:TimeMismatch', ...
@@ -208,6 +208,6 @@ wrapped = @wrapperFunction;
         makeArgs = [makeArgs, {'metadata', meta}];
         
         % Create Field
-        Fout = bct.fields.make(makeArgs{:});
+        Fout = bct.field.make(makeArgs{:});
     end
 end

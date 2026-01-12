@@ -39,7 +39,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field on vertices
             scalarData = sin(2*pi*V(:,1)) .* cos(2*pi*V(:,2));
-            fieldIn = bct.fields.make(M, scalarData, ...
+            fieldIn = bct.field.make(M, scalarData, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply gradient
@@ -62,7 +62,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field
             f = rand(M.numVertices(), 1);
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply gradient via operators
@@ -86,7 +86,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create vector field on faces
             vectorData = randn(M.numFaces(), 3);
-            fieldIn = bct.fields.make(M, vectorData, ...
+            fieldIn = bct.field.make(M, vectorData, ...
                 'support', 'face', 'valueType', 'vector');
             
             % Apply divergence
@@ -108,7 +108,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field
             f = sin(2*pi*V(:,1)) .* cos(2*pi*V(:,2));
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply div(grad(f))
@@ -130,7 +130,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field
             f = rand(M.numVertices(), 1);
-            fieldIn = bct.fields.make(M, f, ...
+            fieldIn = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply Laplacian
@@ -153,7 +153,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field
             f = rand(M.numVertices(), 1);
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply Laplacian via operators
@@ -181,7 +181,7 @@ classdef test_bct_operators < BaseBctTest
             eigenFunc = E.Vectors(:, modeIdx);
             eigenVal = E.Values(modeIdx);
             
-            field = bct.fields.make(M, eigenFunc, ...
+            field = bct.field.make(M, eigenFunc, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Apply Laplacian
@@ -201,7 +201,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create scalar field
             f = sin(2*pi*V(:,1));
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             % Chain: scalar → gradient → divergence → scalar
@@ -249,7 +249,7 @@ classdef test_bct_operators < BaseBctTest
             
             % Create vector field on vertices (wrong for gradient)
             vectorData = randn(M.numVertices(), 3);
-            field = bct.fields.make(M, vectorData, ...
+            field = bct.field.make(M, vectorData, ...
                 'support', 'vertex', 'valueType', 'vector');
             
             % Gradient expects scalar input
@@ -263,13 +263,13 @@ classdef test_bct_operators < BaseBctTest
             M = bct.Manifold(V, F);
             
             f = rand(M.numVertices(), 1);
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             gradField = bct.operators.apply('gradient', field);
             
             % Validate output field
-            testCase.verifyNoError(@() bct.fields.validate(gradField), ...
+            testCase.verifyNoError(@() bct.field.validate(gradField), ...
                 'Operator output should be valid field');
         end
         
@@ -280,7 +280,7 @@ classdef test_bct_operators < BaseBctTest
             M = bct.Manifold(V, F);
             
             f = rand(M.numVertices(), 1);
-            field = bct.fields.make(M, f, ...
+            field = bct.field.make(M, f, ...
                 'support', 'vertex', 'valueType', 'scalar');
             
             gradField = bct.operators.apply('gradient', field);

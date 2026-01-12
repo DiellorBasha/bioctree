@@ -13,10 +13,10 @@ function Fout = withTime(F, timeStruct)
 %
 % Examples:
 %   % Update time units
-%   Fout = bct.fields.withTime(F, struct('t0', 0, 'dt', 0.001, 'unit', 's'));
+%   Fout = bct.field.withTime(F, struct('t0', 0, 'dt', 0.001, 'unit', 's'));
 %
 %   % Change time origin
-%   Fout = bct.fields.withTime(F, struct('t0', -0.5, 'dt', 0.01, 'unit', 's'));
+%   Fout = bct.field.withTime(F, struct('t0', -0.5, 'dt', 0.01, 'unit', 's'));
 
 arguments
     F struct
@@ -24,7 +24,7 @@ arguments
 end
 
 % Check if time-varying
-if ~bct.fields.isTimeVarying(F)
+if ~bct.field.isTimeVarying(F)
     error('bct:Field:NotTimeVarying', ...
         'Field is not time-varying; cannot update time metadata');
 end
@@ -46,6 +46,6 @@ Fout = F;
 Fout.time = timeNorm;
 
 % Validate result
-bct.fields.validate(Fout);
+bct.field.validate(Fout);
 
 end

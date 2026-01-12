@@ -15,13 +15,13 @@ function Fout = selectTime(F, timeIndices)
 %
 % Examples:
 %   % Extract first 10 time points
-%   Fout = bct.fields.selectTime(F, 1:10);
+%   Fout = bct.field.selectTime(F, 1:10);
 %
 %   % Extract single snapshot (becomes static)
-%   Fsnap = bct.fields.selectTime(F, 50);
+%   Fsnap = bct.field.selectTime(F, 50);
 %
 %   % Extract every other sample
-%   Fdown = bct.fields.selectTime(F, 1:2:100);
+%   Fdown = bct.field.selectTime(F, 1:2:100);
 
 arguments
     F struct
@@ -29,7 +29,7 @@ arguments
 end
 
 % Check if time-varying
-if ~bct.fields.isTimeVarying(F)
+if ~bct.field.isTimeVarying(F)
     error('bct:Field:NotTimeVarying', ...
         'Field is not time-varying; cannot select time samples');
 end
@@ -103,6 +103,6 @@ if isfield(F, 'time')
 end
 
 % Validate result
-bct.fields.validate(Fout);
+bct.field.validate(Fout);
 
 end

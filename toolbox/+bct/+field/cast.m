@@ -12,10 +12,10 @@ function Fout = cast(F, targetClass)
 %
 % Examples:
 %   % Convert to single precision
-%   Fsingle = bct.fields.cast(F, 'single');
+%   Fsingle = bct.field.cast(F, 'single');
 %
 %   % Convert to double precision
-%   Fdouble = bct.fields.cast(F, 'double');
+%   Fdouble = bct.field.cast(F, 'double');
 
 arguments
     F struct
@@ -34,6 +34,6 @@ if isfield(F, 'frame')
 end
 
 % Validate result
-bct.fields.validate(Fout);
+bct.field.validate(Fout);
 
 end

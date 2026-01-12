@@ -34,7 +34,7 @@ function spec = fieldSignature(varargin)
 %       'support', 'vertex', 'valueType', 'tangent2', ...
 %       'framePolicy', 'requiresInputFrame');
 %
-% See also: bct.registry.operators.defs, bct.fields.schema
+% See also: bct.registry.operators.defs, bct.field.schema
 
 arguments (Repeating)
     varargin
@@ -65,7 +65,7 @@ if strcmp(spec.kind, 'Field')
     
     % Validate support
     if ~isempty(spec.support)
-        schema = bct.fields.schema();
+        schema = bct.field.schema();
         if ~ismember(string(spec.support), schema.supports)
             error('bct:registry:InvalidSupport', ...
                 'Invalid support: %s', spec.support);
@@ -74,7 +74,7 @@ if strcmp(spec.kind, 'Field')
     
     % Validate valueType
     if ~isempty(spec.valueType)
-        schema = bct.fields.schema();
+        schema = bct.field.schema();
         if ~ismember(string(spec.valueType), schema.valueTypes)
             error('bct:registry:InvalidValueType', ...
                 'Invalid valueType: %s', spec.valueType);
