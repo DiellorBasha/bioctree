@@ -15,8 +15,8 @@ classdef Field < handle
     %   value    - Numeric array [S×...] where S matches support size
     %
     % Name-Value Arguments:
-    %   Support    - "vertex"|"face"|"edge"|"halfedge" (default: inferred)
-    %   ValueType  - "scalar"|"vector3"|"tangent2" (default: inferred)
+    %   Support    - "vertex"|"face"|"edge"|"halfedge"|"dualFace"|"dualVertex" (default: inferred)
+    %   ValueType  - "scalar"|"vector3"|"tangent2"|"complexScalar"|"complexVector3" (default: inferred)
     %   Time       - Time struct for time-varying fields
     %   Frame      - Tangent frame for tangent2 fields
     %   Meta       - Metadata struct
