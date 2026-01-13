@@ -119,7 +119,8 @@ classdef Manifold < handle
                 'geometry', struct('data', struct(), 'meta', struct()), ...
                 'topology', struct('data', struct(), 'meta', struct()), ...
                 'operators', struct('data', struct(), 'meta', struct()), ...
-                'eigenmodes', struct('data', struct(), 'meta', struct()));
+                'eigenmodes', struct('data', struct(), 'meta', struct()), ...
+                'health', struct('data', struct(), 'meta', struct()));
         end
 
         % ===============================================================
@@ -778,6 +779,103 @@ classdef Manifold < handle
             % Cache the result
             obj.Cache.topology.data = topo;
             obj.Cache.topology.meta.computed = datetime('now');
+        end
+        
+        function R = health(obj, varargin)
+            %HEALTH Get or compute mesh health check (lazy creation with caching)
+            %
+            % Syntax:
+            %   R = M.health()
+            %   R = M.health(Name, Value)
+            %
+            % Optional Parameters:
+            %   Level             - "quick" | "standard" | "full" (default: "standard")
+            %                       - quick: topology only (indices, degeneracy, manifoldness)
+            %                       - standard: quick + orientation + boundary + geometry
+            %                       - full: standard + self-intersection + quality metrics
+            %   RequireManifold   - logical, error on non-manifold edges (default: true)
+            %   RequireOriented   - logical, error on orientation conflicts (default: true)
+            %   RequireClosed     - logical, error on boundary edges (default: false)
+            %   FailOnWarnings    - logical, set ok=false for warnings (default: false)
+            %   Force             - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   R - Health check report structure with fields:
+            %     .ok       - logical, overall pass/fail
+            %     .severity - "ok" | "warn" | "error"
+            %     .scope    - "bct.manifold.health"
+            %     .level    - check level performed
+            %     .summary  - string array of high-level messages
+            %     .issues   - struct array of detected issues
+            %     .stats    - mesh statistics (nV, nF, nE, boundary/nonmanifold counts)
+            %     .timing   - performance timers
+            %     .data     - optional cached data
+            %
+            % Description:
+            %   Performs comprehensive mesh health validation and caches the result.
+            %   First call computes health check, subsequent calls return cached
+            %   result unless 'Force' is true or parameters change.
+            %
+            %   The health check validates mesh topology, orientation, and geometry
+            %   to ensure compatibility with DEC operators, FEM computations, and
+            %   graph algorithms.
+            %
+            % Examples:
+            %   % Quick check during construction validation
+            %   M = bct.Manifold(V, F);
+            %   R = M.health('Level', 'quick');
+            %   assert(R.ok, 'Invalid mesh topology');
+            %
+            %   % Standard check (cached)
+            %   R = M.health();  % First call computes
+            %   R = M.health();  % Second call returns cached
+            %
+            %   % Force recomputation
+            %   R = M.health('Force', true);
+            %
+            %   % Check for DEC compatibility
+            %   R = M.health('RequireManifold', true, 'RequireOriented', true);
+            %
+            %   % View formatted report
+            %   disp(bct.manifold.health.report(R));
+            %
+            % See also: bct.manifold.health.check, bct.manifold.health.report
+            
+            % Parse inputs
+            p = inputParser;
+            p.FunctionName = 'bct.Manifold.health';
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'Level', "standard", @(x) ischar(x) || isstring(x));
+            addParameter(p, 'RequireManifold', true, @islogical);
+            addParameter(p, 'RequireOriented', true, @islogical);
+            addParameter(p, 'RequireClosed', false, @islogical);
+            addParameter(p, 'FailOnWarnings', false, @islogical);
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            level = string(p.Results.Level);
+            
+            % Check if we have cached health report and not forcing recomputation
+            if ~force && ~isempty(fieldnames(obj.Cache.health.data))
+                R = obj.Cache.health.data;
+                return;
+            end
+            
+            % Compute health check using bct.manifold.health.check
+            R = bct.manifold.health.check(obj, ...
+                'Level', level, ...
+                'RequireManifold', p.Results.RequireManifold, ...
+                'RequireOriented', p.Results.RequireOriented, ...
+                'RequireClosed', p.Results.RequireClosed, ...
+                'FailOnWarnings', p.Results.FailOnWarnings);
+            
+            % Cache the result
+            obj.Cache.health.data = R;
+            obj.Cache.health.meta.computed = datetime('now');
+            obj.Cache.health.meta.level = level;
+            obj.Cache.health.meta.requireManifold = p.Results.RequireManifold;
+            obj.Cache.health.meta.requireOriented = p.Results.RequireOriented;
+            obj.Cache.health.meta.requireClosed = p.Results.RequireClosed;
         end
         
         function write(obj, fileName, options)
