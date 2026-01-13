@@ -76,10 +76,21 @@ classdef Graph < handle
             obj.GraphMATLABCache = containers.Map();
             obj.GraphGSPCache = containers.Map();
             
-            % Initialize metrics
+            % Initialize metrics (use Manifold's cached computations directly)
             obj.Weights = struct();
-            obj.Weights.geometry = bct.manifold.query.edgeLengths(obj.Manifold);
-            obj.Weights.fem = bct.manifold.query.femWeights(obj.Manifold);
+            
+            % Geometric weights: edge lengths from cached geometry
+            geom = obj.Manifold.geometry();
+            obj.Weights.geometry = geom.edgeLengths;
+            
+            % FEM weights: extract from stiffness matrix
+            ops = obj.Manifold.operators();
+            K = ops.stiffness;
+            i = obj.Edges(:,1);
+            j = obj.Edges(:,2);
+            w = -K(sub2ind(size(K), i, j));
+            w(w < 0) = 0;  % numerical safety
+            obj.Weights.fem = w;
         end
     end
     
