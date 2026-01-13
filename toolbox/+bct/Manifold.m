@@ -2,11 +2,11 @@ classdef Manifold < handle
     %MANIFOLD  Geometric substrate for surface-based analysis
     %
     % Defines geometry, topology, and metric. Provides access to
-    % FEM, DEC, and Graph representations via ports.
+    % DEC and Graph representations via ports.
     %
     % Design principles (from ManifoldContract):
     %   - Manifold owns: Topology, Embedding, Metric, Intrinsic differential structure
-    %   - FEM, DEC, Graph are views accessed through ports (not stored properties)
+    %   - DEC, Graph are views accessed through ports (not stored properties)
     %   - Immutable geometry, mutable representations
     %   - No analysis, filters, brushes, spectral pipelines, or UI state
     %
@@ -15,7 +15,6 @@ classdef Manifold < handle
     %   M = bct.Manifold(struct('V', V, 'F', F));
     %   
     %   % Access representations via ports
-    %   fem = M.FEM();
     %   dec = M.DEC();
     %   graph = M.Graph();
     %
@@ -115,7 +114,7 @@ classdef Manifold < handle
             end
             
             % Extract or compute edges
-            obj.Edges = obj.computeEdges();
+            obj.Edges = bct.manifold.topology.edges(obj.Faces);
             
             % Generate unique ID for this manifold
             obj.ID = string(java.util.UUID.randomUUID());
@@ -136,10 +135,10 @@ classdef Manifold < handle
         end
 
         % ===============================================================
-        % REPRESENTATION PORTS (FEM, DEC, Graph)
+        % REPRESENTATION PORTS (DEC, Graph)
         % ===============================================================
         
-        function fem = FEM(obj)
+        function dec = DEC(obj)
             %FEM Get FEM representation struct (lazy creation with caching)
             %
             % Syntax:
@@ -794,7 +793,7 @@ classdef Manifold < handle
             %   % Force recomputation
             %   E = M.eigenmodes('Force', true);
             %
-            % See also: bct.manifold.eigenmodes, eigensolve
+            % See also: bct.manifold.eigenmodes
             
             % Parse input arguments
             p = inputParser;
@@ -859,79 +858,6 @@ classdef Manifold < handle
             % Cache for future use
             obj.CachedEigen = Eigen;
         end
-
-        function [Psi, Lambda] = eigensolve(obj, k, options)
-            %EIGENSOLVE Compute eigenpairs of Laplace-Beltrami operator
-            %
-            % WARNING: DEPRECATED - Use M.eigenmodes() instead
-            %
-            %   This method is deprecated and will be removed in a future release.
-            %   Use M.eigenmodes() for direct eigenmode computation:
-            %
-            %   Old: [Psi, Lambda] = M.eigensolve(100);
-            %   New: E = M.eigenmodes(100); Psi = E.vectors; Lambda = E.values;
-            %
-            % Syntax:
-            %   [Psi, Lambda] = M.eigensolve(k)
-            %   [Psi, Lambda] = M.eigensolve(k, 'Method', 'FEM')
-            %   [Psi, Lambda] = M.eigensolve(k, 'Force', true)
-            %
-            % Inputs:
-            %   k - Number of eigenmodes to compute
-            %
-            % Optional Parameters:
-            %   Method - Eigensolve method: 'FEM' (default)
-            %            Future: 'DEC', 'Graph'
-            %   Force  - If true, recompute even if cached (default: false)
-            %
-            % Outputs:
-            %   Psi    - [N×k] matrix of eigenvectors (columns are eigenmodes)
-            %   Lambda - [k×1] vector of eigenvalues (spatial frequencies)
-            %
-            % Note: Currently only 'FEM' method is implemented. This delegates
-            %       to FEM().eigenpairs() for computation.
-            %
-            % Examples:
-            %   % Compute first 100 eigenmodes
-            %   [Psi, Lambda] = M.eigensolve(100);
-            %
-            %   % Use FEM method explicitly
-            %   [Psi, Lambda] = M.eigensolve(100, 'Method', 'FEM');
-            %
-            % See also: bct.Manifold.eigenmodes, bct.manifold.eigen.solve
-            
-            arguments
-                obj
-                k (1,1) double {mustBePositive, mustBeInteger}
-                options.Method (1,1) string {mustBeMember(options.Method, ["FEM"])} = "FEM"
-                options.Force (1,1) logical = false
-            end
-            
-            % Deprecation warning
-            warning('bct:Manifold:eigensolve:Deprecated', ...
-                sprintf(['M.eigensolve() is deprecated and will be removed in a future release.\n' ...
-                         'Use M.eigenmodes() instead:\n' ...
-                         '  Old: [Psi, Lambda] = M.eigensolve(%d);\n' ...
-                         '  New: E = M.eigenmodes(%d); Psi = E.vectors; Lambda = E.values;'], ...
-                        k, k));
-            
-            % Delegate to appropriate method
-            switch options.Method
-                case "FEM"
-                    % Delegate to FEM eigenpairs method
-                    fem = obj.FEM();
-                    E = fem.eigenpairs(k, 'Force', options.Force);
-                    
-                    % Extract eigenvectors and eigenvalues
-                    Psi = E.Vectors;
-                    Lambda = E.Values;
-                    
-                otherwise
-                    error('bct:Manifold:UnsupportedMethod', ...
-                          'Method "%s" not yet implemented. Currently only "FEM" is supported.', ...
-                          options.Method);
-            end
-        end
         
         % ===============================================================
         % GEOMETRIC QUERIES (thin delegations)
@@ -961,23 +887,7 @@ classdef Manifold < handle
             % Outputs:
             %   A - [N×N] sparse logical adjacency matrix (symmetric, no self-loops)
             
-            F = obj.Faces;
-            if isempty(F)
-                % No faces: return empty sparse matrix
-                N = size(obj.Vertices, 1);
-                A = sparse(N, N);
-                return;
-            end
-            
-            % Extract unique edges from faces
-            e = unique(sort([F(:,[1 2]); F(:,[2 3]); F(:,[3 1])], 2), 'rows');
-            
-            % Build symmetric adjacency matrix
-            N = size(obj.Vertices, 1);
-            A = sparse(e(:,1), e(:,2), true, N, N);
-            A = A + A.';                % Make symmetric
-            A = A - diag(diag(A));      % Remove self-loops
-            A = spones(A) > 0;          % Binary adjacency
+            A = bct.manifold.topology.adjacency(obj);
         end
         
         function bbox = boundingBox(obj)
@@ -1321,30 +1231,6 @@ classdef Manifold < handle
     end
     
     methods (Access = private)
-        function E = computeEdges(obj)
-            %COMPUTEEDGES Extract unique edges from faces
-            %
-            % Returns:
-            %   E - [E×2] matrix of vertex indices forming edges
-            %
-            % Note: Manual unique() approach is faster than triangulation.edges()
-            %       for large meshes (0.32s vs 0.50s on fsaverage6)
-            
-            F = obj.Faces;
-            if isempty(F)
-                E = zeros(0, 2);
-                return;
-            end
-            
-            % Extract all edges from triangular faces
-            edges = [F(:,[1 2]); F(:,[2 3]); F(:,[3 1])];
-            
-            % Sort each edge so that (i,j) and (j,i) become the same
-            edges = sort(edges, 2);
-            
-            % Get unique edges
-            E = unique(edges, 'rows');
-        end
     end
 
     methods (Static)

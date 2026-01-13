@@ -61,10 +61,9 @@ function he = halfedge(V, F)
   twin = full(D(sub2ind([nV nV], v_head, v_tail))); % D(head,tail)
   % twin is 0 for boundary halfedges (no opposite direction found)
 
-  % Undirected edges: assign an edge id to each halfedge by unique(min,max).
-  a = min(v_tail, v_head);
-  b = max(v_tail, v_head);
-  [E, ~, edge_id] = unique([a b], 'rows', 'stable');
+  % Undirected edges: use canonical edge indexing from topology.edges
+  % This ensures edge IDs are consistent across all topology functions
+  [E, edge_id] = bct.manifold.topology.edges(F);
 
   he = struct();
   he.nV = nV;
