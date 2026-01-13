@@ -200,6 +200,410 @@ classdef Manifold < handle
             end
             dec = obj.Cache('DEC');
         end
+        
+        function op = d0(obj)
+            %D0 Get exterior derivative operator d0: C⁰ → C¹
+            %
+            % Syntax:
+            %   op = M.d0()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the d0 matrix
+            %
+            % Description:
+            %   Returns the exterior derivative operator that maps 0-forms
+            %   (scalar fields on vertices) to 1-forms (fields on edges).
+            %   This is the discrete differential operator from DECLab.
+            %
+            %   Mathematical properties:
+            %   - d0 maps vertex values to edge circulations
+            %   - Size: [numEdges × numVertices]
+            %   - d1 ∘ d0 = 0 (exactness: boundary of boundary is zero)
+            %
+            % Examples:
+            %   % Get d0 operator
+            %   M = bct.Manifold(V, F);
+            %   d0 = M.d0();
+            %
+            %   % Apply to scalar field (0-form)
+            %   omega0 = rand(M.numVertices(), 1);
+            %   omega1 = d0 * omega0;  % Result is 1-form on edges
+            %
+            %   % Check exactness: d1 ∘ d0 = 0
+            %   d1 = M.d1();
+            %   d1d0 = d1 * d0;
+            %   norm(d1d0.Matrix, 'fro')  % Should be ~0
+            %
+            % See also: d1, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.d0, ...
+                'ID', "d0", ...
+                'Name', "Exterior Derivative (0→1)", ...
+                'Domain', "dec", ...
+                'InputType', "0-form", ...
+                'OutputType', "1-form");
+        end
+        
+        function op = d1(obj)
+            %D1 Get exterior derivative operator d1: C¹ → C²
+            %
+            % Syntax:
+            %   op = M.d1()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the d1 matrix
+            %
+            % Description:
+            %   Returns the exterior derivative operator that maps 1-forms
+            %   (fields on edges) to 2-forms (fields on faces).
+            %   This is the discrete differential operator from DECLab.
+            %
+            %   Mathematical properties:
+            %   - d1 maps edge circulations to face fluxes
+            %   - Size: [numFaces × numEdges]
+            %   - d1 ∘ d0 = 0 (exactness: boundary of boundary is zero)
+            %
+            % Examples:
+            %   % Get d1 operator
+            %   M = bct.Manifold(V, F);
+            %   d1 = M.d1();
+            %
+            %   % Apply to 1-form (edge field)
+            %   omega1 = rand(M.numEdges(), 1);
+            %   omega2 = d1 * omega1;  % Result is 2-form on faces
+            %
+            %   % Check exactness: d1 ∘ d0 = 0
+            %   d0 = M.d0();
+            %   d1d0 = d1 * d0;
+            %   norm(d1d0.Matrix, 'fro')  % Should be ~0
+            %
+            % See also: d0, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.d1, ...
+                'ID', "d1", ...
+                'Name', "Exterior Derivative (1→2)", ...
+                'Domain', "dec", ...
+                'InputType', "1-form", ...
+                'OutputType', "2-form");
+        end
+        
+        function op = dd0(obj)
+            %DD0 Get codifferential operator dd0: C¹ → C⁰ (dual of d0)
+            %
+            % Syntax:
+            %   op = M.dd0()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the dd0 matrix
+            %
+            % Description:
+            %   Returns the codifferential (adjoint of exterior derivative) that
+            %   maps 1-forms on dual edges to 0-forms on dual vertices.
+            %   This is the dual exterior derivative from DECLab.
+            %
+            %   Mathematical properties:
+            %   - dd0 is the formal adjoint of d0 on dual complex
+            %   - Size: [numFaces × numEdges]
+            %   - Related to divergence on dual mesh
+            %
+            % Examples:
+            %   % Get dd0 operator
+            %   M = bct.Manifold(V, F);
+            %   dd0 = M.dd0();
+            %
+            %   % Apply to 1-form on dual edges
+            %   omega1_dual = rand(M.numEdges(), 1);
+            %   omega0_dual = dd0 * omega1_dual;
+            %
+            % See also: d0, dd1, hd0, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.dd0, ...
+                'ID', "dd0", ...
+                'Name', "Codifferential (dual 0→1)", ...
+                'Domain', "dec", ...
+                'InputType', "1-form (dual)", ...
+                'OutputType', "0-form (dual)");
+        end
+        
+        function op = dd1(obj)
+            %DD1 Get codifferential operator dd1: C² → C¹ (dual of d1)
+            %
+            % Syntax:
+            %   op = M.dd1()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the dd1 matrix
+            %
+            % Description:
+            %   Returns the codifferential (adjoint of exterior derivative) that
+            %   maps 2-forms on dual faces to 1-forms on dual edges.
+            %   This is the dual exterior derivative from DECLab.
+            %
+            %   Mathematical properties:
+            %   - dd1 is the formal adjoint of d1 on dual complex
+            %   - Size: [numEdges × numVertices]
+            %   - Related to curl on dual mesh
+            %
+            % Examples:
+            %   % Get dd1 operator
+            %   M = bct.Manifold(V, F);
+            %   dd1 = M.dd1();
+            %
+            %   % Apply to 2-form on dual faces
+            %   omega2_dual = rand(M.numVertices(), 1);
+            %   omega1_dual = dd1 * omega2_dual;
+            %
+            % See also: d1, dd0, hd1, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.dd1, ...
+                'ID', "dd1", ...
+                'Name', "Codifferential (dual 1→2)", ...
+                'Domain', "dec", ...
+                'InputType', "2-form (dual)", ...
+                'OutputType', "1-form (dual)");
+        end
+        
+        function op = hd0(obj)
+            %HD0 Get Hodge star operator ⋆₀: C⁰ → C²
+            %
+            % Syntax:
+            %   op = M.hd0()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hd0 matrix
+            %
+            % Description:
+            %   Returns the Hodge star operator that maps primal 0-forms
+            %   (vertex values) to dual 2-forms (face values on dual mesh).
+            %   The Hodge star is a metric-dependent isomorphism between
+            %   k-forms and (n-k)-forms.
+            %
+            %   Mathematical properties:
+            %   - Diagonal matrix with dual cell areas
+            %   - Size: [numVertices × numVertices]
+            %   - Relates primal and dual complexes via metric
+            %
+            % Examples:
+            %   % Get Hodge star ⋆₀
+            %   M = bct.Manifold(V, F);
+            %   star0 = M.hd0();
+            %
+            %   % Apply to 0-form
+            %   omega0 = rand(M.numVertices(), 1);
+            %   omega2_dual = star0 * omega0;
+            %
+            % See also: hd1, hd2, hdd0, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hd0, ...
+                'ID', "hd0", ...
+                'Name', "Hodge Star ⋆₀", ...
+                'Domain', "dec", ...
+                'InputType', "0-form (primal)", ...
+                'OutputType', "2-form (dual)");
+        end
+        
+        function op = hd1(obj)
+            %HD1 Get Hodge star operator ⋆₁: C¹ → C¹
+            %
+            % Syntax:
+            %   op = M.hd1()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hd1 matrix
+            %
+            % Description:
+            %   Returns the Hodge star operator that maps primal 1-forms
+            %   (edge values) to dual 1-forms (dual edge values).
+            %   For 1-forms on 2-manifolds, the Hodge star maps to 1-forms.
+            %
+            %   Mathematical properties:
+            %   - Maps primal edges to dual edges
+            %   - Size: [numEdges × numEdges]
+            %   - Diagonal matrix with dual edge lengths
+            %
+            % Examples:
+            %   % Get Hodge star ⋆₁
+            %   M = bct.Manifold(V, F);
+            %   star1 = M.hd1();
+            %
+            %   % Apply to 1-form
+            %   omega1 = rand(M.numEdges(), 1);
+            %   omega1_dual = star1 * omega1;
+            %
+            % See also: hd0, hd2, hdd1, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hd1, ...
+                'ID', "hd1", ...
+                'Name', "Hodge Star ⋆₁", ...
+                'Domain', "dec", ...
+                'InputType', "1-form (primal)", ...
+                'OutputType', "1-form (dual)");
+        end
+        
+        function op = hd2(obj)
+            %HD2 Get Hodge star operator ⋆₂: C² → C⁰
+            %
+            % Syntax:
+            %   op = M.hd2()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hd2 matrix
+            %
+            % Description:
+            %   Returns the Hodge star operator that maps primal 2-forms
+            %   (face values) to dual 0-forms (vertex values on dual mesh).
+            %   Complements ⋆₀ for the full Hodge decomposition.
+            %
+            %   Mathematical properties:
+            %   - Diagonal matrix with dual vertex areas
+            %   - Size: [numFaces × numFaces]
+            %   - ⋆₂⋆₀ = identity (up to orientation)
+            %
+            % Examples:
+            %   % Get Hodge star ⋆₂
+            %   M = bct.Manifold(V, F);
+            %   star2 = M.hd2();
+            %
+            %   % Apply to 2-form
+            %   omega2 = rand(M.numFaces(), 1);
+            %   omega0_dual = star2 * omega2;
+            %
+            % See also: hd0, hd1, hdd2, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hd2, ...
+                'ID', "hd2", ...
+                'Name', "Hodge Star ⋆₂", ...
+                'Domain', "dec", ...
+                'InputType', "2-form (primal)", ...
+                'OutputType', "0-form (dual)");
+        end
+        
+        function op = hdd0(obj)
+            %HDD0 Get inverse Hodge star operator ⋆₀⁻¹: C² → C⁰
+            %
+            % Syntax:
+            %   op = M.hdd0()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hdd0 matrix
+            %
+            % Description:
+            %   Returns the inverse Hodge star operator that maps dual 2-forms
+            %   to primal 0-forms. This is the inverse of ⋆₀.
+            %
+            %   Mathematical properties:
+            %   - Inverse of hd0
+            %   - Size: [numVertices × numVertices]
+            %   - Diagonal matrix with inverse dual areas
+            %
+            % Examples:
+            %   % Get inverse Hodge star ⋆₀⁻¹
+            %   M = bct.Manifold(V, F);
+            %   invstar0 = M.hdd0();
+            %
+            %   % Verify inverse relationship
+            %   star0 = M.hd0();
+            %   omega0 = rand(M.numVertices(), 1);
+            %   recovered = invstar0 * (star0 * omega0);
+            %   norm(omega0 - recovered)  % Should be ~0
+            %
+            % See also: hd0, hdd1, hdd2, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hdd0, ...
+                'ID', "hdd0", ...
+                'Name', "Inverse Hodge Star ⋆₀⁻¹", ...
+                'Domain', "dec", ...
+                'InputType', "2-form (dual)", ...
+                'OutputType', "0-form (primal)");
+        end
+        
+        function op = hdd1(obj)
+            %HDD1 Get inverse Hodge star operator ⋆₁⁻¹: C¹ → C¹
+            %
+            % Syntax:
+            %   op = M.hdd1()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hdd1 matrix
+            %
+            % Description:
+            %   Returns the inverse Hodge star operator that maps dual 1-forms
+            %   to primal 1-forms. This is the inverse of ⋆₁.
+            %
+            %   Mathematical properties:
+            %   - Inverse of hd1
+            %   - Size: [numEdges × numEdges]
+            %   - Diagonal matrix with inverse dual edge lengths
+            %
+            % Examples:
+            %   % Get inverse Hodge star ⋆₁⁻¹
+            %   M = bct.Manifold(V, F);
+            %   invstar1 = M.hdd1();
+            %
+            %   % Verify inverse relationship
+            %   star1 = M.hd1();
+            %   omega1 = rand(M.numEdges(), 1);
+            %   recovered = invstar1 * (star1 * omega1);
+            %   norm(omega1 - recovered)  % Should be ~0
+            %
+            % See also: hd1, hdd0, hdd2, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hdd1, ...
+                'ID', "hdd1", ...
+                'Name', "Inverse Hodge Star ⋆₁⁻¹", ...
+                'Domain', "dec", ...
+                'InputType', "1-form (dual)", ...
+                'OutputType', "1-form (primal)");
+        end
+        
+        function op = hdd2(obj)
+            %HDD2 Get inverse Hodge star operator ⋆₂⁻¹: C⁰ → C²
+            %
+            % Syntax:
+            %   op = M.hdd2()
+            %
+            % Outputs:
+            %   op - bct.Operator wrapping the hdd2 matrix
+            %
+            % Description:
+            %   Returns the inverse Hodge star operator that maps dual 0-forms
+            %   to primal 2-forms. This is the inverse of ⋆₂.
+            %
+            %   Mathematical properties:
+            %   - Inverse of hd2
+            %   - Size: [numFaces × numFaces]
+            %   - Diagonal matrix with inverse dual vertex areas
+            %
+            % Examples:
+            %   % Get inverse Hodge star ⋆₂⁻¹
+            %   M = bct.Manifold(V, F);
+            %   invstar2 = M.hdd2();
+            %
+            %   % Verify inverse relationship
+            %   star2 = M.hd2();
+            %   omega2 = rand(M.numFaces(), 1);
+            %   recovered = invstar2 * (star2 * omega2);
+            %   norm(omega2 - recovered)  % Should be ~0
+            %
+            % See also: hd2, hdd0, hdd1, DEC, bct.Operator
+            
+            dec = obj.DEC();
+            op = bct.Operator(obj, dec.hdd2, ...
+                'ID', "hdd2", ...
+                'Name', "Inverse Hodge Star ⋆₂⁻¹", ...
+                'Domain', "dec", ...
+                'InputType', "0-form (dual)", ...
+                'OutputType', "2-form (primal)");
+        end
 
         function M = massmatrix(obj, options)
             %MASSMATRIX Get or compute FEM mass matrix (lazy creation with caching)
