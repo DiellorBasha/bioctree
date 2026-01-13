@@ -20,7 +20,7 @@ classdef Manifold < handle
     %   topo = M.topology();  % All topology (edges, adjacency, halfedge)
     %   graph = M.Graph();    % Graph representation (lightweight wrapper)
     %
-    % See also: bct.Graph, bct.manifold.operator, bct.manifold.geometry, bct.manifold.topology
+    % See also: bct.manifold.Graph, bct.manifold.operator, bct.manifold.geometry, bct.manifold.topology
 
     properties (SetAccess = private)
         Vertices         % [N×3] vertex coordinates (immutable)
@@ -305,16 +305,16 @@ classdef Manifold < handle
             %   g = M.Graph()
             %
             % Outputs:
-            %   g - bct.Graph object (navigation/topology)
+            %   g - bct.manifold.Graph object (navigation/topology)
             %
             % Description:
             %   Returns a lightweight Graph wrapper around this Manifold.
             %   Graph objects are not cached since they only hold a reference
             %   to the Manifold and provide navigation/topology methods.
             %
-            % See also: bct.Graph, topology
+            % See also: bct.manifold.Graph, topology
             
-            g = bct.Graph(obj);
+            g = bct.manifold.Graph(obj);
         end
         
         % ===============================================================
