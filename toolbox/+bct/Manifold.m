@@ -35,6 +35,7 @@ classdef Manifold < handle
         CachedStiffness  % Cached stiffness/cotangent matrix (computed on first access)
         CachedMassType   % Type of mass matrix cached ('voronoi', 'barycentric', 'full')
         CachedEigen      % Cached eigenmode structure (values, vectors, metadata)
+        CachedGeometry   % Cached full geometry structure (from bct.manifold.geometry)
     end
 
     methods
@@ -1115,6 +1116,80 @@ classdef Manifold < handle
             end
             
             [N, e1, e2] = bct.manifold.geometry.tangents(obj, 'Domain', options.Domain);
+        end
+        
+        function geom = geometry(obj, varargin)
+            %GEOMETRY Compute and cache all geometric properties
+            %
+            % Syntax:
+            %   geom = M.geometry()
+            %   geom = M.geometry(Name, Value)
+            %
+            % Name-Value Arguments:
+            %   'NormalType'    - 'vertex' (default) or 'face'
+            %   'TangentDomain' - 'face' (default) or 'vertex'
+            %   'ForceFrame'    - false (default) or true to force recomputation
+            %   'Force'         - false (default) or true to force full recomputation
+            %
+            % Outputs:
+            %   geom - Structure with fields:
+            %     .centroids - [nF×3] Face centroids
+            %     .normals   - [nV×3] or [nF×3] Normal vectors
+            %     .tangents  - Structure with N, e1, e2 tangent frames
+            %     .frame     - Cached orthonormal frame structure
+            %     .cotan     - [nF×3] Cotangent values per face
+            %
+            % Description:
+            %   Computes all geometric properties of the manifold and caches
+            %   the result for future calls. This is a wrapper for
+            %   bct.manifold.geometry() that handles caching.
+            %
+            %   On first call, computes all geometry. Subsequent calls return
+            %   the cached result unless 'Force' is true.
+            %
+            % Examples:
+            %   % Compute and cache all geometry
+            %   M = bct.Manifold(V, F);
+            %   geom = M.geometry();
+            %   
+            %   % Access individual properties
+            %   C = geom.centroids;
+            %   N = geom.normals;
+            %   T1 = geom.tangents.e1;
+            %   
+            %   % Force recomputation
+            %   geom = M.geometry('Force', true);
+            %   
+            %   % Compute with custom parameters
+            %   geom = M.geometry('NormalType', 'face', 'TangentDomain', 'vertex');
+            %
+            % See also: bct.manifold.geometry, centroids, normals, tangents
+            
+            % Parse inputs
+            p = inputParser;
+            p.FunctionName = 'bct.Manifold.geometry';
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'NormalType', 'vertex', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'TangentDomain', 'face', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'ForceFrame', false, @islogical);
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if we have cached geometry and not forcing recomputation
+            if ~force && ~isempty(obj.CachedGeometry)
+                geom = obj.CachedGeometry;
+                return;
+            end
+            
+            % Compute all geometry using bct.manifold.geometry
+            geom = bct.manifold.geometry(obj, ...
+                'NormalType', p.Results.NormalType, ...
+                'TangentDomain', p.Results.TangentDomain, ...
+                'ForceFrame', p.Results.ForceFrame);
+            
+            % Cache the result
+            obj.CachedGeometry = geom;
         end
         
         function write(obj, fileName, options)
