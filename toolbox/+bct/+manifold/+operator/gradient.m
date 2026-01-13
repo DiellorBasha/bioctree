@@ -1,5 +1,5 @@
 function [header, grad] = gradient(meshInput, varargin)
-%GRADIENT Construct gradient operator from DEC operators
+%GRADIENT Construct DEC gradient operator (vertex scalar -> face vector)
 %
 % Syntax:
 %   [header, grad] = bct.manifold.operator.gradient(M)
@@ -7,156 +7,198 @@ function [header, grad] = gradient(meshInput, varargin)
 %   [header, grad] = bct.manifold.operator.gradient(d0, sharpPD)
 %
 % Inputs:
-%   M - bct.Manifold object (uses cached DEC operators if available)
+%   M       - bct.Manifold object
 %   OR
-%   V - [N×3] vertex coordinates
-%   F - [M×3] face connectivity
+%   V       - [nV×3] vertex coordinates
+%   F       - [nF×3] face connectivity (1-based)
 %   OR
-%   d0      - Exterior derivative operator d0: C⁰ → C¹
-%   sharpPD - Sharp operator: primal 1-forms → tangent vector fields
+%   d0      - [nE×nV] exterior derivative mapping primal 0-forms to primal 1-forms
+%   sharpPD - [(3*nF)×nE] sharp operator mapping primal 1-forms to stacked face vectors
 %
 % Outputs:
-%   header - Structure with metadata about gradient computation:
-%            .method       - 'DEC'
-%            .composition  - 'sharpPD * d0'
-%            .domain       - 'vertex' (scalar field on vertices)
-%            .codomain     - 'face' (vector field on faces)
-%            .numVertices  - Number of vertices (if available)
-%            .numFaces     - Number of faces (if available)
+%   header  - struct with metadata:
+%       .method                    = "dec"
+%       .backend                   = "declab" (if constructed via bct.manifold.operator.dec)
+%       .composition               = "sharpPD * d0"
+%       .inputSupport              = "vertex"
+%       .inputValueType            = "scalar"
+%       .outputSupport             = "face"
+%       .outputValueType           = "vector3"
+%       .outputVectorDim           = 3
+%       .outputLayout              = "as-produced-by-sharpPD" (stacking not standardized yet)
+%       .requiresTangentProjection = true (to match DECLab gradient semantics via Operator.apply later)
+%       .numVertices, .numEdges, .numFaces (when inferable)
 %
-%   grad - [nF×nV] sparse gradient operator matrix
-%          Maps scalar fields on vertices to tangent vector fields on faces
+%   grad    - [(3*nF)×nV] sparse matrix:
+%             g = grad * s produces a stacked 3D vector per face (one 3-vector per face).
 %
 % Description:
-%   Constructs the discrete gradient operator using DEC composition:
+%   Matches the *linear* portion of DECLab's gradient implementation:
+%       gradS = primal1FormToDualVector(d0 * S)
+%   where primal1FormToDualVector applies:
+%       sharpPD * (d0 * S) and then projects to face tangents.
 %
-%   grad = sharpPD * d0
+%   This function returns only the linear operator:
+%       grad = sharpPD * d0
+%   Tangent projection is expected to be enforced later by bct.Operator.apply,
+%   based on operator metadata.
 %
-%   Where:
-%   - d0: Exterior derivative mapping 0-forms (vertex values) to 1-forms (edge circulations)
-%   - sharpPD: Sharp operator mapping primal 1-forms to tangent vector fields
+% Notes:
+%   - Output stacking convention is not yet standardized in bct. Do not reshape/slice outputs
+%     unless you explicitly know the convention used by sharpPD.
 %
-%   The resulting gradient operator maps scalar functions defined on vertices
-%   to tangent vector fields defined on faces. This is the canonical gradient
-%   representation in bct, where gradients are face-mapped vectors suitable
-%   for advection, flow visualization, and vector field analysis.
-%
-%   Mathematical properties:
-%   - Domain: Scalar fields on vertices (0-forms)
-%   - Codomain: Tangent vector fields on faces (intrinsic 2D vectors)
-%   - Metric-aware: Incorporates mesh geometry via sharp operator
-%   - Compatible with DEC differential operators
-%
-% Examples:
-%   % From Manifold (uses cached operators if available)
-%   M = bct.Manifold(V, F);
-%   [header, grad] = bct.manifold.operator.gradient(M);
-%   
-%   % Apply gradient to scalar field
-%   f = rand(M.numVertices(), 1);  % Scalar field on vertices
-%   gradf = grad * f;               % Gradient on faces (2*nF vector)
-%   
-%   % Extract x and y components
-%   nF = M.numFaces();
-%   gradf_x = gradf(1:nF);
-%   gradf_y = gradf(nF+1:end);
-%   
-%   % From V, F directly
-%   [header, grad] = bct.manifold.operator.gradient(V, F);
-%   
-%   % From DEC operators directly
-%   [~, ops] = bct.manifold.operator.dec(M);
-%   [header, grad] = bct.manifold.operator.gradient(ops.d0, ops.sharpPD);
-%
-% See also: bct.manifold.operator.dec, bct.manifold.operator.divergence,
-%           DiscreteExteriorCalculus
+% See also: bct.manifold.operator.dec, bct.manifold.operator.divergence
 
-% Parse inputs
+% ----------------------------
+% Parse inputs and acquire d0/sharpPD
+% ----------------------------
 if nargin == 1
-    % Case 1: Manifold object
-    if isa(meshInput, 'bct.Manifold')
-        M = meshInput;
-        
-        % Try to get operators from cached operators
-        if ~isempty(fieldnames(M.Cache.operators.data))
-            % Use cached operators
-            ops = M.Cache.operators.data;
-            if isfield(ops, 'dec') && isfield(ops.dec, 'd0') && isfield(ops.dec, 'sharpPD')
-                d0 = ops.dec.d0;
-                sharpPD = ops.dec.sharpPD;
-            else
-                error('bct:manifold:operator:gradient:MissingOperators', ...
-                    'Cached operators do not contain d0 and sharpPD');
-            end
-        else
-            % Compute DEC operators
-            [~, dec_ops] = bct.manifold.operator.dec(M);
-            d0 = dec_ops.d0;
-            sharpPD = dec_ops.sharpPD;
-        end
-        
-        numVertices = M.numVertices();
-        numFaces = M.numFaces();
-    else
+    % Case: gradient(M)
+    if ~isa(meshInput, 'bct.Manifold')
         error('bct:manifold:operator:gradient:InvalidInput', ...
-            'First argument must be bct.Manifold object when called with 1 argument');
+            'With one input, expected a bct.Manifold object.');
     end
-    
+    M = meshInput;
+
+    % Prefer cached operators; otherwise compute via bct.manifold.operator.dec
+    if M.hasCached('operators')
+        opsAll = M.operators(); % returns cached only (per your API)
+    else
+        [~, opsAll] = bct.manifold.operator.dec(M); % compute primitives
+        % Optional: if you later decide dec(M) should populate cache, do it there
+    end
+
+    if isfield(opsAll, 'dec')
+        opsAll = opsAll.dec; % if your cache stores operators under .dec
+    end
+
+    if ~isfield(opsAll, 'd0') || ~isfield(opsAll, 'sharpPD')
+        error('bct:manifold:operator:gradient:MissingOperators', ...
+            'Operators must contain fields d0 and sharpPD.');
+    end
+
+    d0 = opsAll.d0;
+    sharpPD = opsAll.sharpPD;
+
+    numVertices = M.numVertices();
+    numFaces    = M.numFaces();
+    numEdges    = size(d0, 1);
+
 elseif nargin == 2
-    % Case 2: Two arguments - could be (V, F) or (d0, sharpPD)
+    % Case: gradient(V,F) OR gradient(d0,sharpPD)
     arg1 = meshInput;
     arg2 = varargin{1};
-    
-    % Check if arguments are V, F (numeric arrays) or d0, sharpPD (sparse matrices)
-    if isnumeric(arg1) && isnumeric(arg2) && ~issparse(arg1)
-        % Likely V, F
+
+    if issparse(arg1) && issparse(arg2)
+        % gradient(d0, sharpPD)
+        d0 = arg1;
+        sharpPD = arg2;
+
+        numVertices = size(d0, 2);
+        numEdges    = size(d0, 1);
+
+        if size(sharpPD, 2) ~= numEdges
+            error('bct:manifold:operator:gradient:DimMismatch', ...
+                'sharpPD columns (%d) must equal d0 rows / numEdges (%d).', ...
+                size(sharpPD, 2), numEdges);
+        end
+
+        nOut = size(sharpPD, 1);
+        if mod(nOut, 3) ~= 0
+            error('bct:manifold:operator:gradient:InvalidSharpPD', ...
+                'sharpPD rows (%d) must be divisible by 3 to represent face vector3 stacking.', nOut);
+        end
+        numFaces = nOut / 3;
+
+    elseif isnumeric(arg1) && isnumeric(arg2) && ~issparse(arg1) && ~issparse(arg2)
+        % gradient(V, F)
         V = arg1;
         F = arg2;
-        
-        % Validate dimensions
+
+        % Validate V, F
         if size(V, 2) ~= 3
             error('bct:manifold:operator:gradient:InvalidVertices', ...
-                'V must be N×3 array of vertex coordinates');
+                'V must be an [nV×3] numeric array.');
         end
         if size(F, 2) ~= 3
             error('bct:manifold:operator:gradient:InvalidFaces', ...
-                'F must be M×3 array of face indices');
+                'F must be an [nF×3] numeric array of vertex indices.');
         end
-        
-        % Compute DEC operators
+        if any(F(:) < 1) || any(F(:) ~= round(F(:)))
+            error('bct:manifold:operator:gradient:InvalidFaces', ...
+                'F must contain positive 1-based integer indices.');
+        end
+        if max(F(:)) > size(V, 1)
+            error('bct:manifold:operator:gradient:InvalidFaces', ...
+                'F references vertex index %d but V has only %d vertices.', ...
+                max(F(:)), size(V, 1));
+        end
+
+        % Compute DEC primitives from V,F
         [~, dec_ops] = bct.manifold.operator.dec(V, F);
         d0 = dec_ops.d0;
         sharpPD = dec_ops.sharpPD;
-        
+
         numVertices = size(V, 1);
-        numFaces = size(F, 1);
-    elseif issparse(arg1) && issparse(arg2)
-        % Direct operators: d0 and sharpPD
-        d0 = arg1;
-        sharpPD = arg2;
-        
-        numVertices = size(d0, 2);  % d0 is [nE × nV]
-        numFaces = size(sharpPD, 1) / 2;  % sharpPD is [2*nF × nE]
+        numFaces    = size(F, 1);
+        numEdges    = size(d0, 1);
+
+        % Sanity check against sharpPD shape
+        if size(sharpPD, 2) ~= numEdges
+            error('bct:manifold:operator:gradient:DimMismatch', ...
+                'sharpPD columns (%d) must equal d0 rows / numEdges (%d).', ...
+                size(sharpPD, 2), numEdges);
+        end
+        if size(sharpPD, 1) ~= 3 * numFaces
+            error('bct:manifold:operator:gradient:DimMismatch', ...
+                'sharpPD rows (%d) must equal 3*numFaces (%d).', ...
+                size(sharpPD, 1), 3 * numFaces);
+        end
+
     else
         error('bct:manifold:operator:gradient:InvalidInput', ...
-            'With 2 arguments, provide either (V, F) or (d0, sharpPD)');
+            'With two inputs, provide either (V,F) numeric arrays or (d0,sharpPD) sparse matrices.');
     end
-    
+
 else
-    error('bct:manifold:operator:gradient:InvalidInput', ...
-        'Usage: gradient(Manifold) or gradient(V, F) or gradient(d0, sharpPD)');
+    error('bct:manifold:operator:gradient:InvalidNumArgs', ...
+        'Usage: gradient(M) or gradient(V,F) or gradient(d0,sharpPD).');
 end
 
-% Compute gradient operator: grad = sharpPD * d0
-grad = sharpPD * d0;
+% ----------------------------
+% Validate operator dimensions
+% ----------------------------
+if size(d0, 1) ~= size(sharpPD, 2)
+    error('bct:manifold:operator:gradient:DimMismatch', ...
+        'Dimension mismatch: d0 is %dx%d and sharpPD is %dx%d (need size(d0,1)==size(sharpPD,2)).', ...
+        size(d0,1), size(d0,2), size(sharpPD,1), size(sharpPD,2));
+end
 
-% Build header with metadata
+% ----------------------------
+% Construct gradient operator (linear part)
+% ----------------------------
+grad = sharpPD * d0;  % (3*nF) x nV
+
+% ----------------------------
+% Build header
+% ----------------------------
 header = struct();
-header.method = 'DEC';
-header.composition = 'sharpPD * d0';
-header.domain = 'vertex';
-header.codomain = 'face';
+header.method = "dec";
+header.backend = "declab";
+header.composition = "sharpPD * d0";
+
+header.inputSupport   = "vertex";
+header.inputValueType = "scalar";
+
+header.outputSupport   = "face";
+header.outputValueType = "vector3";
+header.outputVectorDim = 3;
+
+header.outputLayout = "as-produced-by-sharpPD";  % stacking not standardized yet
+header.requiresTangentProjection = true;         % enforce later in bct.Operator.apply
+
 header.numVertices = numVertices;
+header.numEdges = numEdges;
 header.numFaces = numFaces;
 
 end

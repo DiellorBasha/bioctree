@@ -318,17 +318,113 @@ classdef Manifold < handle
         end
         
         % ===============================================================
-        % GEOMETRY CACHE (Internal accessor methods)
+        % CACHE INSPECTION
         % ===============================================================
         
-        function geom = getGeometry(obj)
-            %GETGEOMETRY Get geometry cache (internal use by bct.manifold.geometry.*)
-            geom = obj.Cache.geometry.data;
+        function tf = hasCached(obj, namespace)
+            %HASCACHED Check if a cache namespace has computed data
+            %
+            % Syntax:
+            %   tf = M.hasCached(namespace)
+            %
+            % Inputs:
+            %   namespace - String specifying cache namespace:
+            %               'operators', 'geometry', 'topology', 'eigenmodes', 'health'
+            %
+            % Outputs:
+            %   tf - Logical true if namespace has cached data, false otherwise
+            %
+            % Description:
+            %   Checks whether a specific cache namespace contains computed data
+            %   without triggering computation. Useful for external code that needs
+            %   to check cache status before accessing cached properties.
+            %
+            % Examples:
+            %   % Check if operators are cached
+            %   M = bct.Manifold(V, F);
+            %   if M.hasCached('operators')
+            %       ops = M.operators();  % Won't trigger computation
+            %   end
+            %
+            %   % Check multiple namespaces
+            %   hasOps = M.hasCached('operators');
+            %   hasGeom = M.hasCached('geometry');
+            %   hasEigen = M.hasCached('eigenmodes');
+            %
+            %   % Conditional computation
+            %   if ~M.hasCached('eigenmodes')
+            %       E = M.eigenmodes(100);  % Compute with 100 modes
+            %   end
+            %
+            % See also: operators, geometry, topology, eigenmodes, health
+            
+            arguments
+                obj
+                namespace {mustBeTextScalar, mustBeMember(namespace, ...
+                    ["operators", "geometry", "topology", "eigenmodes", "health"])}
+            end
+            
+            namespace = string(namespace);
+            
+            % Check if namespace exists in cache and has data
+            if isfield(obj.Cache, namespace)
+                cacheData = obj.Cache.(namespace).data;
+                tf = ~isempty(fieldnames(cacheData));
+            else
+                tf = false;
+            end
         end
         
-        function setGeometry(obj, geom)
-            %SETGEOMETRY Set geometry cache (internal use by bct.manifold.geometry.*)
-            obj.Cache.geometry.data = geom;
+        function status = cacheStatus(obj)
+            %CACHESTATUS Get summary of cache state across all namespaces
+            %
+            % Syntax:
+            %   status = M.cacheStatus()
+            %
+            % Outputs:
+            %   status - Structure with fields for each namespace:
+            %     .operators  - Logical, true if cached
+            %     .geometry   - Logical, true if cached
+            %     .topology   - Logical, true if cached
+            %     .eigenmodes - Logical, true if cached
+            %     .health     - Logical, true if cached
+            %     .meta       - Structure with metadata for each namespace
+            %
+            % Description:
+            %   Returns a summary of which cache namespaces contain computed
+            %   data and their associated metadata (computation timestamps, etc.).
+            %
+            % Examples:
+            %   % Check cache status
+            %   M = bct.Manifold(V, F);
+            %   ops = M.operators();  % Populate operators cache
+            %   status = M.cacheStatus();
+            %   disp(status);
+            %
+            %   % Use status to decide what to compute
+            %   if ~status.eigenmodes
+            %       E = M.eigenmodes(100);
+            %   end
+            %
+            % See also: hasCached, operators, geometry, topology
+            
+            namespaces = ["operators", "geometry", "topology", "eigenmodes", "health"];
+            
+            % Initialize status structure
+            status = struct();
+            status.meta = struct();
+            
+            % Check each namespace
+            for ns = namespaces
+                status.(ns) = obj.hasCached(ns);
+                
+                % Include metadata if available
+                if isfield(obj.Cache.(ns), 'meta')
+                    status.meta.(ns) = obj.Cache.(ns).meta;
+                else
+                    status.meta.(ns) = struct();
+                end
+            end
         end
         
         % ===============================================================

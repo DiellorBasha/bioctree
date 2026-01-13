@@ -29,11 +29,19 @@ function ops = operator(meshInput, varargin)
 %       .hdd0-2        - Inverse Hodge stars
 %       .flatPP, etc.  - Flat operators
 %       .sharpPD, etc. - Sharp operators
+%     % Top-level DEC shortcuts
+%     .d0, .d1, .dd0, .dd1  - Exterior derivatives
+%     % Derived DEC composition operators
+%     .gradient        - Gradient operator (vertex → face tangent vectors)
+%     .divergence      - Divergence operator (edge → vertex, primal route)
+%     .curl            - Curl operator (edge → face, primal route)
+%     .hodgelaplacian  - Hodge Laplacian struct (kform0, kform1, kform2)
 %
 % Description:
 %   Aggregates all operator computations from the bct.manifold.operator
 %   subpackage. Computes FEM matrices (mass, stiffness, Laplace-Beltrami)
-%   and all DEC operators (exterior derivatives, Hodge stars, etc.).
+%   and all DEC operators (exterior derivatives, Hodge stars, etc.), plus
+%   derived composition operators (gradient, divergence, curl, Hodge Laplacian).
 %
 %   This is an aggregator function similar to bct.manifold.geometry() and
 %   bct.manifold.topology(). It computes all operators in one call for
@@ -53,6 +61,16 @@ function ops = operator(meshInput, varargin)
 %   L = ops.laplacebeltrami;
 %   d0 = ops.dec.d0;
 %   
+%   % Vector calculus operators
+%   grad = ops.gradient;           % [3*nF × nV]
+%   div = ops.divergence;          % [nV × nE]
+%   curl = ops.curl;               % [nF × nE]
+%   Lap0 = ops.hodgelaplacian.kform0;  % [nV × nV]
+%   
+%   % Apply gradient to scalar field
+%   f = randn(M.numVertices(), 1);
+%   grad_f = ops.gradient * f;  % Tangent vectors at faces
+%   
 %   % Compute with custom parameters
 %   ops = bct.manifold.operator(M, 'MassVariant', 'barycentric');
 %   
@@ -60,7 +78,10 @@ function ops = operator(meshInput, varargin)
 %   ops = bct.manifold.operator(V, F);
 %
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
-%           bct.manifold.operator.dec, bct.manifold.geometry, bct.manifold.topology
+%           bct.manifold.operator.dec, bct.manifold.operator.gradient,
+%           bct.manifold.operator.divergence, bct.manifold.operator.curl,
+%           bct.manifold.operator.hodgelaplacian, bct.manifold.geometry,
+%           bct.manifold.topology
 
 % Parse inputs
 p = inputParser;
@@ -140,5 +161,27 @@ ops.d0 = dec_ops.d0;
 ops.d1 = dec_ops.d1;
 ops.dd0 = dec_ops.dd0;
 ops.dd1 = dec_ops.dd1;
+
+% ===============================================================
+% Derived DEC Composition Operators
+% ===============================================================
+
+% Gradient: scalar field (vertex) → tangent vector field (face)
+% Composition: sharpPD * d0
+[~, ops.gradient] = bct.manifold.operator.gradient(M);
+
+% Divergence: edge 1-form → vertex scalar (primal route)
+% Composition: hdd2 * dd1 * hd1
+[~, ops.divergence] = bct.manifold.operator.divergence(M, 'route', 'primal');
+
+% Curl: edge 1-form → face scalar (primal route)
+% Composition: hd2 * d1
+[~, ops.curl] = bct.manifold.operator.curl(M, 'route', 'primal');
+
+% Hodge Laplacian: All three k-forms
+ops.hodgelaplacian = struct();
+[~, ops.hodgelaplacian.kform0] = bct.manifold.operator.hodgelaplacian(M, 'kform', 0);
+[~, ops.hodgelaplacian.kform1] = bct.manifold.operator.hodgelaplacian(M, 'kform', 1);
+[~, ops.hodgelaplacian.kform2] = bct.manifold.operator.hodgelaplacian(M, 'kform', 2);
 
 end

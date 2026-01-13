@@ -1,12 +1,12 @@
-function ops = dictionary(ctx, options)
-%DICTIONARY Create dictionary of operator artifacts for context
+function ops = dictionary(M, options)
+%DICTIONARY Create dictionary of operator artifacts from bct.Manifold
 %
 % Syntax:
-%   ops = bct.runtime.operators.dictionary(ctx)
-%   ops = bct.runtime.operators.dictionary(ctx, Name=Value)
+%   ops = bct.runtime.operators.dictionary(M)
+%   ops = bct.runtime.operators.dictionary(M, Name=Value)
 %
 % Inputs:
-%   ctx - Runtime context struct (must contain Manifold or representations)
+%   M - bct.Manifold instance
 %
 % Name-Value Arguments:
 %   LegacyHandles - logical (default: false)
@@ -19,35 +19,44 @@ function ops = dictionary(ctx, options)
 %         Default: string → OperatorStruct
 %         Legacy:  string → function_handle
 %
-% The dictionary contains only operators that are:
-%   1. Available in the context (dependencies + representation exist)
-%   2. Successfully bound to the context's representations
+% All operators come from bct.manifold.operator and are matrix-based.
+% The dictionary is built from cached operators when available.
 %
 % OperatorStruct Fields:
-%   id, name, meshId, backend, domain, codomain, params, requires,
-%   dependency, purity, applyFcn, matrix, isLinear, provenance, cacheKey
+%   id            - Operator identifier (string)
+%   name          - Display name
+%   backend       - "bct.manifold.operator"
+%   inputSupport  - "vertex" | "edge" | "face"
+%   outputSupport - "vertex" | "edge" | "face"
+%   inputType     - Input semantic type
+%   outputType    - Output semantic type
+%   matrix        - Sparse matrix (operator)
+%   isLinear      - true (all manifold operators are linear)
+%   isMatrix      - true (all manifold operators return matrices)
+%   purity        - "pure" (all manifold operators are pure)
+%   applyFcn      - function_handle: y = applyFcn(x)
 %
 % Example (new API):
-%   M = bct.Manifold(struct('V', V, 'F', F));
-%   ctx = bct.runtime.context(M);
-%   ops = bct.runtime.operators.dictionary(ctx);
+%   M = bct.Manifold(V, F);
+%   ops = bct.runtime.operators.dictionary(M);
 %   
 %   % Use operator struct
-%   if isKey(ops, "gradient.dec")
-%       op = ops("gradient.dec");
+%   if isKey(ops, "gradient")
+%       op = ops("gradient");
 %       gradF = op.applyFcn(f0);
+%       % or directly: gradF = op.matrix * f0;
 %   end
 %
 % Example (legacy mode):
-%   ops = bct.runtime.operators.dictionary(ctx, LegacyHandles=true);
-%   grad_fn = ops("gradient.dec");
+%   ops = bct.runtime.operators.dictionary(M, LegacyHandles=true);
+%   grad_fn = ops("gradient");
 %   gradF = grad_fn(f0);
 %
-% See also: bct.registry.operators.defs, bct.runtime.operators.bind, 
-%           bct.runtime.operators.isAvailable
+% See also: bct.manifold.operator, bct.Manifold.operators, 
+%           bct.registry.operators.defs
 
 arguments
-    ctx struct
+    M bct.Manifold
     options.LegacyHandles (1,1) logical = false
 end
 
@@ -58,49 +67,126 @@ else
     ops = dictionary(string.empty, struct.empty);
 end
 
-% Load operator specifications
+% Load operator specifications from registry
 specs = bct.registry.operators.defs();
-
-% Filter and bind available operators
 allIds = keys(specs);
+
+% Get or compute all operators from manifold
+if M.hasCached('operators')
+    manifoldOps = M.operators();
+else
+    manifoldOps = bct.manifold.operator(M);
+end
+
+% Build dictionary from manifold operators and specs
 for i = 1:length(allIds)
     id = allIds(i);
     spec = specs(id);
     
-    % Check if operator is available for this context
-    [available, reason] = bct.runtime.operators.isAvailable(spec, ctx);
-    
-    if available
-        try
-            % Bind operator to context -> returns Operator struct
-            opStruct = bct.runtime.operators.bind(spec, ctx);
-            
-            if options.LegacyHandles
-                % Extract function handle for legacy mode
-                ops(id) = opStruct.applyFcn;
-            else
-                % Store full Operator struct
-                ops(id) = opStruct;
-            end
-        catch ME
-            % Binding failed - skip this operator
-            warning('bct:runtime:BindFailed', ...
-                'Failed to bind operator "%s": %s', char(id), ME.message);
+    try
+        % Extract operator matrix from manifold operators
+        opMatrix = extractOperatorMatrix(id, manifoldOps, M);
+        
+        if isempty(opMatrix)
+            continue; % Skip if not available
         end
+        
+        % Build operator struct
+        opStruct = buildOperatorStruct(id, spec, opMatrix, M);
+        
+        if options.LegacyHandles
+            % Extract function handle for legacy mode
+            ops(id) = opStruct.applyFcn;
+        else
+            % Store full Operator struct
+            ops(id) = opStruct;
+        end
+    catch ME
+        % Operator extraction failed - skip
+        warning('bct:runtime:operators:dictionary:ExtractionFailed', ...
+            'Failed to extract operator "%s": %s', char(id), ME.message);
     end
 end
 
-% Add deprecated ID aliases for backward compatibility
-% This allows old IDs to work but issues deprecation warnings
-deprecatedIds = ["dec_gradient", "dec_divergence", "dec_curl", ...
-                 "dec_laplacian", "dec_hhd", "fem_gradient", "fem_divergence"];
-
-for oldId = deprecatedIds
-    newId = bct.runtime.operators.resolveAlias(oldId);
-    if ~isempty(newId) && isKey(ops, newId)
-        % Suppress warning here since resolveAlias will warn on first access
-        ops(oldId) = ops(newId);
-    end
 end
+
+%% ========================================================================
+%  Helper Functions
+% =========================================================================
+
+function opMatrix = extractOperatorMatrix(id, manifoldOps, M)
+%EXTRACTOPERATORMATRIX Extract operator matrix from manifold operators struct
+
+% Map operator ID to manifold operator field
+switch char(id)
+    % Matrix operators
+    case 'mass'
+        opMatrix = manifoldOps.mass;
+    case 'stiffness'
+        opMatrix = manifoldOps.stiffness;
+    case 'laplacebeltrami'
+        opMatrix = manifoldOps.laplacebeltrami;
+    
+    % Composition operators
+    case 'gradient'
+        opMatrix = manifoldOps.gradient;
+    case 'divergence.primal'
+        opMatrix = manifoldOps.divergence;
+    case 'divergence.dual'
+        [~, opMatrix] = bct.manifold.operator.divergence(M, 'route', 'dual');
+    case 'curl.primal'
+        opMatrix = manifoldOps.curl;
+    case 'curl.dual'
+        [~, opMatrix] = bct.manifold.operator.curl(M, 'route', 'dual');
+    
+    % Hodge Laplacians
+    case 'hodgelaplacian.0'
+        opMatrix = manifoldOps.hodgelaplacian.kform0;
+    case 'hodgelaplacian.1'
+        opMatrix = manifoldOps.hodgelaplacian.kform1;
+    case 'hodgelaplacian.2'
+        opMatrix = manifoldOps.hodgelaplacian.kform2;
+    
+    % Primitive DEC operators (flat naming)
+    case {'d0', 'd1', 'dd0', 'dd1', 'hd0', 'hd1', 'hd2', 'hdd0', 'hdd1', 'hdd2'}
+        % Extract from dec substructure
+        if isfield(manifoldOps, 'dec') && isfield(manifoldOps.dec, char(id))
+            opMatrix = manifoldOps.dec.(char(id));
+        else
+            opMatrix = [];
+        end
+    
+    otherwise
+        opMatrix = [];
+end
+
+end
+
+function opStruct = buildOperatorStruct(id, spec, opMatrix, M)
+%BUILDOPERATORSTRUCT Build operator struct with metadata and apply function
+
+opStruct = struct();
+opStruct.id = id;
+opStruct.name = spec.name;
+opStruct.backend = spec.backend;
+opStruct.inputSupport = spec.inputSupport;
+opStruct.outputSupport = spec.outputSupport;
+opStruct.inputType = spec.inputType;
+opStruct.outputType = spec.outputType;
+opStruct.matrix = opMatrix;
+opStruct.isLinear = true;
+opStruct.isMatrix = true;
+opStruct.purity = "pure";
+
+% Create apply function (matrix multiplication)
+opStruct.applyFcn = @(x) opMatrix * x;
+
+% Add dimensions metadata
+opStruct.dimensions = struct();
+opStruct.dimensions.input = size(opMatrix, 2);
+opStruct.dimensions.output = size(opMatrix, 1);
+opStruct.dimensions.numVertices = M.numVertices();
+opStruct.dimensions.numEdges = M.numEdges();
+opStruct.dimensions.numFaces = M.numFaces();
 
 end
