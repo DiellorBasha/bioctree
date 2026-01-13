@@ -411,12 +411,9 @@ classdef Manifold < handle
             eigsOpts = p.Results.EigsOpts;
             force = p.Results.Force;
             
-            % Determine if we need to compute
-            needsCompute = false;
-            
+            % Determine if we need to compute (early return if cached)
             if force
                 % Forced recomputation
-                needsCompute = true;
                 if isempty(k_requested)
                     % Use cached k if available, otherwise default
                     if isfield(obj.Cache.eigenmodes.data, 'k') && ~isempty(obj.Cache.eigenmodes.data.k)
@@ -427,11 +424,9 @@ classdef Manifold < handle
                 end
             elseif ~isempty(k_requested)
                 % k specified, need to recompute
-                needsCompute = true;
             elseif isempty(fieldnames(obj.Cache.eigenmodes.data))
                 % No cache exists, compute with default k=50
                 k_requested = 50;
-                needsCompute = true;
             else
                 % Return cached
                 Eigen = obj.Cache.eigenmodes.data;
