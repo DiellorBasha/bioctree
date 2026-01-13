@@ -650,7 +650,7 @@ classdef Manifold < handle
             end
             
             % Compute mass matrix using bct.manifold.operator.mass
-            M = bct.manifold.operator.mass(obj, 'Type', massType);
+            [~, M] = bct.manifold.operator.mass(obj, 'variant', massType);
             
             % Cache for future use
             obj.CachedMass = M;
@@ -680,7 +680,7 @@ classdef Manifold < handle
             %   K = manifold.cotmatrix();
             %   energy = u' * K * u;  % Dirichlet energy
             %
-            % See also: bct.manifold.cotmatrix, cotmatrix, massmatrix
+            % See also: bct.manifold.operator.stiffness, massmatrix
             
             % Check if we have cached stiffness matrix
             if ~isempty(obj.CachedStiffness)
@@ -688,8 +688,11 @@ classdef Manifold < handle
                 return;
             end
             
-            % Compute stiffness matrix using bct.manifold.cotmatrix
-            K = bct.manifold.cotmatrix(obj);
+            % Compute stiffness matrix using bct.manifold.operator.stiffness
+            [~, K] = bct.manifold.operator.stiffness(obj, ...
+                'variant', 'cotan', ...
+                'sign', 'positive', ...
+                'symmetrize', true);
             
             % Cache for future use
             obj.CachedStiffness = K;

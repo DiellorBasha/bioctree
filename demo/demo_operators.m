@@ -40,4 +40,4 @@ fprintf('  - hhd.*         : Helmholtz-Hodge decomposition\n\n');
 fprintf('BACKENDS:\n');
 fprintf('  .dec   - Discrete Exterior Calculus (DECLab)\n');
 fprintf('  .fem   - Finite Element Method (gptoolbox)\n');
-fprintf('  .graph - Graph-theoretic (GSPBox)\n\n');"
+fprintf('  .graph - Graph-theoretic (GSPBox)\n\n');

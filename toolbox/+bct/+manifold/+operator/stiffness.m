@@ -1,14 +1,31 @@
-function K = cotmatrix(Manifold)
-%COTMATRIX Assemble FEM stiffness (cotangent Laplacian) matrix from Manifold
+function [header, K] = stiffness(Manifold, options)
+%STIFFNESS Assemble FEM stiffness matrix from Manifold
 %
 % Syntax:
-%   K = bct.manifold.cotmatrix(Manifold)
+%   [header, K] = bct.manifold.operator.stiffness(Manifold)
+%   [header, K] = bct.manifold.operator.stiffness(Manifold, Name, Value, ...)
 %
 % Inputs:
 %   Manifold - bct.Manifold object
 %
+% Name-Value Parameters:
+%   variant    - Stiffness matrix variant (default: 'cotan')
+%                'cotan' - Cotangent Laplacian (only option currently)
+%   sign       - Sign convention (default: 'positive')
+%                'positive' - Positive semidefinite (λ ≥ 0)
+%                'negative' - Negative semidefinite (λ ≤ 0, as in gptoolbox)
+%   symmetrize - Force symmetric matrix (default: true)
+%   precision  - Matrix precision (default: 'double')
+%                'double' - Double precision
+%                'single' - Single precision
+%
 % Outputs:
-%   K - [N×N] sparse stiffness matrix (cotangent Laplacian)
+%   header - Struct containing parameters used:
+%            .variant    - Stiffness variant used
+%            .sign       - Sign convention applied
+%            .symmetrize - Whether matrix was symmetrized
+%            .precision  - Matrix precision
+%   K      - [N×N] sparse stiffness matrix (cotangent Laplacian)
 %
 % Description:
 %   Assembles the FEM stiffness matrix using gptoolbox. The stiffness matrix
@@ -23,34 +40,51 @@ function K = cotmatrix(Manifold)
 %
 %   Physical meaning:
 %   - Measures geometric connectivity via angles in triangulation
-%   - Positive semidefinite on closed manifolds (λ ≥ 0)
+%   - Positive semidefinite on closed manifolds (λ ≥ 0) with sign='positive'
 %   - Null space corresponds to constant functions
 %
 %   Note: gptoolbox cotmatrix() returns negative semidefinite form
-%   (negative diagonal). This function negates it to get positive
+%   (negative diagonal). By default, this function negates it to get positive
 %   semidefinite form K*u = λ*M*u with λ ≥ 0.
 %
 %   Dependency path is resolved via bct.config/bct.install system.
 %
 % Examples:
-%   % Compute stiffness matrix
-%   K = bct.manifold.cotmatrix(manifold);
+%   % Default: cotangent Laplacian, positive semidefinite, symmetrized
+%   [header, K] = bct.manifold.operator.stiffness(M);
+%
+%   % Get negative form (as gptoolbox returns)
+%   [header, K] = bct.manifold.operator.stiffness(M, 'sign', 'negative');
+%
+%   % Single precision
+%   [header, K] = bct.manifold.operator.stiffness(M, 'precision', 'single');
 %
 %   % Dirichlet energy
-%   M = bct.manifold.operator.mass(manifold);
+%   [~, M0] = bct.manifold.operator.mass(M);
 %   energy = u' * K * u;
 %
 %   % Laplace-Beltrami operator application
-%   Lu = M \ (K * u);
+%   Lu = M0 \ (K * u);
 %
 %   % Eigenvalue problem
-%   [V, D] = eigs(K, M, 100, 'sm');
+%   [V, D] = eigs(K, M0, 100, 'sm');
 %
-% See also: bct.manifold.operator.mass, cotmatrix
+% See also: bct.manifold.operator.mass, bct.Manifold.cotmatrix
 
 arguments
     Manifold (1,1) bct.Manifold
+    options.variant (1,1) string {mustBeMember(options.variant, ["cotan"])} = "cotan"
+    options.sign (1,1) string {mustBeMember(options.sign, ["positive","negative"])} = "positive"
+    options.symmetrize (1,1) logical = true
+    options.precision (1,1) string {mustBeMember(options.precision, ["double","single"])} = "double"
 end
+
+% Build header with parameters used
+header = struct();
+header.variant = char(options.variant);
+header.sign = char(options.sign);
+header.symmetrize = options.symmetrize;
+header.precision = char(options.precision);
 
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
@@ -70,17 +104,29 @@ end
 try
     K_gptoolbox = cotmatrix(V, F);
 catch ME
-    error('bct:manifold:cotmatrix:GPToolboxError', ...
+    error('bct:manifold:operator:stiffness:GPToolboxError', ...
         'Failed to call gptoolbox cotmatrix: %s\nPath: %s', ...
         ME.message, gptoolboxPath);
 end
 
-% Negate to get positive semidefinite form (gptoolbox returns negative)
-% This allows eigenvalue problem: K*u = λ*M*u with λ ≥ 0
-K = -K_gptoolbox;
+% Apply sign convention
+% gptoolbox returns negative semidefinite form
+% Default is to negate for positive semidefinite (λ ≥ 0)
+if strcmp(header.sign, 'positive')
+    K = -K_gptoolbox;
+else
+    K = K_gptoolbox;
+end
 
 % Symmetrize for numerical safety
-K = (K + K') / 2;
+if header.symmetrize
+    K = (K + K') / 2;
+end
+
+% Apply precision
+if strcmp(header.precision, 'single')
+    K = single(K);
+end
 
 end
 
@@ -103,7 +149,7 @@ function gptoolboxPath = resolveGPToolboxPath()
 try
     [depsRoot, ~] = bct.install.internal.resolveRoot('');
 catch ME
-    error('bct:manifold:cotmatrix:ConfigError', ...
+    error('bct:manifold:operator:stiffness:ConfigError', ...
         'Failed to resolve dependency root: %s', ME.message);
 end
 
@@ -111,13 +157,13 @@ end
 try
     manifest = bct.config.deps();
     if ~isfield(manifest, 'gptoolbox')
-        error('bct:manifold:cotmatrix:ManifestError', ...
+        error('bct:manifold:operator:stiffness:ManifestError', ...
             'gptoolbox not found in dependency manifest');
     end
     gptoolboxFolder = manifest.gptoolbox.folder;
 catch ME
     % Fallback to hardcoded folder name
-    warning('bct:manifold:cotmatrix:ManifestWarning', ...
+    warning('bct:manifold:operator:stiffness:ManifestWarning', ...
         'Could not load manifest, using default folder name: %s', ME.message);
     gptoolboxFolder = 'gptoolbox';
 end
@@ -127,7 +173,7 @@ gptoolboxPath = fullfile(depsRoot, gptoolboxFolder, 'mesh');
 
 % Validate path exists
 if ~exist(gptoolboxPath, 'dir')
-    error('bct:manifold:cotmatrix:PathNotFound', ...
+    error('bct:manifold:operator:stiffness:PathNotFound', ...
         ['gptoolbox mesh folder not found: %s\n\n' ...
          'Install dependencies with:\n' ...
          '  bct.install.deps\n\n' ...
@@ -139,7 +185,7 @@ end
 % Validate cotmatrix.m exists
 cotmatrixFile = fullfile(gptoolboxPath, 'cotmatrix.m');
 if ~exist(cotmatrixFile, 'file')
-    error('bct:manifold:cotmatrix:FunctionNotFound', ...
+    error('bct:manifold:operator:stiffness:FunctionNotFound', ...
         'cotmatrix.m not found in: %s', gptoolboxPath);
 end
 

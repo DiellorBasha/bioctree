@@ -1,21 +1,29 @@
-function M = mass(Manifold, options)
+function [header, M] = mass(Manifold, options)
 %MASS Assemble FEM mass matrix from Manifold
 %
 % Syntax:
-%   M = bct.manifold.operator.mass(Manifold)
-%   M = bct.manifold.operator.mass(Manifold, 'Type', massType)
+%   [header, M] = bct.manifold.operator.mass(Manifold)
+%   [header, M] = bct.manifold.operator.mass(Manifold, Name, Value)
 %
 % Inputs:
 %   Manifold - bct.Manifold object
 %
 % Name-Value Parameters:
-%   Type - Mass matrix type (default: 'voronoi')
-%          'voronoi'     - Voronoi area cells (diagonal, default for triangles)
-%          'barycentric' - Equal area distribution (diagonal)
-%          'full'        - Consistent FEM mass matrix (sparse, with off-diagonal)
+%   variant    - Mass matrix variant (default: 'voronoi')
+%                'voronoi'     - Voronoi area cells (diagonal, default)
+%                'barycentric' - Equal area distribution (diagonal)
+%                'full'        - Consistent FEM mass matrix (sparse)
+%   symmetrize - Force symmetrization (default: true)
+%   precision  - Output precision (default: 'double')
+%                'double' - Double precision
+%                'single' - Single precision
 %
 % Outputs:
-%   M - [N×N] sparse mass matrix defining FEM inner product
+%   header - Structure containing the parameters used:
+%            .variant    - Mass matrix variant used
+%            .symmetrize - Whether symmetrization was applied
+%            .precision  - Precision of output matrix
+%   M      - [N×N] sparse mass matrix defining FEM inner product
 %
 % Description:
 %   Assembles the FEM mass matrix using gptoolbox. The mass matrix defines
@@ -23,7 +31,7 @@ function M = mass(Manifold, options)
 %
 %   ⟨u, v⟩ = u' * M * v
 %
-%   Three types available:
+%   Three variants available:
 %   - 'voronoi': Diagonal matrix with true Voronoi areas (handles obtuse
 %     triangles), best for most applications
 %   - 'barycentric': Diagonal matrix distributing triangle area equally
@@ -35,24 +43,38 @@ function M = mass(Manifold, options)
 %   authoritative implementation. Dependency path is resolved via bct.config.
 %
 % Examples:
-%   % Default (voronoi)
-%   M = bct.manifold.operator.mass(manifold);
+%   % Default (voronoi, double precision, symmetrized)
+%   [header, M] = bct.manifold.operator.mass(manifold);
 %
 %   % Barycentric lumped mass
-%   M = bct.manifold.operator.mass(manifold, 'Type', 'barycentric');
+%   [header, M] = bct.manifold.operator.mass(manifold, 'variant', 'barycentric');
 %
-%   % Full consistent mass
-%   M = bct.manifold.operator.mass(manifold, 'Type', 'full');
+%   % Full consistent mass without symmetrization
+%   [header, M] = bct.manifold.operator.mass(manifold, ...
+%       'variant', 'full', 'symmetrize', false);
+%
+%   % Single precision output
+%   [header, M] = bct.manifold.operator.mass(manifold, ...
+%       'variant', 'voronoi', 'precision', 'single');
 %
 %   % Use with FEM inner product
+%   [~, M] = bct.manifold.operator.mass(manifold);
 %   norm_u = sqrt(u' * M * u);
 %
 % See also: bct.manifold.operator.stiffness, massmatrix
 
 arguments
     Manifold (1,1) bct.Manifold
-    options.Type (1,1) string {mustBeMember(options.Type, ["voronoi","barycentric","full"])} = "voronoi"
+    options.variant (1,1) string {mustBeMember(options.variant, ["voronoi","barycentric","full"])} = "voronoi"
+    options.symmetrize (1,1) logical = true
+    options.precision (1,1) string {mustBeMember(options.precision, ["double","single"])} = "double"
 end
+
+% Build header structure with input parameters
+header = struct();
+header.variant = char(options.variant);
+header.symmetrize = options.symmetrize;
+header.precision = char(options.precision);
 
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
@@ -70,15 +92,22 @@ if needsPath
 end
 
 try
-    M = massmatrix(V, F, char(options.Type));
+    M = massmatrix(V, F, header.variant);
 catch ME
     error('bct:manifold:operator:mass:GPToolboxError', ...
         'Failed to call gptoolbox massmatrix: %s\nPath: %s', ...
         ME.message, gptoolboxPath);
 end
 
-% Symmetrize for numerical safety
-M = (M + M') / 2;
+% Symmetrize if requested
+if header.symmetrize
+    M = (M + M') / 2;
+end
+
+% Convert precision if requested
+if strcmp(header.precision, 'single')
+    M = single(M);
+end
 
 end
 

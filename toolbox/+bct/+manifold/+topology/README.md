@@ -111,4 +111,4 @@ he = bct.manifold.topology.halfedge(V, F);
 
 - `bct.Manifold` - Main manifold class
 - `bct.manifold.geometry` - Embedding-dependent operations (centroids, normals, tangents)
-- `bct.manifold.operator.mass`, `bct.manifold.cotmatrix` - FEM operators
+- `bct.manifold.operator.mass`, `bct.manifold.operator.stiffness` - FEM operators

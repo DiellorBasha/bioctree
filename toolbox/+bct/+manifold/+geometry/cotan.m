@@ -31,7 +31,7 @@ function [C, he] = cotan(V, F)
 %   % Get halfedge structure too
 %   [C, he] = bct.manifold.geometry.cotan(V, F);
 %
-% See also: bct.manifold.topology.halfedge, bct.manifold.cotmatrix
+% See also: bct.manifold.topology.halfedge, bct.manifold.operator.stiffness
 
   if size(F,2) ~= 3
     error('bct:geometry:cotan', ...
