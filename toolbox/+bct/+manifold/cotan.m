@@ -28,7 +28,7 @@ function [C, he] = cotan(V, F)
         'Only triangular faces (#F x 3) are supported.');
   end
 
-  he = bct.topology.halfedge(V,F);
+  he = bct.manifold.topology.halfedge(V,F);
 
   % For each halfedge h = i->j in face, the vertex opposite this edge is:
   %   k = head( next(h) )

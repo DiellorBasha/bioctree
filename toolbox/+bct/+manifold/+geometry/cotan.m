@@ -13,7 +13,7 @@ function [C, he] = cotan(V, F)
 %        C(:,1) = (1/2)*cot(angle at v1) opposite edge (v2,v3)
 %        C(:,2) = (1/2)*cot(angle at v2) opposite edge (v3,v1)
 %        C(:,3) = (1/2)*cot(angle at v3) opposite edge (v1,v2)
-%   he - halfedge structure (optional, from bct.topology.halfedge)
+%   he - halfedge structure (optional, from bct.manifold.topology.halfedge)
 %
 % Description:
 %   Computes cotangent values at each face vertex, matching gptoolbox
@@ -31,14 +31,14 @@ function [C, he] = cotan(V, F)
 %   % Get halfedge structure too
 %   [C, he] = bct.manifold.geometry.cotan(V, F);
 %
-% See also: bct.topology.halfedge, bct.fem.assembleStiffness
+% See also: bct.manifold.topology.halfedge, bct.fem.assembleStiffness
 
   if size(F,2) ~= 3
     error('bct:geometry:cotan', ...
         'Only triangular faces (#F x 3) are supported.');
   end
 
-  he = bct.topology.halfedge(V, F);
+  he = bct.manifold.topology.halfedge(V, F);
 
   % For each halfedge h = i->j in face, the vertex opposite this edge is:
   %   k = head(next(h))

@@ -1,5 +1,5 @@
 classdef test_bct_topology < BaseBctTest
-    % TEST_BCT_TOPOLOGY Unified tests for bct.topology package
+    % TEST_BCT_TOPOLOGY Unified tests for bct.manifold.topology package
     %
     % Tests all topology functions:
     % - edges: Extract unique edges from faces
@@ -15,7 +15,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            E = bct.topology.edges(M);
+            E = bct.manifold.topology.edges(M);
             
             testCase.verifySize(E(:,1), [size(E,1), 1], ...
                 'Edges should have first column');
@@ -31,7 +31,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify edges extraction from faces directly
             [~, F] = testCase.getDefaultTestMesh();
             
-            E = bct.topology.edges(F);
+            E = bct.manifold.topology.edges(F);
             
             testCase.verifyEqual(size(E,2), 2, ...
                 'Edges should have 2 columns');
@@ -41,7 +41,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify edges are unique
             [~, F] = testCase.getDefaultTestMesh();
             
-            E = bct.topology.edges(F);
+            E = bct.manifold.topology.edges(F);
             E_unique = unique(sort(E, 2), 'rows');
             
             testCase.verifyEqual(size(E,1), size(E_unique,1), ...
@@ -53,7 +53,7 @@ classdef test_bct_topology < BaseBctTest
             % Use fsaverage which is a closed mesh
             [V, F] = testCase.getDefaultTestMesh();
             
-            E = bct.topology.edges(F);
+            E = bct.manifold.topology.edges(F);
             chi = size(V,1) - size(E,1) + size(F,1);
             
             testCase.verifyEqual(chi, 2, ...
@@ -66,10 +66,10 @@ classdef test_bct_topology < BaseBctTest
             M = bct.Manifold(V, F);
             
             E1 = M.Edges;
-            E2 = bct.topology.edges(M);
+            E2 = bct.manifold.topology.edges(M);
             
             testCase.verifyEqual(E1, E2, ...
-                'bct.topology.edges should match Manifold.Edges');
+                'bct.manifold.topology.edges should match Manifold.Edges');
         end
         
         %% ADJACENCY TESTS
@@ -78,7 +78,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            A = bct.topology.adjacency(M);
+            A = bct.manifold.topology.adjacency(M);
             
             testCase.verifySize(A, [size(V,1), size(V,1)], ...
                 'Adjacency should be [Nv×Nv]');
@@ -92,7 +92,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify adjacency from faces directly
             [V, F] = testCase.getDefaultTestMesh();
             
-            A = bct.topology.adjacency(F, size(V,1));
+            A = bct.manifold.topology.adjacency(F, size(V,1));
             
             testCase.verifySize(A, [size(V,1), size(V,1)]);
         end
@@ -101,7 +101,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify adjacency is symmetric
             [V, F] = testCase.getDefaultTestMesh();
             
-            A = bct.topology.adjacency(F, size(V,1));
+            A = bct.manifold.topology.adjacency(F, size(V,1));
             
             testCase.verifyEqual(A, A', ...
                 'Adjacency should be symmetric');
@@ -111,7 +111,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify no self-loops
             [V, F] = testCase.getDefaultTestMesh();
             
-            A = bct.topology.adjacency(F, size(V,1));
+            A = bct.manifold.topology.adjacency(F, size(V,1));
             
             testCase.verifyEqual(double(full(diag(A))), zeros(size(V,1), 1), ...
                 'Adjacency should have no self-loops');
@@ -121,7 +121,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify adjacency is binary (0 or 1)
             [V, F] = testCase.getDefaultTestMesh();
             
-            A = bct.topology.adjacency(F, size(V,1));
+            A = bct.manifold.topology.adjacency(F, size(V,1));
             vals = unique(A(:));
             
             testCase.verifyTrue(all(ismember(vals, [0; 1])), ...
@@ -134,10 +134,10 @@ classdef test_bct_topology < BaseBctTest
             M = bct.Manifold(V, F);
             
             A1 = M.adjacency();
-            A2 = bct.topology.adjacency(M);
+            A2 = bct.manifold.topology.adjacency(M);
             
             testCase.verifyEqual(A1, A2, ...
-                'Manifold.adjacency() should match bct.topology.adjacency()');
+                'Manifold.adjacency() should match bct.manifold.topology.adjacency()');
         end
         
         %% HALFEDGE TESTS
@@ -146,7 +146,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             testCase.verifyTrue(isstruct(he), ...
                 'Output should be a struct');
@@ -164,7 +164,7 @@ classdef test_bct_topology < BaseBctTest
             % Verify halfedge from V,F directly
             [V, F] = testCase.getDefaultTestMesh();
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             testCase.verifyTrue(isstruct(he));
         end
@@ -174,7 +174,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             % Each face contributes 3 halfedges
             Nh = size(F, 1) * 3;
@@ -190,7 +190,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             % For each halfedge, next(prev(h)) == h and prev(next(h)) == h
             for h = 1:length(he.next)
@@ -206,7 +206,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             % For non-boundary halfedges, twin(twin(h)) == h
             for h = 1:length(he.twin)
@@ -226,7 +226,7 @@ classdef test_bct_topology < BaseBctTest
             V = [0 0 0; 1 0 0; 1 1 0; 0 1 0];
             F = [1 2 3; 1 3 4];
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             % Count boundary halfedges
             nBoundary = sum(he.isBoundary);
@@ -241,8 +241,8 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
-            E = bct.topology.edges(M);
+            he = bct.manifold.topology.halfedge(V, F);
+            E = bct.manifold.topology.edges(M);
             
             testCase.verifyEqual(size(he.E, 1), size(E, 1), ...
                 'Halfedge edge list should match topology edges');
@@ -253,7 +253,7 @@ classdef test_bct_topology < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             testCase.verifySize(he.fh, [size(F,1), 3], ...
                 'fh should be [Nf×3] storing 3 halfedges per face');
@@ -268,10 +268,11 @@ classdef test_bct_topology < BaseBctTest
             % Use fsaverage which is a closed mesh
             [V, F] = testCase.getDefaultTestMesh();
             
-            he = bct.topology.halfedge(V, F);
+            he = bct.manifold.topology.halfedge(V, F);
             
             testCase.verifyEqual(sum(he.isBoundary), 0, ...
                 'Closed mesh (fsaverage) should have no boundary halfedges');
         end
     end
 end
+

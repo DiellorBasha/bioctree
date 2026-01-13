@@ -1,6 +1,27 @@
-# bct.topology Package
+# bct.topology Package [DEPRECATED]
 
-## Purpose
+## ⚠️ DEPRECATION NOTICE
+
+**This package has been moved to `bct.manifold.topology`.**
+
+Please update your code to use:
+```matlab
+% OLD (deprecated)
+bct.topology.edges(M)
+bct.topology.adjacency(M)
+bct.topology.halfedge(V, F)
+
+% NEW (current)
+bct.manifold.topology.edges(M)
+bct.manifold.topology.adjacency(M)
+bct.manifold.topology.halfedge(V, F)
+```
+
+This directory will be removed in a future release.
+
+---
+
+## Purpose (Historical)
 
 `bct.topology` is a self-contained package containing **copied implementations** of curated topology and connectivity routines for triangular surface meshes. This package was created as **Step 1 of a safe migration** to establish a clear separation between topology (coordinate-free) and geometry (embedding-dependent) operations.
 
@@ -35,20 +56,19 @@ This package contains **coordinate-free** connectivity primitives for simplicial
 ```
 bct.Manifold (class)
 ├── Vertices, Faces (immutable data)
-├── bct.topology.* (connectivity: edges, adjacency, halfedge)
+├── bct.manifold.topology.* (connectivity: edges, adjacency, halfedge)
 ├── bct.manifold.geometry.* (embedding: centroids, normals, tangents)
 ├── bct.fem.* (operators: mass, stiffness, Laplacian)
 └── bct.eigenpairs.* (spectral decomposition)
 ```
 
-## Migration Strategy
+## Migration Strategy (Historical)
 
-This is Step 1 of migration:
+This was Step 1 of migration:
 
 1. ✅ Create `bct.topology.*` with copied implementations
 2. ✅ Validate equivalence via regression tests
-3. ⏳ Update callers to use `bct.topology.*` (future)
-4. ⏳ Deprecate topology functions in `bct.manifold` (future)
+3. ✅ Moved to `bct.manifold.topology.*` (completed)
 
 ## Usage
 
