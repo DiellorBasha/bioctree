@@ -137,39 +137,6 @@ classdef Manifold < handle
         % ===============================================================
         % REPRESENTATION PORTS (DEC, Graph)
         % ===============================================================
-        
-        function fem = FEM(obj)
-            %FEM Get FEM representation struct (lazy creation with caching)
-            %
-            % Syntax:
-            %   fem = M.FEM()
-            %
-            % Outputs:
-            %   fem - Struct with fields:
-            %         * V - Vertices
-            %         * F - Faces
-            %         * G - Gradient operator (lazy-computed)
-            %         * D - Divergence operator (lazy-computed)
-            %         * Manifold - Reference to parent Manifold
-            %
-            % Note: 
-            %   - First call creates FEM struct, subsequent calls return cached version
-            %   - Gradient/Divergence matrices computed on first use and cached
-            %   - Requires gptoolbox functions (grad, div) on path
-            %
-            % See also: bct.runtime.operators.femGradient, bct.runtime.operators.femDivergence
-            
-            if ~isKey(obj.Cache, 'FEM')
-                fem = struct();
-                fem.V = obj.Vertices;
-                fem.F = obj.Faces;
-                fem.Manifold = obj;
-                fem.G = [];  % Lazy-computed gradient matrix
-                fem.D = [];  % Lazy-computed divergence matrix
-                obj.Cache('FEM') = fem;
-            end
-            fem = obj.Cache('FEM');
-        end
 
         function dec = DEC(obj)
             %DEC Get DECLab DiscreteExteriorCalculus backend (lazy creation with caching)
