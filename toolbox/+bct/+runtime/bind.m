@@ -16,8 +16,8 @@ function boundFn = bind(spec, context)
 %
 % Representation Resolution:
 %   - DEC: Resolves context.DEC or calls Manifold.DEC()
-%   - FEM: Resolves context.FEM or calls Manifold.FEM()
 %   - Graph: Resolves context.Graph or calls Manifold.Graph()
+%   - Manifold: Used directly for Vertices/Faces access
 %
 % Method Handles:
 %   - Unbound method handles (e.g., @DiscreteExteriorCalculus.gradient)
@@ -55,15 +55,13 @@ switch repType
                 'Cannot resolve DiscreteExteriorCalculus: no DEC or Manifold in context');
         end
         
-    case "FEM"
-        % Resolve FEM representation
-        if isfield(context, 'FEM') && ~isempty(context.FEM)
-            rep = context.FEM;
-        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
-            rep = context.Manifold.FEM();
+    case "Manifold"
+        % Resolve Manifold directly
+        if isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            rep = context.Manifold;
         else
             error('bct:runtime:NoRepresentation', ...
-                'Cannot resolve FEM: no FEM or Manifold in context');
+                'Cannot resolve Manifold in context');
         end
         
     case "Graph"

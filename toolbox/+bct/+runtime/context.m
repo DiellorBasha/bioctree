@@ -9,7 +9,6 @@ function ctx = context(Manifold, options)
 %   Manifold - bct.Manifold object
 %
 % Optional Parameters:
-%   FEM   - Create FEM representation (default: true)
 %   DEC   - Create DEC representation (default: false)
 %   Graph - Create Graph representation (default: false)
 %
@@ -21,14 +20,13 @@ function ctx = context(Manifold, options)
 %
 % Example:
 %   M = bct.Manifold(struct('V', V, 'F', F));
-%   ctx = bct.runtime.context(M, 'FEM', true);
+%   ctx = bct.runtime.context(M, 'DEC', true);
 %   ops = bct.runtime.operators(ctx);
 %
 % See also: bct.runtime.operators
 
 arguments
     Manifold (1,1) bct.Manifold
-    options.FEM   (1,1) logical = true
     options.DEC   (1,1) logical = false
     options.Graph (1,1) logical = false
 end
@@ -37,10 +35,6 @@ end
 ctx = struct('Manifold', Manifold);
 
 % Add requested representations (lazy creation via Manifold ports)
-if options.FEM
-    ctx.FEM = Manifold.FEM();
-end
-
 if options.DEC
     try
         ctx.DEC = Manifold.DEC();

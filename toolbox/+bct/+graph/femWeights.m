@@ -21,9 +21,13 @@ arguments
     Manifold (1,1) bct.Manifold
 end
 
-% Get stiffness matrix from FEM
-fem = Manifold.FEM();
-K = fem.Stiffness;
+% Extract vertices and faces
+V = Manifold.Vertices;
+F = Manifold.Faces;
+
+% Compute gradient/divergence matrix from gptoolbox
+G = grad(V, F);
+K = G' * G;  % Stiffness matrix = G^T * G
 
 E = Manifold.Edges;
 i = E(:,1);

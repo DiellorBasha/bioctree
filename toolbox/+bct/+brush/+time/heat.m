@@ -97,14 +97,13 @@ function w = heat(manifold, time, params)
         metric = "geometry";
     end
 
-    % --- Get FEM representation and eigenpairs ---
-    fem = manifold.FEM();
+    % --- Get eigenmodes for spectral analysis ---
     
     % Determine number of modes (default to 100)
     numModes = min(100, manifold.numVertices());
     
     % Get eigenpairs (uses caching internally)
-    E = fem.eigenpairs(numModes);
+    E = manifold.eigenmodes(numModes);
     eigenvalues = E.Values;
     lambda_max = max(eigenvalues);
     

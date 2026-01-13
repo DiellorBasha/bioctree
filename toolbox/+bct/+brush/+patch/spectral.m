@@ -78,8 +78,7 @@ function w = spectral(manifold, params)
             'Source vertex %d out of range [1, %d]', i, Nv);
     end
     
-    % Step 1: Get FEM representation and compute eigenpairs
-    fem = manifold.FEM();
+    % Step 1: Compute eigenpairs for spectral analysis
     
     % Determine number of modes
     if isfield(params, 'bandwidth') && ~isempty(params.bandwidth)
@@ -89,13 +88,14 @@ function w = spectral(manifold, params)
     end
     
     % Get eigenpairs (uses caching internally)
-    E = fem.eigenpairs(numModes);
+    E = manifold.eigenmodes(numModes);
     eigenvalues = E.Values;
     
-    % Step 2: Create FEM-correct Dirac delta at seed vertex
+    % Step 2: Create mass-weighted Dirac delta at seed vertex
     ei = zeros(Nv, 1);
     ei(i) = 1;
-    delta_i = fem.Mass \ ei;  % Correct FEM delta
+    Mass = manifold.DEC().hodge0;  % Get mass matrix from DEC
+    delta_i = Mass \ ei;  % Mass-weighted delta
     
     % Step 3: Project to spectral domain using Eigenpairs
     spectral_coeffs = E.project(delta_i);

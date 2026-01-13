@@ -60,8 +60,7 @@ function w = spectral(manifold, params)
         kernel_params = struct();
     end
 
-    % --- Get FEM representation and eigenpairs ---
-    fem = manifold.FEM();
+    % --- Get eigenmodes for spectral analysis ---
     
     % Determine number of modes from kernel params or use default
     if isfield(kernel_params, 'numModes')
@@ -71,7 +70,7 @@ function w = spectral(manifold, params)
     end
     
     % Get eigenpairs (uses caching internally)
-    E = fem.eigenpairs(numModes);
+    E = manifold.eigenmodes(numModes);
     eigenvalues = E.Values;
 
     % --- Compute shortest path ---

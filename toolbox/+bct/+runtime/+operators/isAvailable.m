@@ -68,16 +68,12 @@ switch rep
             return;
         end
         
-    case "FEM"
-        % Can resolve if:
-        % - context.FEM exists and is populated, OR
-        % - context.Manifold exists and can provide FEM
-        if isfield(context, 'FEM') && ~isempty(context.FEM)
-            % Already resolved
-        elseif isfield(context, 'Manifold') && ~isempty(context.Manifold)
-            % Can resolve via Manifold.FEM()
+    case "Manifold"
+        % Can resolve if context.Manifold exists
+        if isfield(context, 'Manifold') && ~isempty(context.Manifold)
+            % Manifold available for direct V/F access
         else
-            reason = "No FEM or Manifold in context";
+            reason = "No Manifold in context";
             return;
         end
         

@@ -138,14 +138,6 @@ function satisfied = isDependencySatisfied(spec, manifold)
                     return;
                 end
                 
-            case "FEM"
-                try
-                    manifold.FEM();
-                catch
-                    satisfied = false;
-                    return;
-                end
-                
             case "DEC"
                 try
                     manifold.DEC();
@@ -155,12 +147,11 @@ function satisfied = isDependencySatisfied(spec, manifold)
                 end
                 
             case "Eigenpairs"
-                % Eigenpairs are computed through FEM
+                % Eigenpairs are computed through manifold.eigenmodes()
                 try
-                    fem = manifold.FEM();
-                    % Check if eigenpairs can be computed
-                    % (we don't actually compute them here)
-                    if isempty(fem.Mass) || isempty(fem.Stiffness)
+                    % Check if eigenmodes can be computed
+                    % (we don't actually compute them here, just verify capability)
+                    if manifold.numVertices() < 1
                         satisfied = false;
                         return;
                     end

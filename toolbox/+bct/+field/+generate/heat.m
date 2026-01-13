@@ -109,25 +109,22 @@ normalize = options.Normalize;
 delta_struct = bct.field.generate.delta(index, M, 'Support', support);
 delta_values = delta_struct.value;
 
-% Step 2: Get FEM representation and compute eigenpairs
-% Note: Creates bct.FEM object (not cached at Manifold level)
-% but eigenpairs are cached within the FEM object instance
-fem = bct.FEM(M);
-
-% Determine number of modes if not specified
+% Step 2: Get eigenpairs from Manifold
+% Uses internal caching
 if isempty(numModes)
     Nv = M.numVertices();
     numModes = min(100, Nv);
 end
 
-% Get eigenpairs (uses caching internally within FEM object)
-E = fem.eigenpairs(numModes);
+% Get eigenpairs (uses caching internally)
+E = M.eigenmodes(numModes);
 eigenvalues = E.Values;
 
-% Step 3: Create FEM-correct delta (for vertex support)
+% Step 3: Create mass-weighted delta (for vertex support)
 % For vertex fields, we need M^(-1) * delta for proper projection
 if strcmp(support, 'vertex')
-    delta_fem = fem.Mass \ delta_values;
+    Mass = M.DEC().hodge0;  % Get mass matrix from DEC
+    delta_fem = Mass \ delta_values;
 else
     % For face/edge support, use values directly
     % (FEM eigenpairs are vertex-based, so this is an approximation)
