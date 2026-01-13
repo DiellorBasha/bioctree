@@ -497,6 +497,52 @@ classdef Manifold < handle
             idx = bct.manifold.query.neighbors(A, v);
         end
         
+        function deg = degree(obj, varargin)
+            %DEGREE Get degree of vertex or all vertices
+            %
+            % Syntax:
+            %   deg = M.degree()
+            %   deg = M.degree(v)
+            %   deg = M.degree(v1, v2, ...)
+            %
+            % Inputs:
+            %   v - Vertex index or indices (optional)
+            %
+            % Outputs:
+            %   deg - Vertex degrees (scalar, vector, or full degree list)
+            %
+            % Description:
+            %   Computes the degree (number of neighbors) for vertices.
+            %   With no arguments, returns degrees for all vertices.
+            %   With vertex indices, returns degrees for those vertices only.
+            %   Uses cached adjacency matrix.
+            %
+            % Examples:
+            %   M = bct.manifold.load();
+            %   
+            %   % Get all vertex degrees
+            %   deg_all = M.degree();
+            %   
+            %   % Get degree of specific vertex
+            %   deg_v = M.degree(100);
+            %   
+            %   % Get degrees of multiple vertices
+            %   deg_verts = M.degree([10, 20, 30]);
+            %
+            % See also: bct.manifold.query.degree, neighbors, adjacency
+            
+            arguments
+                obj (1,1) bct.Manifold
+            end
+            
+            arguments (Repeating)
+                varargin
+            end
+            
+            A = obj.adjacency();
+            deg = bct.manifold.query.degree(A, varargin{:});
+        end
+        
         % ===============================================================
         % CACHE INSPECTION
         % ===============================================================
