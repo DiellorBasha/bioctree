@@ -90,11 +90,15 @@ classdef Graph < handle
         end
         
         function D = get.Degree(obj)
-            D = bct.graph.assembleDegree(obj.Adjacency);
+            % Inline computation: D = diag(sum(A, 2))
+            A = obj.Adjacency;
+            d = sum(A, 2);
+            N = size(A, 1);
+            D = spdiags(d, 0, N, N);
         end
         
         function L = get.Laplacian(obj)
-            L = bct.graph.assembleLaplacian(obj.Adjacency, obj.Degree, obj.LaplacianType);
+            L = bct.manifold.operator.graphlaplacian(obj.Manifold, 'Type', obj.LaplacianType);
         end
     end
     

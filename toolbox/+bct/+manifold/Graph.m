@@ -42,8 +42,8 @@ classdef Graph < handle
     
     properties (Dependent)
         Adjacency           % [N×N] sparse adjacency (via bct.manifold.topology.adjacency)
-        Degree              % [N×N] sparse degree (via bct.manifold.query.assembleDegree)
-        Laplacian           % [N×N] sparse Laplacian (via bct.manifold.query.assembleLaplacian)
+        Degree              % [N×N] sparse degree matrix (computed from adjacency)
+        Laplacian           % [N×N] sparse Laplacian (via bct.manifold.operator.graphlaplacian)
     end
     
     methods
@@ -94,18 +94,22 @@ classdef Graph < handle
         end
     end
     
-    %% Dependent properties (lazy computed via bct.manifold.query)
+    %% Dependent properties (lazy computed)
     methods
         function A = get.Adjacency(obj)
             A = obj.Manifold.adjacency();
         end
         
         function D = get.Degree(obj)
-            D = bct.manifold.query.assembleDegree(obj.Adjacency);
+            % Inline computation: D = diag(sum(A, 2))
+            A = obj.Adjacency;
+            d = sum(A, 2);
+            N = size(A, 1);
+            D = spdiags(d, 0, N, N);
         end
         
         function L = get.Laplacian(obj)
-            L = bct.manifold.query.assembleLaplacian(obj.Adjacency, obj.Degree, obj.LaplacianType);
+            L = bct.manifold.operator.graphlaplacian(obj.Manifold, 'Type', obj.LaplacianType);
         end
     end
     

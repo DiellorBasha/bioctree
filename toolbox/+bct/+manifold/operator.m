@@ -22,6 +22,7 @@ function ops = operator(meshInput, varargin)
 %     .mass            - [N×N] FEM mass matrix
 %     .stiffness       - [N×N] FEM stiffness matrix (cotangent Laplacian)
 %     .laplacebeltrami - [N×N] Laplace-Beltrami operator (M^(-1) * K)
+%     .graphlaplacian  - [N×N] Graph Laplacian (topological, D - A)
 %     .dec             - Structure with 15 DEC operators:
 %       .d0, .d1       - Exterior derivatives
 %       .dd0, .dd1     - Codifferentials
@@ -80,8 +81,8 @@ function ops = operator(meshInput, varargin)
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
 %           bct.manifold.operator.dec, bct.manifold.operator.gradient,
 %           bct.manifold.operator.divergence, bct.manifold.operator.curl,
-%           bct.manifold.operator.hodgelaplacian, bct.manifold.geometry,
-%           bct.manifold.topology
+%           bct.manifold.operator.hodgelaplacian, bct.manifold.operator.graphlaplacian,
+%           bct.manifold.geometry, bct.manifold.topology
 
 % Parse inputs
 p = inputParser;
@@ -183,5 +184,13 @@ ops.hodgelaplacian = struct();
 [~, ops.hodgelaplacian.kform0] = bct.manifold.operator.hodgelaplacian(M, 'kform', 0);
 [~, ops.hodgelaplacian.kform1] = bct.manifold.operator.hodgelaplacian(M, 'kform', 1);
 [~, ops.hodgelaplacian.kform2] = bct.manifold.operator.hodgelaplacian(M, 'kform', 2);
+
+% ===============================================================
+% Graph Laplacian (Topological)
+% ===============================================================
+
+% Graph Laplacian: combinatorial (D - A) based on topology only
+% Unlike Laplace-Beltrami which uses geometric weighting
+ops.graphlaplacian = bct.manifold.operator.graphlaplacian(M, 'Type', 'combinatorial');
 
 end
