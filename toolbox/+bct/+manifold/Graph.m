@@ -281,7 +281,7 @@ classdef Graph < handle
                 metric (1,1) string = "geometry"
             end
             
-            [path, dist] = bct.manifold.query.shortestPath(obj, s, t, metric);
+            [path, dist] = bct.manifold.query.shortestPath(obj.Manifold, s, t, metric);
         end
         
         function D = distances(obj, metric)
@@ -294,7 +294,7 @@ classdef Graph < handle
                 metric (1,1) string = "geometry"
             end
             
-            D = bct.manifold.query.distances(obj, metric);
+            D = bct.manifold.query.distances(obj.Manifold, metric);
         end
         
         function [T, pred] = bfSearch(obj, s, metric)
@@ -309,9 +309,9 @@ classdef Graph < handle
             end
             
             if nargout > 1
-                [T, pred] = bct.manifold.query.bfSearch(obj, s, metric);
+                [T, pred] = bct.manifold.query.bfSearch(obj.Manifold, s, metric);
             else
-                T = bct.manifold.query.bfSearch(obj, s, metric);
+                T = bct.manifold.query.bfSearch(obj.Manifold, s, metric);
             end
         end
         
@@ -327,9 +327,9 @@ classdef Graph < handle
             end
             
             if nargout > 1
-                [T, pred] = bct.manifold.query.dfSearch(obj, s, metric);
+                [T, pred] = bct.manifold.query.dfSearch(obj.Manifold, s, metric);
             else
-                T = bct.manifold.query.dfSearch(obj, s, metric);
+                T = bct.manifold.query.dfSearch(obj.Manifold, s, metric);
             end
         end
     end
@@ -370,7 +370,7 @@ classdef Graph < handle
             end
             
             % Delegate to bct.manifold.query.eigensolve
-            E = bct.manifold.query.eigensolve(obj, k);
+            E = bct.manifold.query.eigensolve(obj.Manifold, k, obj.LaplacianType);
             
             % Cache result
             obj.GraphGSPCache(key) = E;

@@ -1,25 +1,25 @@
-function D = distances(Graph, metric)
+function D = distances(M, metric)
 %DISTANCES All-pairs shortest path distances
 %
 % Syntax:
-%   D = bct.manifold.query.distances(Graph)
-%   D = bct.manifold.query.distances(Graph, metric)
+%   D = bct.manifold.query.distances(M)
+%   D = bct.manifold.query.distances(M, metric)
 %
 % Inputs:
-%   Graph  - bct.manifold.Graph object
-%   metric - "geometry" (default) | "fem" | custom
+%   M      - bct.Manifold object
+%   metric - "geometry" (default) | "fem" | "uniform"
 %
 % Returns:
 %   D - [N×N] matrix of shortest path distances
 %
-% See also: bct.manifold.query.shortestPath, bct.manifold.Graph.matlab
+% See also: bct.manifold.query.shortestPath, bct.manifold.out
 
 arguments
-    Graph (1,1) bct.manifold.Graph
+    M (1,1) bct.Manifold
     metric (1,1) string = "geometry"
 end
 
-G = Graph.matlab(metric);
+G = bct.manifold.out(M, 'graph', 'EdgeWeights', metric);
 D = distances(G);
 
 end

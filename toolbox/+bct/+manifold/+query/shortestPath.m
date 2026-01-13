@@ -1,30 +1,30 @@
-function [path, dist] = shortestPath(Graph, s, t, metric)
+function [path, dist] = shortestPath(M, s, t, metric)
 %SHORTESTPATH Compute shortest path between two nodes
 %
 % Syntax:
-%   path = bct.manifold.query.shortestPath(Graph, s, t)
-%   [path, dist] = bct.manifold.query.shortestPath(Graph, s, t, metric)
+%   path = bct.manifold.query.shortestPath(M, s, t)
+%   [path, dist] = bct.manifold.query.shortestPath(M, s, t, metric)
 %
 % Inputs:
-%   Graph  - bct.manifold.Graph object
+%   M      - bct.Manifold object
 %   s      - Source node
 %   t      - Target node
-%   metric - "geometry" (default) | "fem" | custom
+%   metric - "geometry" (default) | "fem" | "uniform"
 %
 % Returns:
 %   path - Vector of node indices along shortest path
 %   dist - Total path distance
 %
-% See also: bct.manifold.Graph.matlab
+% See also: bct.manifold.out
 
 arguments
-    Graph (1,1) bct.manifold.Graph
+    M (1,1) bct.Manifold
     s (1,1) {mustBeInteger, mustBePositive}
     t (1,1) {mustBeInteger, mustBePositive}
     metric (1,1) string = "geometry"
 end
 
-G = Graph.matlab(metric);
+G = bct.manifold.out(M, 'graph', 'EdgeWeights', metric);
 [path, dist] = shortestpath(G, s, t);
 
 end

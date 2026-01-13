@@ -318,6 +318,78 @@ classdef Manifold < handle
         end
         
         % ===============================================================
+        % GRAPH QUERY METHODS
+        % ===============================================================
+        
+        function [T, pred] = bfSearch(obj, s)
+            %BFSEARCH Breadth-first search from source node
+            %
+            % Syntax:
+            %   T = M.bfSearch(s)
+            %   [T, pred] = M.bfSearch(s)
+            %
+            % Inputs:
+            %   s - Source node index
+            %
+            % Outputs:
+            %   T    - Vector of node discovery order
+            %   pred - Vector of predecessor nodes
+            %
+            % Description:
+            %   Performs breadth-first search on the manifold's topology.
+            %   Uses cached adjacency matrix from topology namespace.
+            %
+            % See also: dfSearch, bct.manifold.query.bfSearch
+            
+            arguments
+                obj (1,1) bct.Manifold
+                s (1,1) {mustBeInteger, mustBePositive}
+            end
+            
+            A = obj.adjacency();
+            
+            if nargout > 1
+                [T, pred] = bct.manifold.query.bfSearch(A, s);
+            else
+                T = bct.manifold.query.bfSearch(A, s);
+            end
+        end
+        
+        function [T, pred] = dfSearch(obj, s)
+            %DFSEARCH Depth-first search from source node
+            %
+            % Syntax:
+            %   T = M.dfSearch(s)
+            %   [T, pred] = M.dfSearch(s)
+            %
+            % Inputs:
+            %   s - Source node index
+            %
+            % Outputs:
+            %   T    - Vector of node discovery order
+            %   pred - Vector of predecessor nodes
+            %
+            % Description:
+            %   Performs depth-first search on the manifold's topology.
+            %   Uses cached adjacency matrix from topology namespace.
+            %
+            % See also: bfSearch, bct.manifold.query.dfSearch
+            
+            arguments
+                obj (1,1) bct.Manifold
+                s (1,1) {mustBeInteger, mustBePositive}
+            end
+            
+            A = obj.adjacency();
+            
+            if nargout > 1
+                [T, pred] = bct.manifold.query.dfSearch(A, s);
+            else
+                T = bct.manifold.query.dfSearch(A, s);
+            end
+        end
+        
+        % ===============================================================
         % CACHE INSPECTION
         % ===============================================================
         
