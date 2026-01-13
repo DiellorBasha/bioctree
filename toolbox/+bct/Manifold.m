@@ -138,7 +138,7 @@ classdef Manifold < handle
         % REPRESENTATION PORTS (DEC, Graph)
         % ===============================================================
         
-        function dec = DEC(obj)
+        function fem = FEM(obj)
             %FEM Get FEM representation struct (lazy creation with caching)
             %
             % Syntax:
