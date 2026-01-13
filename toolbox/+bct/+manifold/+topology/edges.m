@@ -83,12 +83,14 @@ edges = [F(:,[1 2]); F(:,[2 3]); F(:,[3 1])];
 % Sort each edge so that (i,j) and (j,i) become the same
 edges_sorted = sort(edges, 2);
 
-% Get unique edges with indexing
+% Get unique edges with CANONICAL lexicographic ordering
+% CRITICAL: Do NOT use 'stable' - we want deterministic ordering independent
+% of face ordering, not encounter-dependent ordering.
 if nargout > 1
     % Return mapping from face-edges to unique edges
-    [E, ~, edge_id] = unique(edges_sorted, 'rows', 'stable');
+    [E, ~, edge_id] = unique(edges_sorted, 'rows');  % canonical lexicographic
 else
-    % Only return unique edges
+    % Only return unique edges (same canonical ordering)
     E = unique(edges_sorted, 'rows');
 end
 

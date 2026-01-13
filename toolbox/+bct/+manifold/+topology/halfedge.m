@@ -57,6 +57,17 @@ function he = halfedge(V, F)
 
   % Twin lookup via sparse directed-edge matrix D(tail, head) = halfedge_id.
   % For a valid manifold triangle mesh, each directed edge appears at most once.
+  
+  % SAFETY: Detect duplicate directed edges before building sparse matrix
+  % If duplicates exist, sparse() will sum values, yielding incorrect topology
+  ij = [v_tail v_head];
+  [~, ~, ic] = unique(ij, 'rows');
+  counts = accumarray(ic, 1);
+  if any(counts > 1)
+    error('bct:topology:halfedge:DuplicateDirectedEdge', ...
+      'Duplicate directed edges detected. Mesh may be non-manifold or contain duplicated faces.');
+  end
+  
   D = sparse(v_tail, v_head, (1:nH)', nV, nV);
   twin = full(D(sub2ind([nV nV], v_head, v_tail))); % D(head,tail)
   % twin is 0 for boundary halfedges (no opposite direction found)
