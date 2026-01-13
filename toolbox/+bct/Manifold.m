@@ -36,6 +36,7 @@ classdef Manifold < handle
         CachedMassType   % Type of mass matrix cached ('voronoi', 'barycentric', 'full')
         CachedEigen      % Cached eigenmode structure (values, vectors, metadata)
         CachedGeometry   % Cached full geometry structure (from bct.manifold.geometry)
+        CachedTopology   % Cached full topology structure (from bct.manifold.topology)
     end
 
     methods
@@ -1190,6 +1191,72 @@ classdef Manifold < handle
             
             % Cache the result
             obj.CachedGeometry = geom;
+        end
+        
+        function topo = topology(obj, varargin)
+            %TOPOLOGY Compute and cache all topological properties
+            %
+            % Syntax:
+            %   topo = M.topology()
+            %   topo = M.topology('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force' - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   topo - Structure with fields:
+            %     .edges     - [nE×2] Unique undirected edges
+            %     .adjacency - [N×N] Sparse binary adjacency matrix
+            %     .halfedge  - Halfedge data structure with navigation
+            %
+            % Description:
+            %   Computes all topological properties of the manifold and caches
+            %   the result for future calls. This is a wrapper for
+            %   bct.manifold.topology() that handles caching.
+            %
+            %   Topology is coordinate-free and depends only on face
+            %   connectivity. On first call, computes all topology. Subsequent
+            %   calls return the cached result unless 'Force' is true.
+            %
+            % Examples:
+            %   % Compute and cache all topology
+            %   M = bct.Manifold(V, F);
+            %   topo = M.topology();
+            %   
+            %   % Access individual properties
+            %   E = topo.edges;          % [nE×2] edge list
+            %   A = topo.adjacency;      % [N×N] adjacency matrix
+            %   he = topo.halfedge;      % Halfedge structure
+            %   
+            %   % Navigate mesh using halfedge
+            %   h = 1;  % First halfedge
+            %   next_h = topo.halfedge.next(h);
+            %   twin_h = topo.halfedge.twin(h);
+            %   
+            %   % Force recomputation
+            %   topo = M.topology('Force', true);
+            %
+            % See also: bct.manifold.topology, geometry
+            
+            % Parse inputs
+            p = inputParser;
+            p.FunctionName = 'bct.Manifold.topology';
+            addParameter(p, 'Force', false, @islogical);
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if we have cached topology and not forcing recomputation
+            if ~force && ~isempty(obj.CachedTopology)
+                topo = obj.CachedTopology;
+                return;
+            end
+            
+            % Compute all topology using bct.manifold.topology
+            topo = bct.manifold.topology(obj);
+            
+            % Cache the result
+            obj.CachedTopology = topo;
         end
         
         function write(obj, fileName, options)
