@@ -466,6 +466,37 @@ classdef Manifold < handle
             D = bct.manifold.query.distances(E, w, N);
         end
         
+        function idx = neighbors(obj, v)
+            %NEIGHBORS Get topological neighbors of vertex
+            %
+            % Syntax:
+            %   idx = M.neighbors(v)
+            %
+            % Inputs:
+            %   v - Vertex index
+            %
+            % Outputs:
+            %   idx - Indices of neighboring vertices
+            %
+            % Description:
+            %   Returns the indices of all vertices directly connected to
+            %   vertex v in the mesh topology. Uses cached adjacency matrix.
+            %
+            % Examples:
+            %   M = bct.manifold.load();
+            %   nbrs = M.neighbors(100);  % Get neighbors of vertex 100
+            %
+            % See also: bct.manifold.query.neighbors, adjacency
+            
+            arguments
+                obj (1,1) bct.Manifold
+                v (1,1) {mustBeInteger, mustBePositive}
+            end
+            
+            A = obj.adjacency();
+            idx = bct.manifold.query.neighbors(A, v);
+        end
+        
         % ===============================================================
         % CACHE INSPECTION
         % ===============================================================
