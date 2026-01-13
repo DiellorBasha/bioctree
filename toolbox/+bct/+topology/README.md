@@ -20,7 +20,7 @@ This package contains **coordinate-free** connectivity primitives for simplicial
 - Metric-dependent operators (mass matrix, stiffness, Laplacian, Hodge stars)
 - DEC numerical workflows → see `bct.dec`
 - Spectral computations → see `bct.eigenpairs`
-- Geometry computations → see `bct.geometry`
+- Geometry computations → see `bct.manifold.geometry`
 
 ## Design Principles
 
@@ -36,7 +36,7 @@ This package contains **coordinate-free** connectivity primitives for simplicial
 bct.Manifold (class)
 ├── Vertices, Faces (immutable data)
 ├── bct.topology.* (connectivity: edges, adjacency, halfedge)
-├── bct.geometry.* (embedding: centroids, normals, tangents)
+├── bct.manifold.geometry.* (embedding: centroids, normals, tangents)
 ├── bct.fem.* (operators: mass, stiffness, Laplacian)
 └── bct.eigenpairs.* (spectral decomposition)
 ```
@@ -82,7 +82,7 @@ Constructs comprehensive halfedge data structure for efficient mesh navigation:
 
 ## See Also
 
-- **`bct.geometry`** - Embedding-dependent operations (centroids, normals, tangents)
+- **`bct.manifold.geometry`** - Embedding-dependent operations (centroids, normals, tangents)
 - **`bct.manifold`** - I/O, conversion, and original implementations (load, read, write, in, out, convert)
 - **`bct.Manifold`** - Main manifold class with convenience methods
 - **`bct.fem`** - Finite element operators

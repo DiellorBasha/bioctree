@@ -2,8 +2,8 @@ function C = centroids(varargin)
 %CENTROIDS Compute face centroids of a triangular mesh
 %
 % Syntax:
-%   C = bct.manifold.centroids(M)
-%   C = bct.manifold.centroids(V, F)
+%   C = bct.manifold.geometry.centroids(M)
+%   C = bct.manifold.geometry.centroids(V, F)
 %
 % Inputs:
 %   M - bct.Manifold object
@@ -20,13 +20,13 @@ function C = centroids(varargin)
 % Examples:
 %   % From Manifold object
 %   M = bct.Manifold(V, F);
-%   C = bct.manifold.centroids(M);
+%   C = bct.manifold.geometry.centroids(M);
 %
 %   % From V, F directly
-%   C = bct.manifold.centroids(V, F);
+%   C = bct.manifold.geometry.centroids(V, F);
 %
 %   % Visualize centroids
-%   C = bct.manifold.centroids(M);
+%   C = bct.manifold.geometry.centroids(M);
 %   plot3(C(:,1), C(:,2), C(:,3), 'r.');
 %
 % See also: bct.manifold.geometry.normals, bct.manifold.geometry.tangents
@@ -39,7 +39,7 @@ if nargin == 1
         V = M.Vertices;
         F = M.Faces;
     else
-        error('bct:manifold:centroids:InvalidInput', ...
+        error('bct:geometry:centroids:InvalidInput', ...
             'Single argument must be a bct.Manifold object');
     end
 elseif nargin == 2
@@ -49,15 +49,15 @@ elseif nargin == 2
     
     % Validate inputs
     if ~isnumeric(V) || size(V, 2) ~= 3
-        error('bct:manifold:centroids:InvalidVertices', ...
+        error('bct:geometry:centroids:InvalidVertices', ...
             'Vertices must be N×3 numeric array');
     end
     if ~isnumeric(F) || size(F, 2) ~= 3
-        error('bct:manifold:centroids:InvalidFaces', ...
+        error('bct:geometry:centroids:InvalidFaces', ...
             'Faces must be M×3 numeric array');
     end
 else
-    error('bct:manifold:centroids:InvalidNumArgs', ...
+    error('bct:geometry:centroids:InvalidNumArgs', ...
         'Expected 1 (Manifold) or 2 (V, F) input arguments');
 end
 

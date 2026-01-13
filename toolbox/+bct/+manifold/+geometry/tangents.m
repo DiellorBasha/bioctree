@@ -2,10 +2,10 @@ function [N, e1, e2] = tangents(varargin)
 %TANGENTS Compute orthonormal tangent frame for each face or vertex
 %
 % Syntax:
-%   [N, e1, e2] = bct.manifold.tangents(M)
-%   [N, e1, e2] = bct.manifold.tangents(V, F)
-%   [N, e1, e2] = bct.manifold.tangents(___, 'Domain', 'face')    % default
-%   [N, e1, e2] = bct.manifold.tangents(___, 'Domain', 'vertex')
+%   [N, e1, e2] = bct.manifold.geometry.tangents(M)
+%   [N, e1, e2] = bct.manifold.geometry.tangents(V, F)
+%   [N, e1, e2] = bct.manifold.geometry.tangents(___, 'Domain', 'face')    % default
+%   [N, e1, e2] = bct.manifold.geometry.tangents(___, 'Domain', 'vertex')
 %
 % Inputs:
 %   M - bct.Manifold object
@@ -29,7 +29,7 @@ function [N, e1, e2] = tangents(varargin)
 %   - e1: first tangent basis vector (orthogonal to N)
 %   - e2: second tangent basis vector (orthogonal to both N and e1)
 %
-%   For Manifold objects, uses cached frames from bct.geometry.frame() for
+%   For Manifold objects, uses cached frames from bct.manifold.geometry.frame() for
 %   efficiency. For V,F inputs, computes frames directly.
 %
 %   Face tangents are computed per triangle using the first edge (v2-v1).
@@ -39,29 +39,29 @@ function [N, e1, e2] = tangents(varargin)
 % Examples:
 %   % Face tangents from Manifold object
 %   M = bct.Manifold(V, F);
-%   [N, e1, e2] = bct.manifold.tangents(M);
-%   [N, e1, e2] = bct.manifold.tangents(M, 'Domain', 'face');
+%   [N, e1, e2] = bct.manifold.geometry.tangents(M);
+%   [N, e1, e2] = bct.manifold.geometry.tangents(M, 'Domain', 'face');
 %
 %   % Vertex tangents from V, F directly
-%   [N, e1, e2] = bct.manifold.tangents(V, F, 'Domain', 'vertex');
+%   [N, e1, e2] = bct.manifold.geometry.tangents(V, F, 'Domain', 'vertex');
 %
 %   % Visualize face tangent frame at centroids
-%   C = bct.manifold.centroids(M);
-%   [N, e1, e2] = bct.manifold.tangents(M, 'Domain', 'face');
+%   C = bct.manifold.geometry.centroids(M);
+%   [N, e1, e2] = bct.manifold.geometry.tangents(M, 'Domain', 'face');
 %   quiver3(C(:,1), C(:,2), C(:,3), e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
 %   hold on;
 %   quiver3(C(:,1), C(:,2), C(:,3), e2(:,1), e2(:,2), e2(:,3), 0.5, 'g');
 %   quiver3(C(:,1), C(:,2), C(:,3), N(:,1), N(:,2), N(:,3), 0.5, 'b');
 %
 %   % Visualize vertex tangent frame
-%   [N, e1, e2] = bct.manifold.tangents(M, 'Domain', 'vertex');
+%   [N, e1, e2] = bct.manifold.geometry.tangents(M, 'Domain', 'vertex');
 %   quiver3(V(:,1), V(:,2), V(:,3), e1(:,1), e1(:,2), e1(:,3), 0.5, 'r');
 %
 % See also: bct.manifold.geometry.frame, bct.manifold.geometry.normals, bct.manifold.geometry.centroids
 
 % -------- Parse args: allow (M, nv) or (V,F,nv) --------
 if nargin == 0
-    error('bct:manifold:tangents:InvalidNumArgs', ...
+    error('bct:geometry:tangents:InvalidNumArgs', ...
         'Expected inputs: (M) or (V,F), optionally with name-value pairs.');
 end
 
@@ -76,7 +76,7 @@ else
 end
 
 p = inputParser;
-p.FunctionName = 'bct.manifold.tangents';
+p.FunctionName = 'bct.manifold.geometry.tangents';
 addParameter(p, 'Domain', 'face', @(s) any(strcmpi(s, {'face','vertex'})));
 parse(p, nv{:});
 domain = lower(string(p.Results.Domain));
@@ -107,11 +107,11 @@ elseif haveVF
 
     % Validate inputs
     if ~isnumeric(V) || size(V,2) ~= 3
-        error('bct:manifold:tangents:InvalidVertices', ...
+        error('bct:geometry:tangents:InvalidVertices', ...
             'Vertices must be Nv×3 numeric array.');
     end
     if ~isnumeric(F) || size(F,2) ~= 3
-        error('bct:manifold:tangents:InvalidFaces', ...
+        error('bct:geometry:tangents:InvalidFaces', ...
             'Faces must be Nf×3 numeric array.');
     end
 
@@ -147,7 +147,7 @@ elseif haveVF
     end
 
 else
-    error('bct:manifold:tangents:InvalidInput', ...
+    error('bct:geometry:tangents:InvalidInput', ...
         'Expected (M) or (V,F) as positional inputs, optionally with name-value pairs.');
 end
 

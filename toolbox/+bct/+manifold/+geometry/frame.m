@@ -1,11 +1,8 @@
 function out = frame(M)
-%FRAME Compute and cache orthonormal frames [DEPRECATED - Use bct.geometry.frame]
+%FRAME Compute and cache orthonormal frames for faces and vertices
 %
 % Syntax:
-%   fr = bct.manifold.frame(M)
-%
-% DEPRECATED: This function has been moved to bct.geometry.frame
-%             Please update your code to use: bct.geometry.frame(M)
+%   fr = bct.manifold.geometry.frame(M)
 %
 % Inputs:
 %   M - bct.Manifold object
@@ -22,23 +19,45 @@ function out = frame(M)
 %                  T2v: [Nv×3] second vertex tangent (unit)
 %        .Meta   - struct('Hash', hash, 'CreatedOn', timestamp)
 %
-% See also: bct.geometry.frame, bct.geometry.normals, bct.geometry.tangents
-
-warning('bct:manifold:frame:deprecated', ...
-    ['bct.manifold.frame is deprecated and will be removed in a future release.\n', ...
-     'Use bct.geometry.frame instead.']);
+% Description:
+%   Computes right-handed orthonormal coordinate frames {N, T1, T2} for
+%   each face and vertex on the manifold. Results are cached in M.Geometry.Frame
+%   and reused on subsequent calls unless the geometry changes.
+%
+%   Cache invalidation: Uses a geometry hash (Nv, Nf, bounding box) to detect
+%   changes. When geometry is modified, frames are automatically recomputed.
+%
+%   Frame properties:
+%   - N:  Unit normal vector
+%   - T1: Unit tangent orthogonal to N
+%   - T2: Unit tangent orthogonal to both N and T1
+%   - Right-handed: T2 = N × T1
+%
+% Examples:
+%   % Compute and cache frames
+%   M = bct.Manifold(V, F);
+%   fr = bct.manifold.geometry.frame(M);
+%
+%   % Access face frames
+%   Nf  = fr.Face.N;
+%   T1f = fr.Face.T1;
+%   T2f = fr.Face.T2;
+%
+%   % Access vertex frames
+%   Nv  = fr.Vertex.N;
+%   T1v = fr.Vertex.T1;
+%   T2v = fr.Vertex.T2;
+%
+%   % Second call retrieves from cache (fast)
+%   fr2 = bct.manifold.geometry.frame(M);  % O(1) lookup
+%
+% See also: bct.manifold.geometry.normals, bct.manifold.geometry.tangents, bct.Manifold
 
 % Validate input
 if ~isa(M, 'bct.Manifold')
-    error('bct:manifold:frame:InvalidInput', ...
+    error('bct:geometry:frame:InvalidInput', ...
         'Input must be a bct.Manifold object');
 end
-
-% Delegate to bct.manifold.geometry.frame
-out = bct.manifold.geometry.frame(M);
-
-% Legacy implementation below (kept for reference but not executed)
-return;
 
 % Compute geometry hash for cache validation
 V = M.Vertices;
@@ -104,6 +123,8 @@ if needsCompute
     M.setGeometry(geomCache);
 end
 
+end
+
 % ===== Helper: normalize each row safely =====
 function X = normalizeRows(X)
     n = vecnorm(X, 2, 2);
@@ -111,6 +132,4 @@ function X = normalizeRows(X)
     n(bad) = 1;          % Prevent divide-by-zero
     X = X ./ n;
     X(bad,:) = 0;        % Zero-out degenerate results
-end
-
 end

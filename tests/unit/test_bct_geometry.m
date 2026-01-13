@@ -1,5 +1,5 @@
 classdef test_bct_geometry < BaseBctTest
-    % TEST_BCT_GEOMETRY Unified tests for bct.geometry package
+    % TEST_BCT_GEOMETRY Unified tests for bct.manifold.geometry package
     %
     % Tests all geometry functions:
     % - centroids: Face geometric centers
@@ -16,7 +16,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            C = bct.geometry.centroids(M);
+            C = bct.manifold.geometry.centroids(M);
             
             testCase.verifySize(C, [size(F,1), 3], ...
                 'Centroids should be [Nf×3]');
@@ -26,7 +26,7 @@ classdef test_bct_geometry < BaseBctTest
             % Verify centroids with V,F input
             [V, F] = testCase.getDefaultTestMesh();
             
-            C = bct.geometry.centroids(V, F);
+            C = bct.manifold.geometry.centroids(V, F);
             
             testCase.verifySize(C, [size(F,1), 3], ...
                 'Centroids should be [Nf×3]');
@@ -37,7 +37,7 @@ classdef test_bct_geometry < BaseBctTest
             V = [0 0 0; 1 0 0; 0 1 0];
             F = [1 2 3];
             
-            C = bct.geometry.centroids(V, F);
+            C = bct.manifold.geometry.centroids(V, F);
             C_expected = [1/3, 1/3, 0];
             
             testCase.verifyLessThan(abs(C - C_expected), 1e-12, ...
@@ -45,15 +45,15 @@ classdef test_bct_geometry < BaseBctTest
         end
         
         function testCentroidsManifoldMethod(testCase)
-            % Verify Manifold.centroids() uses bct.geometry
+            % Verify Manifold.centroids() uses bct.manifold.geometry
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
             C1 = M.centroids();
-            C2 = bct.geometry.centroids(M);
+            C2 = bct.manifold.geometry.centroids(M);
             
             testCase.verifyEqual(C1, C2, ...
-                'Manifold.centroids() should match bct.geometry.centroids()');
+                'Manifold.centroids() should match bct.manifold.geometry.centroids()');
         end
         
         %% NORMALS TESTS
@@ -62,7 +62,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            N = bct.geometry.normals(M);
+            N = bct.manifold.geometry.normals(M);
             
             testCase.verifySize(N, [size(V,1), 3], ...
                 'Default should return vertex normals');
@@ -73,7 +73,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            N = bct.geometry.normals(M, 'Face');
+            N = bct.manifold.geometry.normals(M, 'Face');
             
             testCase.verifySize(N, [size(F,1), 3], ...
                 'Face type should return face normals');
@@ -83,7 +83,7 @@ classdef test_bct_geometry < BaseBctTest
             % Verify V,F input works
             [V, F] = testCase.getDefaultTestMesh();
             
-            N = bct.geometry.normals(V, F);
+            N = bct.manifold.geometry.normals(V, F);
             
             testCase.verifySize(N, [size(V,1), 3], ...
                 'V,F input should return vertex normals');
@@ -94,7 +94,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            N = bct.geometry.normals(M);
+            N = bct.manifold.geometry.normals(M);
             norms = vecnorm(N, 2, 2);
             
             testCase.verifyLessThan(abs(norms - 1), 1e-10, ...
@@ -102,15 +102,15 @@ classdef test_bct_geometry < BaseBctTest
         end
         
         function testNormalsManifoldMethod(testCase)
-            % Verify Manifold.normals() uses bct.geometry
+            % Verify Manifold.normals() uses bct.manifold.geometry
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
             N1 = M.normals();
-            N2 = bct.geometry.normals(M);
+            N2 = bct.manifold.geometry.normals(M);
             
             testCase.verifyEqual(N1, N2, ...
-                'Manifold.normals() should match bct.geometry.normals()');
+                'Manifold.normals() should match bct.manifold.geometry.normals()');
         end
         
         %% TANGENTS TESTS
@@ -119,7 +119,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            [N, e1, e2] = bct.geometry.tangents(M);
+            [N, e1, e2] = bct.manifold.geometry.tangents(M);
             
             testCase.verifySize(N, [size(F,1), 3], ...
                 'Default should return face tangents');
@@ -132,7 +132,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            [N, e1, e2] = bct.geometry.tangents(M, 'Domain', 'vertex');
+            [N, e1, e2] = bct.manifold.geometry.tangents(M, 'Domain', 'vertex');
             
             testCase.verifySize(N, [size(V,1), 3], ...
                 'Vertex domain should return vertex tangents');
@@ -143,7 +143,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            [N, e1, e2] = bct.geometry.tangents(M);
+            [N, e1, e2] = bct.manifold.geometry.tangents(M);
             
             % Unit length
             testCase.verifyLessThan(max(abs(vecnorm(N,2,2) - 1)), 1e-10, ...
@@ -171,7 +171,7 @@ classdef test_bct_geometry < BaseBctTest
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
-            [N, e1, e2] = bct.geometry.tangents(M);
+            [N, e1, e2] = bct.manifold.geometry.tangents(M);
             
             cross_prod = cross(e1, e2, 2);
             
@@ -180,17 +180,17 @@ classdef test_bct_geometry < BaseBctTest
         end
         
         function testTangentsManifoldMethod(testCase)
-            % Verify Manifold.tangents() uses bct.geometry
+            % Verify Manifold.tangents() uses bct.manifold.geometry
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
             [N1, e1_1, e2_1] = M.tangents();
-            [N2, e1_2, e2_2] = bct.geometry.tangents(M);
+            [N2, e1_2, e2_2] = bct.manifold.geometry.tangents(M);
             
             testCase.verifyEqual(N1, N2);
             testCase.verifyEqual(e1_1, e1_2);
             testCase.verifyEqual(e2_1, e2_2, ...
-                'Manifold.tangents() should match bct.geometry.tangents()');
+                'Manifold.tangents() should match bct.manifold.geometry.tangents()');
         end
         
         %% FRAME TESTS

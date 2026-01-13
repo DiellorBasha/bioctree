@@ -2,10 +2,10 @@ function N = normals(varargin)
 %NORMALS Compute vertex or face normals of a triangular mesh
 %
 % Syntax:
-%   N = bct.manifold.normals(M)
-%   N = bct.manifold.normals(M, Type)
-%   N = bct.manifold.normals(V, F)
-%   N = bct.manifold.normals(V, F, Type)
+%   N = bct.manifold.geometry.normals(M)
+%   N = bct.manifold.geometry.normals(M, Type)
+%   N = bct.manifold.geometry.normals(V, F)
+%   N = bct.manifold.geometry.normals(V, F, Type)
 %
 % Inputs:
 %   M    - bct.Manifold object
@@ -18,25 +18,25 @@ function N = normals(varargin)
 %
 % Description:
 %   Computes vertex or face normals. For Manifold objects, uses cached
-%   frames from bct.geometry.frame() for efficiency. For V,F inputs,
+%   frames from bct.manifold.geometry.frame() for efficiency. For V,F inputs,
 %   uses surfaceMesh.computeNormals().
 %
 % Examples:
 %   % Vertex normals from Manifold object (default)
 %   M = bct.Manifold(V, F);
-%   VN = bct.manifold.normals(M);
+%   VN = bct.manifold.geometry.normals(M);
 %
 %   % Face normals from Manifold object
-%   FN = bct.manifold.normals(M, 'Face');
+%   FN = bct.manifold.geometry.normals(M, 'Face');
 %
 %   % Vertex normals from V, F directly
-%   VN = bct.manifold.normals(V, F);
+%   VN = bct.manifold.geometry.normals(V, F);
 %
 %   % Face normals from V, F directly
-%   FN = bct.manifold.normals(V, F, 'Face');
+%   FN = bct.manifold.geometry.normals(V, F, 'Face');
 %
 %   % Visualize vertex normals
-%   VN = bct.manifold.normals(M);
+%   VN = bct.manifold.geometry.normals(M);
 %   quiver3(V(:,1), V(:,2), V(:,3), VN(:,1), VN(:,2), VN(:,3));
 %
 % See also: bct.manifold.geometry.frame, bct.manifold.geometry.centroids, bct.manifold.geometry.tangents
@@ -49,7 +49,7 @@ if nargin == 1
     if isa(varargin{1}, 'bct.Manifold')
         M = varargin{1};
     else
-        error('bct:manifold:normals:InvalidInput', ...
+        error('bct:geometry:normals:InvalidInput', ...
             'Single argument must be a bct.Manifold object');
     end
     
@@ -73,7 +73,7 @@ elseif nargin == 3
     M = [];
     
 else
-    error('bct:manifold:normals:InvalidNumArgs', ...
+    error('bct:geometry:normals:InvalidNumArgs', ...
         'Expected 1-3 input arguments');
 end
 
@@ -88,17 +88,17 @@ if ~isempty(M)
         case 'Face'
             N = fr.Face.N;
         otherwise
-            error('bct:manifold:normals:InvalidType', ...
+            error('bct:geometry:normals:InvalidType', ...
                 'Type must be ''Vertex'' or ''Face''');
     end
 else
     % For V, F inputs, compute directly using surfaceMesh
     if ~isnumeric(V) || size(V, 2) ~= 3
-        error('bct:manifold:normals:InvalidVertices', ...
+        error('bct:geometry:normals:InvalidVertices', ...
             'Vertices must be N×3 numeric array');
     end
     if ~isnumeric(F) || size(F, 2) ~= 3
-        error('bct:manifold:normals:InvalidFaces', ...
+        error('bct:geometry:normals:InvalidFaces', ...
             'Faces must be M×3 numeric array');
     end
     
@@ -112,7 +112,7 @@ else
             computeNormals(mesh, "face");
             N = mesh.FaceNormals;
         otherwise
-            error('bct:manifold:normals:InvalidType', ...
+            error('bct:geometry:normals:InvalidType', ...
                 'Type must be ''Vertex'' or ''Face''');
     end
 end
@@ -132,11 +132,11 @@ if isstring(typeArg) || ischar(typeArg)
         case {'face', 'f', 'faces'}
             type = 'Face';
         otherwise
-            error('bct:manifold:normals:InvalidType', ...
+            error('bct:geometry:normals:InvalidType', ...
                 'Type must be ''Vertex'' or ''Face'', got ''%s''', type);
     end
 else
-    error('bct:manifold:normals:InvalidTypeArg', ...
+    error('bct:geometry:normals:InvalidTypeArg', ...
         'Type argument must be a string or char');
 end
 

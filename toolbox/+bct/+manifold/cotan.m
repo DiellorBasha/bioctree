@@ -1,11 +1,11 @@
 function [C, he] = cotan(V, F)
-%COTAN Cotangents per face (triangle mesh) [DEPRECATED - Use bct.geometry.cotan]
+%COTAN Cotangents per face (triangle mesh) [DEPRECATED - Use bct.manifold.geometry.cotan]
 %
 %   C = cotan(V,F)
 %   [C,he] = cotan(V,F)
 %
-% DEPRECATED: This function has been moved to bct.geometry.cotan
-%             Please update your code to use: bct.geometry.cotan(V, F)
+% DEPRECATED: This function has been moved to bct.manifold.geometry.cotan
+%             Please update your code to use: bct.manifold.geometry.cotan(V, F)
 %
 % This matches the *triangle* behavior of gptoolbox cotangent(V,F):
 %   - Output C is #F x 3
@@ -17,11 +17,11 @@ function [C, he] = cotan(V, F)
 %   C(:,2) = (1/2)*cot(angle at v2)  opposite edge (v3,v1)
 %   C(:,3) = (1/2)*cot(angle at v3)  opposite edge (v1,v2)
 %
-% See also: bct.geometry.cotan
+% See also: bct.manifold.geometry.cotan
 
   warning('bct:manifold:cotan:deprecated', ...
       ['bct.manifold.cotan is deprecated and will be removed in a future release.\n', ...
-       'Use bct.geometry.cotan instead.']);
+       'Use bct.manifold.geometry.cotan instead.']);
 
   if size(F,2) ~= 3
     error('bct:manifold:cotan', ...
