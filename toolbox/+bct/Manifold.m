@@ -28,14 +28,8 @@ classdef Manifold < handle
     end
 
     properties (Access = private)
-        Cache            % containers.Map for lazy representation creation
-        Geometry         % Struct for cached geometric computations (frames, etc.)
-        CachedMass       % Cached mass matrix (computed on first access)
-        CachedStiffness  % Cached stiffness/cotangent matrix (computed on first access)
-        CachedMassType   % Type of mass matrix cached ('voronoi', 'barycentric', 'full')
-        CachedEigen      % Cached eigenmode structure (values, vectors, metadata)
-        CachedGeometry   % Cached full geometry structure (from bct.manifold.geometry)
-        CachedTopology   % Cached full topology structure (from bct.manifold.topology)
+        RepresentationCache  % containers.Map for lazy representation creation (DEC, Graph)
+        Cache                % Unified cache structure with namespaces: geometry, topology, operators, eigenmodes
     end
 
     methods
@@ -119,19 +113,15 @@ classdef Manifold < handle
             % Generate unique ID for this manifold
             obj.ID = string(java.util.UUID.randomUUID());
 
-            % Initialize cache for representations
-            obj.Cache = containers.Map('KeyType','char','ValueType','any');
+            % Initialize representation cache (DEC, Graph ports)
+            obj.RepresentationCache = containers.Map('KeyType','char','ValueType','any');
             
-            % Initialize geometry cache for frames
-            obj.Geometry = struct();
-            
-            % Initialize FEM matrix cache
-            obj.CachedMass = [];
-            obj.CachedStiffness = [];
-            obj.CachedMassType = "";
-            
-            % Initialize eigenmode cache
-            obj.CachedEigen = struct();
+            % Initialize unified cache structure with namespaces
+            obj.Cache = struct(...
+                'geometry', struct('data', struct(), 'meta', struct()), ...
+                'topology', struct('data', struct(), 'meta', struct()), ...
+                'operators', struct('data', containers.Map('KeyType','char','ValueType','any'), 'meta', struct()), ...
+                'eigenmodes', struct('data', struct(), 'meta', struct()));
         end
 
         % ===============================================================
@@ -154,7 +144,7 @@ classdef Manifold < handle
             %
             % See also: DiscreteExteriorCalculus, bct.runtime.operators
             
-            if ~isKey(obj.Cache, 'DEC')
+            if ~isKey(obj.RepresentationCache, 'DEC')
                 % Check for DECLab availability
                 if exist("DiscreteExteriorCalculus", "class") ~= 8
                     error("bct:MissingDependency", ...
@@ -164,9 +154,9 @@ classdef Manifold < handle
                 
                 F = double(obj.Faces);
                 V = double(obj.Vertices);
-                obj.Cache('DEC') = DiscreteExteriorCalculus(F, V);
+                obj.RepresentationCache('DEC') = DiscreteExteriorCalculus(F, V);
             end
-            dec = obj.Cache('DEC');
+            dec = obj.RepresentationCache('DEC');
         end
         
         function op = d0(obj)
@@ -609,9 +599,12 @@ classdef Manifold < handle
             
             massType = options.Type;
             
+            % Build cache key for this mass matrix variant
+            cacheKey = sprintf('mass|variant=%s', massType);
+            
             % Check if we have cached mass matrix of requested type
-            if ~isempty(obj.CachedMass) && obj.CachedMassType == massType
-                M = obj.CachedMass;
+            if isKey(obj.Cache.operators.data, cacheKey)
+                M = obj.Cache.operators.data(cacheKey);
                 return;
             end
             
@@ -619,8 +612,10 @@ classdef Manifold < handle
             [~, M] = bct.manifold.operator.mass(obj, 'variant', massType);
             
             % Cache for future use
-            obj.CachedMass = M;
-            obj.CachedMassType = massType;
+            obj.Cache.operators.data(cacheKey) = M;
+            obj.Cache.operators.meta.(matlab.lang.makeValidName(cacheKey)) = struct(...
+                'computed', datetime('now'), ...
+                'variant', massType);
         end
         
         function K = cotmatrix(obj)
@@ -648,9 +643,12 @@ classdef Manifold < handle
             %
             % See also: bct.manifold.operator.stiffness, massmatrix
             
+            % Build cache key for stiffness matrix
+            cacheKey = 'stiffness|variant=cotan|sign=positive|symmetrize=true';
+            
             % Check if we have cached stiffness matrix
-            if ~isempty(obj.CachedStiffness)
-                K = obj.CachedStiffness;
+            if isKey(obj.Cache.operators.data, cacheKey)
+                K = obj.Cache.operators.data(cacheKey);
                 return;
             end
             
@@ -661,7 +659,12 @@ classdef Manifold < handle
                 'symmetrize', true);
             
             % Cache for future use
-            obj.CachedStiffness = K;
+            obj.Cache.operators.data(cacheKey) = K;
+            obj.Cache.operators.meta.(matlab.lang.makeValidName(cacheKey)) = struct(...
+                'computed', datetime('now'), ...
+                'variant', 'cotan', ...
+                'sign', 'positive', ...
+                'symmetrize', true);
         end
 
         function g = Graph(obj)
@@ -677,10 +680,10 @@ classdef Manifold < handle
             %
             % See also: bct.Graph
             
-            if ~isKey(obj.Cache, 'Graph')
-                obj.Cache('Graph') = bct.Graph(obj);
+            if ~isKey(obj.RepresentationCache, 'Graph')
+                obj.RepresentationCache('Graph') = bct.Graph(obj);
             end
-            g = obj.Cache('Graph');
+            g = obj.RepresentationCache('Graph');
         end
         
         % ===============================================================
@@ -689,12 +692,12 @@ classdef Manifold < handle
         
         function geom = getGeometry(obj)
             %GETGEOMETRY Get geometry cache (internal use by bct.manifold.geometry.*)
-            geom = obj.Geometry;
+            geom = obj.Cache.geometry.data;
         end
         
         function setGeometry(obj, geom)
             %SETGEOMETRY Set geometry cache (internal use by bct.manifold.geometry.*)
-            obj.Geometry = geom;
+            obj.Cache.geometry.data = geom;
         end
         
         % ===============================================================
@@ -785,8 +788,8 @@ classdef Manifold < handle
                 needsCompute = true;
                 if isempty(k_requested)
                     % Use cached k if available, otherwise default
-                    if isfield(obj.CachedEigen, 'k') && ~isempty(obj.CachedEigen.k)
-                        k_requested = obj.CachedEigen.k;
+                    if isfield(obj.Cache.eigenmodes.data, 'k') && ~isempty(obj.Cache.eigenmodes.data.k)
+                        k_requested = obj.Cache.eigenmodes.data.k;
                     else
                         k_requested = 50;  % Default
                     end
@@ -794,13 +797,13 @@ classdef Manifold < handle
             elseif ~isempty(k_requested)
                 % k specified, need to recompute
                 needsCompute = true;
-            elseif isempty(fieldnames(obj.CachedEigen))
+            elseif isempty(fieldnames(obj.Cache.eigenmodes.data))
                 % No cache exists, compute with default k=50
                 k_requested = 50;
                 needsCompute = true;
             else
                 % Return cached
-                Eigen = obj.CachedEigen;
+                Eigen = obj.Cache.eigenmodes.data;
                 return;
             end
             
@@ -823,7 +826,11 @@ classdef Manifold < handle
             Eigen.removedDC = removeDC;
             
             % Cache for future use
-            obj.CachedEigen = Eigen;
+            obj.Cache.eigenmodes.data = Eigen;
+            obj.Cache.eigenmodes.meta.computed = datetime('now');
+            obj.Cache.eigenmodes.meta.k = Eigen.k;
+            obj.Cache.eigenmodes.meta.massType = massType;
+            obj.Cache.eigenmodes.meta.removedDC = removeDC;
         end
         
         % ===============================================================
@@ -1058,8 +1065,8 @@ classdef Manifold < handle
             force = p.Results.Force;
             
             % Check if we have cached geometry and not forcing recomputation
-            if ~force && ~isempty(obj.CachedGeometry)
-                geom = obj.CachedGeometry;
+            if ~force && ~isempty(fieldnames(obj.Cache.geometry.data))
+                geom = obj.Cache.geometry.data;
                 return;
             end
             
@@ -1070,7 +1077,10 @@ classdef Manifold < handle
                 'ForceFrame', p.Results.ForceFrame);
             
             % Cache the result
-            obj.CachedGeometry = geom;
+            obj.Cache.geometry.data = geom;
+            obj.Cache.geometry.meta.computed = datetime('now');
+            obj.Cache.geometry.meta.normalType = p.Results.NormalType;
+            obj.Cache.geometry.meta.tangentDomain = p.Results.TangentDomain;
         end
         
         function topo = topology(obj, varargin)
@@ -1127,8 +1137,8 @@ classdef Manifold < handle
             force = p.Results.Force;
             
             % Check if we have cached topology and not forcing recomputation
-            if ~force && ~isempty(obj.CachedTopology)
-                topo = obj.CachedTopology;
+            if ~force && ~isempty(fieldnames(obj.Cache.topology.data))
+                topo = obj.Cache.topology.data;
                 return;
             end
             
@@ -1136,7 +1146,8 @@ classdef Manifold < handle
             topo = bct.manifold.topology(obj);
             
             % Cache the result
-            obj.CachedTopology = topo;
+            obj.Cache.topology.data = topo;
+            obj.Cache.topology.meta.computed = datetime('now');
         end
         
         function write(obj, fileName, options)
