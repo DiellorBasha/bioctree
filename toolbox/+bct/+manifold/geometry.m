@@ -26,6 +26,7 @@ function geom = geometry(M, varargin)
 %     .cotan              - [nF×3] Cotangent values per face
 %     .faceAreas          - [nF×1] Area of each face (NEW)
 %     .edgeLengths        - [nE×1] Length of each edge (NEW)
+%     .edgeWeights        - Structure with cotangent and euclidean weights (NEW)
 %     .faceCircumcenters  - [nF×3] Circumcenter of each face (NEW)
 %     .dualEdgeLengths    - [nE×1] Dual edge lengths (NEW, requires closed mesh)
 %     .dualVertexAreas    - [nV×1] Dual vertex areas (NEW, requires closed mesh)
@@ -125,6 +126,10 @@ geom.header.faceAreas = areaHeader;
 [edgeHeader, geom.edgeLengths] = bct.manifold.geometry.edgeLengths(M, ...
     'precision', precision);
 geom.header.edgeLengths = edgeHeader;
+
+% Edge weights (cotangent and euclidean for graph algorithms)
+[weightsHeader, geom.edgeWeights] = bct.manifold.geometry.edgeWeights(M);
+geom.header.edgeWeights = weightsHeader;
 
 % Face circumcenters
 [circumHeader, geom.faceCircumcenters] = bct.manifold.geometry.faceCircumcenters(M, ...

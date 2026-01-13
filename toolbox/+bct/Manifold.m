@@ -389,6 +389,83 @@ classdef Manifold < handle
             end
         end
         
+        function [path, dist] = shortestPath(obj, s, t, options)
+            %SHORTESTPATH Shortest path between two nodes
+            %
+            % Syntax:
+            %   path = M.shortestPath(s, t)
+            %   [path, dist] = M.shortestPath(s, t, 'Metric', 'cotangent')
+            %
+            % Inputs:
+            %   s - Source node index
+            %   t - Target node index
+            %
+            % Optional Parameters:
+            %   Metric - 'euclidean' | 'cotangent' (default)
+            %
+            % Outputs:
+            %   path - Vector of node indices along shortest path
+            %   dist - Total path distance
+            %
+            % Description:
+            %   Computes shortest path using cached edge weights from geometry.
+            %   Cotangent weights provide better discrete approximation for
+            %   spectral methods. Uses cached geometry data.
+            %
+            % See also: distances, bct.manifold.query.shortestPath
+            
+            arguments
+                obj (1,1) bct.Manifold
+                s (1,1) {mustBeInteger, mustBePositive}
+                t (1,1) {mustBeInteger, mustBePositive}
+                options.Metric (1,1) string {mustBeMember(options.Metric, ...
+                    ["euclidean", "cotangent"])} = "cotangent"
+            end
+            
+            % Get edges and weights from cache
+            E = obj.Edges;
+            N = size(obj.Vertices, 1);
+            geom = obj.geometry();
+            w = geom.edgeWeights.(options.Metric);
+            
+            [path, dist] = bct.manifold.query.shortestPath(E, w, N, s, t);
+        end
+        
+        function D = distances(obj, options)
+            %DISTANCES All-pairs shortest path distances
+            %
+            % Syntax:
+            %   D = M.distances()
+            %   D = M.distances('Metric', 'euclidean')
+            %
+            % Optional Parameters:
+            %   Metric - 'euclidean' | 'cotangent' (default)
+            %
+            % Outputs:
+            %   D - [N×N] matrix of shortest path distances
+            %
+            % Description:
+            %   Computes all-pairs shortest path distances using cached
+            %   edge weights from geometry. Cotangent weights provide
+            %   better discrete approximation for spectral methods.
+            %
+            % See also: shortestPath, bct.manifold.query.distances
+            
+            arguments
+                obj (1,1) bct.Manifold
+                options.Metric (1,1) string {mustBeMember(options.Metric, ...
+                    ["euclidean", "cotangent"])} = "cotangent"
+            end
+            
+            % Get edges and weights from cache
+            E = obj.Edges;
+            N = size(obj.Vertices, 1);
+            geom = obj.geometry();
+            w = geom.edgeWeights.(options.Metric);
+            
+            D = bct.manifold.query.distances(E, w, N);
+        end
+        
         % ===============================================================
         % CACHE INSPECTION
         % ===============================================================
