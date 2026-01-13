@@ -15,7 +15,7 @@ function w = femWeights(Manifold)
 %   - Physics-aligned metric for diffusion/heat processes
 %   - Negative values are clamped to zero for numerical safety
 %
-% See also: bct.graph.edgeLengths, bct.fem.assembleStiffness
+% See also: bct.graph.edgeLengths, bct.manifold.cotmatrix
 
 arguments
     Manifold (1,1) bct.Manifold

@@ -19,7 +19,7 @@ classdef Manifold < handle
     %   dec = M.DEC();
     %   graph = M.Graph();
     %
-    % See also: bct.FEM, bct.Graph, DiscreteExteriorCalculus
+    % See also: bct.Graph, bct.Operator, DiscreteExteriorCalculus
 
     properties (SetAccess = private)
         Vertices         % [N×3] vertex coordinates (immutable)
@@ -628,7 +628,7 @@ classdef Manifold < handle
             %   on first call and cached for subsequent calls with same type.
             %   Different mass types are cached independently.
             %
-            %   Note: Default 'voronoi' matches bct.FEM class convention.
+            %   Note: Default 'voronoi' is recommended for discrete analysis.
             %
             % Examples:
             %   M = manifold.massmatrix();  % Default voronoi
@@ -895,7 +895,7 @@ classdef Manifold < handle
             %   % Use FEM method explicitly
             %   [Psi, Lambda] = M.eigensolve(100, 'Method', 'FEM');
             %
-            % See also: bct.Manifold.eigenmodes, bct.FEM.eigenpairs, bct.Eigenpairs
+            % See also: bct.Manifold.eigenmodes, bct.manifold.eigen.solve
             
             arguments
                 obj

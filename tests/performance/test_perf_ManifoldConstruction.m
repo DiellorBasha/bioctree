@@ -7,9 +7,9 @@ classdef test_perf_ManifoldConstruction < BaseBctTest
     % - No eager FEM/eigenpair computation
     % - Lazy initialization of representations
     %
-    % Performance Requirements (from FEM and Eigenpairs policy):
-    % - FEM eigensolver ("eigs" function, solveGeneralized) should NOT be
-    %   initiated on construction but computed lazily
+    % Performance Requirements:
+    % - Eigensolver ("eigs" function) should NOT be initiated on
+    %   construction but computed lazily
     % - Manifold construction should be dominated by edge extraction only
     %
     % Expected Performance:
@@ -17,7 +17,7 @@ classdef test_perf_ManifoldConstruction < BaseBctTest
     % - Medium mesh (10k vertices): < 0.5s
     % - Large mesh (163k vertices, fsaverage6): < 3.5s
     %
-    % See also: bct.Manifold, bct.FEM, bct.Eigenpairs
+    % See also: bct.Manifold
     
     properties (TestParameter)
         % Test different mesh sizes
@@ -124,9 +124,9 @@ classdef test_perf_ManifoldConstruction < BaseBctTest
         
         %% Lazy Initialization Tests
         
-        function testNoEagerFEMConstruction(testCase)
-            % Verify that FEM object is NOT created during Manifold construction
-            % FEM should be created lazily on first M.FEM() call
+        function testNoEagerMatrixConstruction(testCase)
+            % Verify that FEM matrices are NOT created during Manifold construction
+            % Matrices should be created lazily on first access
             
             mesh = bct.data.load();
             
@@ -135,58 +135,57 @@ classdef test_perf_ManifoldConstruction < BaseBctTest
             M = bct.Manifold(mesh);
             constructionTime = toc;
             
-            % Time first FEM access (includes FEM construction + matrix assembly)
+            % Time first matrix access (includes matrix assembly)
             tic;
-            fem = M.FEM();
+            Mass = M.massmatrix();
+            K = M.cotmatrix();
             femAccessTime = toc;
             
             % Log performance
             fprintf('  [PERF] Manifold construction: %.3f s\n', constructionTime);
-            fprintf('  [PERF] First FEM access: %.3f s\n', femAccessTime);
+            fprintf('  [PERF] First mass/stiffness access: %.3f s\n', femAccessTime);
             
-            % FEM access should take significantly longer than Manifold construction
+            % Matrix access should take significantly longer than Manifold construction
             % if lazy initialization is working correctly
             testCase.verifyGreaterThan(femAccessTime, constructionTime, ...
-                'FEM access should be slower than Manifold construction (indicating lazy initialization)');
+                'Matrix computation should be slower than Manifold construction (indicating lazy initialization)');
             
-            % Verify FEM was actually created
-            testCase.verifyClass(fem, 'bct.FEM', 'Should return FEM object');
+            % Verify matrices were actually created
+            testCase.verifyClass(Mass, 'double', 'Should return mass matrix');
+            testCase.verifyClass(K, 'double', 'Should return stiffness matrix');
         end
         
         function testNoEagerEigensolve(testCase)
-            % Verify that eigenpairs are NOT computed during Manifold construction
-            % Eigensolver (eigs) should only run on explicit fem.eigenpairs(k) call
+            % Verify that eigenmodes are NOT computed during Manifold construction
+            % Eigensolver (eigs) should only run on explicit eigenmodes() call
             
             mesh = bct.data.load();
             
-            % Time Manifold + FEM construction
+            % Time Manifold construction
             tic;
             M = bct.Manifold(mesh);
-            fem = M.FEM();
             setupTime = toc;
             
-            % Time eigenpair computation (first call triggers eigensolve)
-            % Note: Request k+1 to account for DC component removal
+            % Time eigenmode computation (first call triggers eigensolve)
             k = 100;
             tic;
-            E = fem.eigenpairs(k + 1);
+            E = M.eigenmodes(k);
             eigensolveTime = toc;
             
             % Log performance
-            fprintf('  [PERF] Manifold + FEM setup: %.3f s\n', setupTime);
-            fprintf('  [PERF] Eigensolve (%d modes requested): %.3f s\n', k + 1, eigensolveTime);
-            fprintf('  [PERF] Actual modes returned: %d\n', numel(E.Values));
+            fprintf('  [PERF] Manifold setup: %.3f s\n', setupTime);
+            fprintf('  [PERF] Eigensolve (%d modes): %.3f s\n', k, eigensolveTime);
+            fprintf('  [PERF] Actual modes returned: %d\n', numel(E.values));
             
             % Eigensolve should take significant time on first call
             % (indicating it was not done during construction)
-            % If it's too fast, eigenpairs may have been cached from a previous call
             testCase.verifyGreaterThan(eigensolveTime, 0.01, ...
                 'Eigensolve should take measurable time (> 0.01s)');
             
-            % Verify eigenpairs were computed (allow for DC removal)
-            testCase.verifyClass(E, 'bct.Eigenpairs', 'Should return Eigenpairs object');
-            testCase.verifyGreaterThanOrEqual(numel(E.Values), k, ...
-                sprintf('Should compute at least %d eigenpairs (got %d)', k, numel(E.Values)));
+            % Verify eigenmodes were computed
+            testCase.verifyClass(E, 'struct', 'Should return eigenmode structure');
+            testCase.verifyEqual(numel(E.values), k, ...
+                sprintf('Should compute %d eigenmodes', k));
         end
         
         function testRepresentationCaching(testCase)
@@ -196,7 +195,7 @@ classdef test_perf_ManifoldConstruction < BaseBctTest
             mesh = bct.data.load();
             M = bct.Manifold(mesh);
             
-            % First FEM access (triggers creation)
+            % First matrix access (triggers creation)
             tic;
             fem1 = M.FEM();
             firstAccessTime = toc;

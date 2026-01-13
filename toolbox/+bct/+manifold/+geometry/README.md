@@ -19,7 +19,7 @@ This package contains geometric computations on triangulated 2-manifolds:
 ### Out of Scope
 
 - Topology-only operations (edges, adjacency, halfedge) → see `bct.manifold.topology`
-- Operator assembly (mass matrix, stiffness, Laplacian) → see `bct.FEM`
+- Operator assembly (mass matrix, stiffness, Laplacian) → see `bct.manifold` functions
 - Spectral computations → see `bct.Eigenpairs`
 - I/O operations → see `bct.manifold.load/save`
 
@@ -71,4 +71,4 @@ This avoids redundant computation when geometry is requested multiple times.
 
 - `bct.Manifold` - Main manifold class
 - `bct.manifold.topology` - Topological operations (halfedge, edges, adjacency)
-- `bct.FEM` - Finite element operators (mass, stiffness, gradient, divergence)
+- `bct.manifold.massmatrix`, `bct.manifold.cotmatrix` - FEM operators

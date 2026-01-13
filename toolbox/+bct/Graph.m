@@ -312,11 +312,11 @@ classdef Graph < handle
             %   Force - Recompute even if cached (default: false)
             %
             % Outputs:
-            %   E - bct.Eigenpairs object
+            %   E - Eigenmode structure (from bct.graph.eigensolve)
             %
             % Note: Delegates to bct.graph.eigensolve
             %
-            % See also: bct.graph.eigensolve, bct.Eigenpairs
+            % See also: bct.graph.eigensolve, bct.manifold.eigen.solve
             
             arguments
                 obj (1,1) bct.Graph

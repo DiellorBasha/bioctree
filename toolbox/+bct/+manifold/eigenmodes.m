@@ -49,7 +49,7 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   1. Manifold-based: Extracts K and M from bct.Manifold object
 %   2. Matrix-based: Accepts K and M directly for standalone computation
 %
-%   Implementation matches bct.Eigenpairs and bct.eigenpairs package:
+%   Implementation uses bct.manifold.eigen package:
 %   - Uses smallest-magnitude eigenvalues ('SM')
 %   - Enforces M-orthonormality via whitening
 %   - Same normalization and DC removal strategy
@@ -81,7 +81,7 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   filtered = U * (heat_kernel .* coeffs);
 %
 % See also: bct.manifold.massmatrix, bct.manifold.cotmatrix,
-%           bct.manifold.eigen.solve, bct.Eigenpairs
+%           bct.manifold.eigen.solve, bct.manifold.eigen
 
 % Parse input arguments to determine mode
 if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')

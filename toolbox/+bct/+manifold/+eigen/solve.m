@@ -22,7 +22,7 @@ function [U, lambda] = solve(K, M, numModes, options)
 %   - Enforces real and symmetric operator assumptions
 %   - Warns on partial convergence but continues
 %   - Returns eigenvalues in ascending order
-%   - Identical implementation to bct.eigenpairs.solveGeneralized
+%   - Standard generalized eigenvalue solver for graph Laplacian
 %
 % See also: eigs, bct.manifold.eigen.normalize
 

@@ -87,14 +87,14 @@ classdef test_bct_graph < BaseBctTest
         
         %% EIGENSOLVE TESTS
         function testEigensolveBasic(testCase)
-            % Verify eigensolve returns Eigenpairs object
+            % Verify eigensolve returns eigenmode structure
             [V, F] = testCase.getDefaultTestMesh();
             M = bct.Manifold(V, F);
             
             E = bct.graph.eigensolve(M, 10);
             
-            testCase.verifyClass(E, 'bct.Eigenpairs', ...
-                'Should return Eigenpairs object');
+            testCase.verifyClass(E, 'struct', ...
+                'Should return eigenmode structure');
             testCase.verifyEqual(E.k, 10, ...
                 'Should have 10 eigenpairs');
         end

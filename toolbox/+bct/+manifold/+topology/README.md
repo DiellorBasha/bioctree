@@ -17,7 +17,7 @@ This package contains topological primitives for simplicial complexes (triangula
 ### Out of Scope
 
 - Anything requiring vertex positions V (lengths, areas, normals, curvature) → see `bct.manifold.geometry`
-- Metric-dependent operators (mass, stiffness, Laplacian) → see `bct.FEM`
+- Metric-dependent operators (mass, stiffness, Laplacian) → see `bct.manifold` functions
 - Spectral computations → see `bct.Eigenpairs`
 
 ## Design Principles
@@ -35,8 +35,7 @@ bct.Manifold (class)
 ├── Vertices, Faces (immutable data)
 ├── bct.manifold.topology.* (connectivity: edges, adjacency, halfedge)
 ├── bct.manifold.geometry.* (embedding: centroids, normals, tangents)
-├── bct.FEM.* (operators: mass, stiffness, gradient, divergence)
-└── bct.Eigenpairs.* (spectral decomposition)
+└── bct.manifold.eigen.* (spectral decomposition)
 ```
 
 ## Usage
@@ -112,4 +111,4 @@ he = bct.manifold.topology.halfedge(V, F);
 
 - `bct.Manifold` - Main manifold class
 - `bct.manifold.geometry` - Embedding-dependent operations (centroids, normals, tangents)
-- `bct.FEM` - Finite element operators (mass, stiffness, gradient, divergence)
+- `bct.manifold.massmatrix`, `bct.manifold.cotmatrix` - FEM operators

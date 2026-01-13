@@ -46,7 +46,7 @@ function K = cotmatrix(Manifold)
 %   % Eigenvalue problem
 %   [V, D] = eigs(K, M, 100, 'sm');
 %
-% See also: bct.manifold.massmatrix, bct.FEM, cotmatrix
+% See also: bct.manifold.massmatrix, cotmatrix
 
 arguments
     Manifold (1,1) bct.Manifold

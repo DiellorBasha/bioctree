@@ -21,8 +21,8 @@ classdef test_bct_start < BaseBctTest
                 'bct.Manifold class should be accessible');
             testCase.verifyTrue(exist('bct.Graph', 'class') == 8, ...
                 'bct.Graph class should be accessible');
-            testCase.verifyTrue(exist('bct.FEM', 'class') == 8, ...
-                'bct.FEM class should be accessible');
+            testCase.verifyTrue(exist('bct.Operator', 'class') == 8, ...
+                'bct.Operator class should be accessible');
             
             % Verify new operator system is callable
             try

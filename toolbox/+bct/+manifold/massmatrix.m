@@ -47,7 +47,7 @@ function M = massmatrix(Manifold, options)
 %   % Use with FEM inner product
 %   norm_u = sqrt(u' * M * u);
 %
-% See also: bct.manifold.cotmatrix, bct.FEM, massmatrix
+% See also: bct.manifold.cotmatrix, massmatrix
 
 arguments
     Manifold (1,1) bct.Manifold
