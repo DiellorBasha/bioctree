@@ -1,24 +1,26 @@
 classdef Manifold < handle
     %MANIFOLD  Geometric substrate for surface-based analysis
     %
-    % Defines geometry, topology, and metric. Provides access to
-    % DEC and Graph representations via ports.
+    % Defines geometry, topology, and metric. Provides unified caching of
+    % computed properties (geometry, topology, operators, eigenmodes).
     %
     % Design principles (from ManifoldContract):
     %   - Manifold owns: Topology, Embedding, Metric, Intrinsic differential structure
-    %   - DEC, Graph are views accessed through ports (not stored properties)
     %   - Immutable geometry, mutable representations
+    %   - Lazy computation with unified cache structure
     %   - No analysis, filters, brushes, spectral pipelines, or UI state
     %
     % Usage:
     %   % Construction
     %   M = bct.Manifold(struct('V', V, 'F', F));
     %   
-    %   % Access representations via ports
-    %   dec = M.DEC();
-    %   graph = M.Graph();
+    %   % Access cached properties
+    %   ops = M.operators();  % All operators (mass, stiffness, DEC)
+    %   geom = M.geometry();  % All geometry (centroids, normals, tangents)
+    %   topo = M.topology();  % All topology (edges, adjacency, halfedge)
+    %   graph = M.Graph();    % Graph representation (lightweight wrapper)
     %
-    % See also: bct.Graph, bct.Operator, DiscreteExteriorCalculus
+    % See also: bct.Graph, bct.manifold.operator, bct.manifold.geometry, bct.manifold.topology
 
     properties (SetAccess = private)
         Vertices         % [N×3] vertex coordinates (immutable)
@@ -28,8 +30,7 @@ classdef Manifold < handle
     end
 
     properties (Access = private)
-        RepresentationCache  % containers.Map for lazy representation creation (DEC, Graph)
-        Cache                % Unified cache structure with namespaces: geometry, topology, operators, eigenmodes
+        Cache  % Unified cache structure with namespaces: geometry, topology, operators, eigenmodes
     end
 
     methods
@@ -112,9 +113,6 @@ classdef Manifold < handle
             
             % Generate unique ID for this manifold
             obj.ID = string(java.util.UUID.randomUUID());
-
-            % Initialize representation cache (Graph port only)
-            obj.RepresentationCache = containers.Map('KeyType','char','ValueType','any');
             
             % Initialize unified cache structure with namespaces
             obj.Cache = struct(...
@@ -300,7 +298,7 @@ classdef Manifold < handle
         end
 
         function g = Graph(obj)
-            %GRAPH Get Graph representation (lazy creation with caching)
+            %GRAPH Get Graph representation (lightweight wrapper)
             %
             % Syntax:
             %   g = M.Graph()
@@ -308,14 +306,14 @@ classdef Manifold < handle
             % Outputs:
             %   g - bct.Graph object (navigation/topology)
             %
-            % Note: First call creates Graph object, subsequent calls return cached version
+            % Description:
+            %   Returns a lightweight Graph wrapper around this Manifold.
+            %   Graph objects are not cached since they only hold a reference
+            %   to the Manifold and provide navigation/topology methods.
             %
-            % See also: bct.Graph
+            % See also: bct.Graph, topology
             
-            if ~isKey(obj.RepresentationCache, 'Graph')
-                obj.RepresentationCache('Graph') = bct.Graph(obj);
-            end
-            g = obj.RepresentationCache('Graph');
+            g = bct.Graph(obj);
         end
         
         % ===============================================================
