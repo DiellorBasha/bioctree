@@ -60,7 +60,7 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %
 %   % Matrix-based usage (standalone)
 %   K = bct.manifold.cotmatrix(M);
-%   Mass = bct.manifold.massmatrix(M);
+%   Mass = bct.manifold.operator.mass(M);
 %   [lambda, U] = bct.manifold.eigenmodes(K, Mass, 100);
 %
 %   % Keep DC mode
@@ -80,7 +80,7 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   heat_kernel = exp(-lambda * tau);
 %   filtered = U * (heat_kernel .* coeffs);
 %
-% See also: bct.manifold.massmatrix, bct.manifold.cotmatrix,
+% See also: bct.manifold.operator.mass, bct.manifold.cotmatrix,
 %           bct.manifold.eigen.solve, bct.manifold.eigen
 
 % Parse input arguments to determine mode

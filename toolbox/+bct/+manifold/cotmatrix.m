@@ -37,7 +37,7 @@ function K = cotmatrix(Manifold)
 %   K = bct.manifold.cotmatrix(manifold);
 %
 %   % Dirichlet energy
-%   M = bct.manifold.massmatrix(manifold);
+%   M = bct.manifold.operator.mass(manifold);
 %   energy = u' * K * u;
 %
 %   % Laplace-Beltrami operator application
@@ -46,7 +46,7 @@ function K = cotmatrix(Manifold)
 %   % Eigenvalue problem
 %   [V, D] = eigs(K, M, 100, 'sm');
 %
-% See also: bct.manifold.massmatrix, cotmatrix
+% See also: bct.manifold.operator.mass, cotmatrix
 
 arguments
     Manifold (1,1) bct.Manifold

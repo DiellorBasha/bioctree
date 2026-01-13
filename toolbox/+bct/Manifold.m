@@ -634,7 +634,7 @@ classdef Manifold < handle
             %   M = manifold.massmatrix();  % Default voronoi
             %   M = manifold.massmatrix('Type', 'barycentric');
             %
-            % See also: bct.manifold.massmatrix, massmatrix, cotmatrix
+            % See also: bct.manifold.operator.mass, massmatrix, cotmatrix
             
             arguments
                 obj
@@ -649,8 +649,8 @@ classdef Manifold < handle
                 return;
             end
             
-            % Compute mass matrix using bct.manifold.massmatrix
-            M = bct.manifold.massmatrix(obj, 'Type', massType);
+            % Compute mass matrix using bct.manifold.operator.mass
+            M = bct.manifold.operator.mass(obj, 'Type', massType);
             
             % Cache for future use
             obj.CachedMass = M;

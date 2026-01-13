@@ -71,4 +71,4 @@ This avoids redundant computation when geometry is requested multiple times.
 
 - `bct.Manifold` - Main manifold class
 - `bct.manifold.topology` - Topological operations (halfedge, edges, adjacency)
-- `bct.manifold.massmatrix`, `bct.manifold.cotmatrix` - FEM operators
+- `bct.manifold.operator.mass`, `bct.manifold.cotmatrix` - FEM operators
