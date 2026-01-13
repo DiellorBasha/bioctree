@@ -15,7 +15,7 @@ function [path, dist] = shortestPath(Graph, s, t, metric)
 %   path - Vector of node indices along shortest path
 %   dist - Total path distance
 %
-% See also: bct.manifold.query.matlabGraph
+% See also: bct.manifold.Graph.matlab
 
 arguments
     Graph (1,1) bct.manifold.Graph
@@ -24,7 +24,7 @@ arguments
     metric (1,1) string = "geometry"
 end
 
-G = bct.manifold.query.matlabGraph(Graph, metric);
+G = Graph.matlab(metric);
 [path, dist] = shortestpath(G, s, t);
 
 end

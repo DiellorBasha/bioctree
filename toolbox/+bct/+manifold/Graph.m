@@ -180,7 +180,30 @@ classdef Graph < handle
             key = metric + "_" + string(obj.GraphVersion);
             
             if ~isKey(obj.GraphMATLABCache, key)
-                G = bct.manifold.query.matlabGraph(obj, metric);
+                % Use bct.manifold.out for standard metrics, manual build for custom
+                if ismember(metric, ["geometry", "fem"])
+                    G = bct.manifold.out(obj.Manifold, 'graph', 'EdgeWeights', metric);
+                else
+                    % Custom metric: build manually
+                    if ~isfield(obj.Weights, metric)
+                        error('bct:manifold:Graph:UnknownMetric', ...
+                            'Metric "%s" not defined. Available: %s', ...
+                            metric, strjoin(string(fieldnames(obj.Weights)), ", "));
+                    end
+                    
+                    % Get edge weights
+                    w = full(obj.Weights.(metric));
+                    
+                    % Create weighted graph
+                    G = graph(obj.Edges(:,1), obj.Edges(:,2), w, obj.NumNodes);
+                    
+                    % Attach coordinates as node properties
+                    V = obj.Manifold.Vertices;
+                    G.Nodes.X = V(:,1);
+                    G.Nodes.Y = V(:,2);
+                    G.Nodes.Z = V(:,3);
+                end
+                
                 obj.GraphMATLABCache(key) = G;
             else
                 G = obj.GraphMATLABCache(key);

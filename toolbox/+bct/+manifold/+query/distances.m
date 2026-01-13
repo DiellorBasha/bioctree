@@ -12,14 +12,14 @@ function D = distances(Graph, metric)
 % Returns:
 %   D - [N×N] matrix of shortest path distances
 %
-% See also: bct.manifold.query.shortestPath, bct.manifold.query.matlabGraph
+% See also: bct.manifold.query.shortestPath, bct.manifold.Graph.matlab
 
 arguments
     Graph (1,1) bct.manifold.Graph
     metric (1,1) string = "geometry"
 end
 
-G = bct.manifold.query.matlabGraph(Graph, metric);
+G = Graph.matlab(metric);
 D = distances(G);
 
 end

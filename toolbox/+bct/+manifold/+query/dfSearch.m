@@ -14,7 +14,7 @@ function [T, pred] = dfSearch(Graph, s, metric)
 %   T    - Vector of node discovery order
 %   pred - Vector of predecessor nodes
 %
-% See also: bct.manifold.query.bfSearch, bct.manifold.query.matlabGraph
+% See also: bct.manifold.query.bfSearch, bct.manifold.Graph.matlab
 
 arguments
     Graph (1,1) bct.manifold.Graph
@@ -22,7 +22,7 @@ arguments
     metric (1,1) string = "geometry"
 end
 
-G = bct.manifold.query.matlabGraph(Graph, metric);
+G = Graph.matlab(metric);
 
 if nargout > 1
     [T, pred] = dfsearch(G, s);
