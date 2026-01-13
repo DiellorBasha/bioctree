@@ -27,6 +27,7 @@ classdef Manifold < handle
         Faces            % [M×3] face connectivity (immutable)
         Edges            % [E×2] edge connectivity (derived from faces)
         ID               % Unique identifier for compatibility tracking
+        Metric           % Metric provenance (unit, rescale status)
     end
 
     properties (Access = private)
@@ -113,6 +114,15 @@ classdef Manifold < handle
             
             % Generate unique ID for this manifold
             obj.ID = string(java.util.UUID.randomUUID());
+            
+            % Initialize metric provenance (all manifolds are in meters by default)
+            obj.Metric = struct( ...
+                'unit', "m", ...
+                'rescale', struct( ...
+                    'applied', false, ...
+                    'fromUnit', "", ...
+                    'factor', 1.0, ...
+                    'timestamp', "") );
             
             % Initialize unified cache structure with namespaces
             obj.Cache = struct(...
@@ -632,6 +642,46 @@ classdef Manifold < handle
                     status.meta.(ns) = struct();
                 end
             end
+        end
+        
+        function obj = invalidateMetricDependentCaches(obj)
+            %INVALIDATEMETRICDEPENDENTCACHES Clear caches that depend on vertex scale/units
+            %
+            % Syntax:
+            %   M = M.invalidateMetricDependentCaches()
+            %
+            % Outputs:
+            %   M - Manifold with cleared metric-dependent caches
+            %
+            % Description:
+            %   Clears all cached data that depends on vertex coordinates with
+            %   physical units. Called automatically by bct.manifold.metric.rescale.
+            %
+            %   Invalidates:
+            %   - geometry: edge lengths, face areas, dual areas, centroids, etc.
+            %   - operators: mass, stiffness, Laplacians, DEC operators
+            %   - eigenmodes: spectral decompositions of metric-dependent operators
+            %
+            %   Does NOT invalidate:
+            %   - topology: adjacency, edges, halfedge (combinatorial, scale-invariant)
+            %   - health: mesh quality metrics (recomputed on demand)
+            %
+            % See also: bct.manifold.metric.rescale
+            
+            % Clear geometry-derived caches
+            obj.Cache.geometry.data = struct();
+            obj.Cache.geometry.meta = struct();
+            
+            % Clear operator-derived caches
+            obj.Cache.operators.data = struct();
+            obj.Cache.operators.meta = struct();
+            
+            % Clear spectral caches
+            obj.Cache.eigenmodes.data = struct();
+            obj.Cache.eigenmodes.meta = struct();
+            
+            % Topology remains valid (combinatorial structure)
+            % Health will be recomputed on demand
         end
         
         % ===============================================================
