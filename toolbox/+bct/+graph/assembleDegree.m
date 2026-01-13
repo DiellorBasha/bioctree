@@ -14,7 +14,7 @@ function D = assembleDegree(A)
 %   - D(i,i) = degree of vertex i = sum(A(i,:))
 %   - Result is diagonal matrix
 %
-% See also: bct.graph.assembleAdjacency
+% See also: bct.manifold.topology.adjacency
 
 arguments
     A (:,:) {mustBeSparse}

@@ -13,19 +13,15 @@ function w = edgeLengths(Manifold)
 % Notes:
 %   - Uses Euclidean distance between vertex positions
 %   - Standard geometric metric for navigation
+%   - Delegates to bct.manifold.geometry.edgeLengths
 %
-% See also: bct.manifold.query.femWeights
+% See also: bct.manifold.query.femWeights, bct.manifold.geometry.edgeLengths
 
 arguments
     Manifold (1,1) bct.Manifold
 end
 
-V = Manifold.Vertices;
-E = Manifold.Edges;
-
-i = E(:,1);
-j = E(:,2);
-
-w = vecnorm(V(i,:) - V(j,:), 2, 2);
+% Delegate to geometry module (returns header and values)
+[~, w] = bct.manifold.geometry.edgeLengths(Manifold);
 
 end

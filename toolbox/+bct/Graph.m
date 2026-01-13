@@ -86,7 +86,7 @@ classdef Graph < handle
     %% Dependent properties (lazy computed via bct.graph)
     methods
         function A = get.Adjacency(obj)
-            A = bct.graph.assembleAdjacency(obj.Manifold);
+            A = obj.Manifold.adjacency();
         end
         
         function D = get.Degree(obj)
