@@ -7,15 +7,19 @@ function obj = out(M, targetType, options)
 %   obj = bct.manifold.out(M, 'patch')
 %   obj = bct.manifold.out(M, 'graph')
 %   obj = bct.manifold.out(M, 'graph', 'EdgeWeights', 'geometry')
+%   obj = bct.manifold.out(M, 'gspbox')
+%   obj = bct.manifold.out(M, 'gspbox', 'EdgeWeights', 'cotangent', 'LaplacianType', 'normalized')
 %
 % Supported Target Types:
 %   - 'surfaceMesh': Creates MATLAB surfaceMesh object
 %   - 'triangulation': Creates MATLAB triangulation object
 %   - 'patch': Creates MATLAB Patch graphics object (in invisible figure)
 %   - 'graph': Creates MATLAB graph object with edge weights
+%   - 'gspbox': Creates GSPBox graph structure for graph signal processing
 %
-% Name-Value Arguments (for 'graph' only):
-%   EdgeWeights - "geometry" (default) | "fem" | "uniform"
+% Name-Value Arguments (for 'graph' and 'gspbox'):
+%   EdgeWeights   - "cotangent" (default) | "euclidean"
+%   LaplacianType - "combinatorial" (default) | "normalized" | "randomwalk" (gspbox only)
 %
 % Inputs:
 %   M          - bct.Manifold object
@@ -29,8 +33,8 @@ function obj = out(M, targetType, options)
 %   - Patch objects are created in an invisible figure by default
 %   - For patch objects with visible figures, use patch() directly
 %   - Graph objects include node coordinates as properties (X, Y, Z)
-%   - Graph edge weights: 'geometry' uses Euclidean lengths, 'fem' uses
-%     cotangent stiffness, 'uniform' uses equal weights
+%   - GSPBox graphs are populated with gsp_graph_default_parameters()
+%   - Edge weights: 'cotangent' uses FEM stiffness, 'euclidean' uses geometric lengths
 %
 % Examples:
 %   % Convert to surfaceMesh
@@ -43,18 +47,19 @@ function obj = out(M, targetType, options)
 %   % Convert to patch (in invisible figure)
 %   p = bct.manifold.out(M, 'patch');
 %
-%   % Convert to MATLAB graph with geometric edge weights
+%   % Convert to MATLAB graph with cotangent edge weights
 %   G = bct.manifold.out(M, 'graph');
 %
-%   % Convert to MATLAB graph with FEM edge weights
-%   G = bct.manifold.out(M, 'graph', 'EdgeWeights', 'fem');
+%   % Convert to GSPBox graph with normalized Laplacian
+%   G = bct.manifold.out(M, 'gspbox', 'LaplacianType', 'normalized');
 %
 % See also: bct.Manifold, bct.manifold.in, bct.manifold.convert
 
 arguments
     M          bct.Manifold
-    targetType (1,1) string {mustBeMember(targetType, ["surfaceMesh", "triangulation", "patch", "graph"])}
-    options.EdgeWeights (1,1) string {mustBeMember(options.EdgeWeights, ["geometry", "fem", "uniform"])} = "geometry"
+    targetType (1,1) string {mustBeMember(targetType, ["surfaceMesh", "triangulation", "patch", "graph", "gspbox"])}
+    options.EdgeWeights (1,1) string {mustBeMember(options.EdgeWeights, ["cotangent", "euclidean"])} = "cotangent"
+    options.LaplacianType (1,1) string {mustBeMember(options.LaplacianType, ["combinatorial", "normalized", "randomwalk"])} = "combinatorial"
 end
 
 % Get vertices and faces from Manifold
@@ -87,26 +92,9 @@ switch targetType
         E = M.Edges;
         N = size(V, 1);
         
-        % Compute edge weights based on requested metric
-        switch options.EdgeWeights
-            case "geometry"
-                % Geometric weights: Euclidean edge lengths
-                geom = M.geometry();
-                w = geom.edgeLengths;
-                
-            case "fem"
-                % FEM weights: Extract from cotangent stiffness matrix
-                ops = M.operators();
-                K = ops.stiffness;
-                i = E(:,1);
-                j = E(:,2);
-                w = -K(sub2ind(size(K), i, j));
-                w(w < 0) = 0;  % numerical safety
-                
-            case "uniform"
-                % Uniform weights: all edges have weight 1
-                w = ones(size(E, 1), 1);
-        end
+        % Get edge weights from cached geometry
+        geom = M.geometry();
+        w = geom.edgeWeights.(options.EdgeWeights);
         
         % Create weighted MATLAB graph
         obj = graph(E(:,1), E(:,2), full(w), N);
@@ -115,6 +103,29 @@ switch targetType
         obj.Nodes.X = V(:,1);
         obj.Nodes.Y = V(:,2);
         obj.Nodes.Z = V(:,3);
+        
+    case "gspbox"
+        % Create GSPBox graph structure
+        E = M.Edges;
+        N = size(V, 1);
+        
+        % Get edge weights from cached geometry
+        geom = M.geometry();
+        w = geom.edgeWeights.(options.EdgeWeights);
+        
+        % Build sparse symmetric adjacency matrix
+        W = sparse(E(:,1), E(:,2), w, N, N);
+        W = W + W.';  % ensure symmetry
+        
+        % Build GSP structure
+        obj = struct();
+        obj.N = N;
+        obj.W = W;
+        obj.coords = V;
+        obj.type = char(options.LaplacianType);
+        
+        % Let GSPBox populate operators lazily
+        obj = gsp_graph_default_parameters(obj);
         
     otherwise
         error('bct:manifold:UnsupportedTargetType', ...
