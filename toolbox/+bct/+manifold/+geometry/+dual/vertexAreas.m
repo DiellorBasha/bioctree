@@ -1,11 +1,14 @@
-function [header, dualVertexAreas] = dualVertexAreas(meshOrManifold, options)
-%DUALVERTEXAREAS Compute circumcentric dual cell area for each vertex.
+﻿function [header, vertexAreas] = vertexAreas(meshInput, options)
+%VERTEXAREAS Compute circumcentric dual cell area for each vertex.
 %
-%   [header, A] = bct.manifold.geometry.dualVertexAreas(meshOrManifold)
-%   [header, A] = bct.manifold.geometry.dualVertexAreas(__, Name, Value)
+%   [header, A] = bct.manifold.geometry.dual.vertexAreas(M)
+%   [header, A] = bct.manifold.geometry.dual.vertexAreas(V, F)
+%   [header, A] = bct.manifold.geometry.dual.vertexAreas(__, Name, Value)
 %
 % Inputs
-%   meshOrManifold : bct.Manifold object or {V, F} cell array
+%   M : bct.Manifold object
+%   OR
+%   V, F : Vertices [NÃ—3] and Faces [nFÃ—3] (can be passed as {V, F} cell)
 %
 % Name-Value Parameters
 %   dualCellType        : 'circumcentric' (default)
@@ -20,7 +23,7 @@ function [header, dualVertexAreas] = dualVertexAreas(meshOrManifold, options)
 %     .circumcenterMethod : method for circumcenters
 %     .precision         : precision used
 %     .numberOfNonPositiveDualVertexAreas : diagnostic count
-%   dualVertexAreas : [nV × 1] dual cell area per vertex
+%   vertexAreas : [nV × 1] dual cell area per vertex
 %
 % Dual Cell Definition (Circumcentric)
 %   For each vertex, the dual cell area is computed by summing contributions
@@ -42,13 +45,13 @@ function [header, dualVertexAreas] = dualVertexAreas(meshOrManifold, options)
 %   - Non-degenerate faces
 %
 % Example
-%   [header, A] = bct.manifold.geometry.dualVertexAreas(M);
+%   [header, A] = bct.manifold.geometry.dual.vertexAreas(M);
 %   totalDualArea = sum(A);
 %
-% See also: bct.manifold.geometry.faceCircumcenters, bct.manifold.geometry.dualEdgeLengths
+% See also: bct.manifold.geometry.face.circumcenters, bct.manifold.geometry.dual.edgeLengths
 
 arguments
-    meshOrManifold
+    meshInput
     options.dualCellType (1,1) string {mustBeMember(options.dualCellType, ...
         ["circumcentric"])} = "circumcentric"
     options.boundaryPolicy (1,1) string {mustBeMember(options.boundaryPolicy, ...
@@ -60,7 +63,7 @@ arguments
 end
 
 % Normalize input
-mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
+mesh = bct.manifold.health.internal.normalizeInput(meshInput);
 V = mesh.V;
 F = mesh.F;
 nV = mesh.nV;
@@ -73,7 +76,7 @@ if ~mesh.hasV
 end
 
 if nF == 0
-    dualVertexAreas = zeros(0, 1, options.precision);
+    vertexAreas = zeros(0, 1, options.precision);
     header = struct( ...
         'dualCellType', options.dualCellType, ...
         'boundaryPolicy', options.boundaryPolicy, ...
@@ -84,8 +87,8 @@ if nF == 0
 end
 
 % Get halfedge connectivity
-if isa(meshOrManifold, 'bct.Manifold')
-    he = meshOrManifold.halfedge();
+if isa(meshInput, 'bct.Manifold')
+    he = meshInput.halfedge();
 else
     he = bct.manifold.topology.halfedge(V, F);
 end
@@ -94,7 +97,7 @@ end
 nBoundary = sum(he.isBoundary);
 
 if nBoundary > 0 && options.boundaryPolicy == "error"
-    error('bct:manifold:geometry:dualVertexAreas:BoundaryNotSupported', ...
+    error('bct:manifold:geometry:dual:vertexAreas:BoundaryNotSupported', ...
         ['Mesh has %d boundary edges. Circumcentric dual vertex areas require ', ...
          'a closed manifold. Set boundaryPolicy to a supported value when available.'], ...
         nBoundary);

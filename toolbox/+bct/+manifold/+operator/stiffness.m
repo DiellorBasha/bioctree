@@ -1,12 +1,16 @@
-function [header, K] = stiffness(Manifold, options)
-%STIFFNESS Assemble FEM stiffness matrix from Manifold
+function [header, K] = stiffness(meshInput, varargin)
+%STIFFNESS Assemble FEM stiffness matrix from Manifold or mesh data
 %
 % Syntax:
-%   [header, K] = bct.manifold.operator.stiffness(Manifold)
-%   [header, K] = bct.manifold.operator.stiffness(Manifold, Name, Value, ...)
+%   [header, K] = bct.manifold.operator.stiffness(M)
+%   [header, K] = bct.manifold.operator.stiffness(V, F)
+%   [header, K] = bct.manifold.operator.stiffness(..., Name, Value, ...)
 %
 % Inputs:
-%   Manifold - bct.Manifold object
+%   M  - bct.Manifold object
+%   OR
+%   V  - [N×3] vertex coordinates
+%   F  - [nF×3] face connectivity (1-based)
 %
 % Name-Value Parameters:
 %   variant    - Stiffness matrix variant (default: 'cotan')
@@ -50,14 +54,17 @@ function [header, K] = stiffness(Manifold, options)
 %   Dependency path is resolved via bct.config/bct.install system.
 %
 % Examples:
-%   % Default: cotangent Laplacian, positive semidefinite, symmetrized
+%   % Using Manifold object (default: cotangent, positive semidefinite, symmetrized)
 %   [header, K] = bct.manifold.operator.stiffness(M);
+%
+%   % Using explicit V, F
+%   [header, K] = bct.manifold.operator.stiffness(V, F);
 %
 %   % Get negative form (as gptoolbox returns)
 %   [header, K] = bct.manifold.operator.stiffness(M, 'sign', 'negative');
 %
-%   % Single precision
-%   [header, K] = bct.manifold.operator.stiffness(M, 'precision', 'single');
+%   % Single precision with V, F
+%   [header, K] = bct.manifold.operator.stiffness(V, F, 'precision', 'single');
 %
 %   % Dirichlet energy
 %   [~, M0] = bct.manifold.operator.mass(M);
@@ -71,13 +78,58 @@ function [header, K] = stiffness(Manifold, options)
 %
 % See also: bct.manifold.operator.mass, bct.Manifold.cotmatrix
 
-arguments
-    Manifold (1,1) bct.Manifold
-    options.variant (1,1) string {mustBeMember(options.variant, ["cotan"])} = "cotan"
-    options.sign (1,1) string {mustBeMember(options.sign, ["positive","negative"])} = "positive"
-    options.symmetrize (1,1) logical = true
-    options.precision (1,1) string {mustBeMember(options.precision, ["double","single"])} = "double"
+% ----------------------------
+% Parse inputs
+% ----------------------------
+if nargin == 0
+    error('bct:manifold:operator:stiffness:NoInput', ...
+        'At least one input required: stiffness(M) or stiffness(V, F)');
 end
+
+% Check if first argument is Manifold or numeric
+if isa(meshInput, 'bct.Manifold')
+    % Case: stiffness(M, Name=Value...)
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+    nameValueStart = 1;
+elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
+    % Case: stiffness(V, F, Name=Value...)
+    V = meshInput;
+    F = varargin{1};
+    nameValueStart = 2;
+    
+    % Validate V, F
+    if size(V, 2) ~= 3
+        error('bct:manifold:operator:stiffness:InvalidVertices', ...
+            'V must be an [N×3] numeric array.');
+    end
+    if size(F, 2) ~= 3
+        error('bct:manifold:operator:stiffness:InvalidFaces', ...
+            'F must be an [nF×3] numeric array of vertex indices.');
+    end
+    if any(F(:) < 1) || any(F(:) ~= round(F(:)))
+        error('bct:manifold:operator:stiffness:InvalidFaces', ...
+            'F must contain positive 1-based integer indices.');
+    end
+    if max(F(:)) > size(V, 1)
+        error('bct:manifold:operator:stiffness:InvalidFaces', ...
+            'F references vertex index %d but V has only %d vertices.', ...
+            max(F(:)), size(V, 1));
+    end
+else
+    error('bct:manifold:operator:stiffness:InvalidInput', ...
+        'Input must be either stiffness(M) or stiffness(V, F). Got %s.', class(meshInput));
+end
+
+% Parse Name-Value pairs
+p = inputParser;
+p.addParameter('variant', 'cotan', @(x) ismember(x, ["cotan"]));
+p.addParameter('sign', 'positive', @(x) ismember(x, ["positive","negative"]));
+p.addParameter('symmetrize', true, @islogical);
+p.addParameter('precision', 'double', @(x) ismember(x, ["double","single"]));
+p.parse(varargin{nameValueStart:end});
+
+options = p.Results;
 
 % Build header with parameters used
 header = struct();
@@ -89,9 +141,7 @@ header.precision = char(options.precision);
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
 
-% Get vertices and faces from manifold
-V = Manifold.Vertices;
-F = Manifold.Faces;
+% V and F already extracted during input parsing
 
 % Call gptoolbox cotmatrix function
 % Add path temporarily if not already present

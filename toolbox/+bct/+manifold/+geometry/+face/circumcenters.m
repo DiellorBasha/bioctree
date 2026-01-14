@@ -1,11 +1,14 @@
-function [header, faceCircumcenters] = faceCircumcenters(meshOrManifold, options)
-%FACECIRCUMCENTERS Compute circumcenter of each triangular face.
+function [header, circumcenters] = circumcenters(meshInput, options)
+%CIRCUMCENTERS Compute circumcenter of each triangular face.
 %
-%   [header, C] = bct.manifold.geometry.faceCircumcenters(meshOrManifold)
-%   [header, C] = bct.manifold.geometry.faceCircumcenters(__, 'method', m)
+%   [header, C] = bct.manifold.geometry.face.circumcenters(M)
+%   [header, C] = bct.manifold.geometry.face.circumcenters(V, F)
+%   [header, C] = bct.manifold.geometry.face.circumcenters(__, 'method', m)
 %
 % Inputs
-%   meshOrManifold : bct.Manifold object or {V, F} cell array
+%   M : bct.Manifold object
+%   OR
+%   V, F : Vertices [N×3] and Faces [nF×3] (can be passed as {V, F} cell)
 %
 % Name-Value Parameters
 %   method    : 'native' (default) | 'triangulation'
@@ -15,7 +18,7 @@ function [header, faceCircumcenters] = faceCircumcenters(meshOrManifold, options
 %   header : struct with fields
 %     .method    : method used
 %     .precision : precision used
-%   faceCircumcenters : [nF × 3] 3D coordinates of circumcenter per face
+%   circumcenters : [nF × 3] 3D coordinates of circumcenter per face
 %
 % Methods
 %   'native' : Stable vectorized circumcenter formula
@@ -28,13 +31,13 @@ function [header, faceCircumcenters] = faceCircumcenters(meshOrManifold, options
 %     3. Translate back to global frame
 %
 % Example
-%   [header, C] = bct.manifold.geometry.faceCircumcenters(M);
+%   [header, C] = bct.manifold.geometry.face.circumcenters(M);
 %   plot3(C(:,1), C(:,2), C(:,3), 'r.');
 %
-% See also: bct.manifold.geometry, bct.manifold.geometry.faceAreas
+% See also: bct.manifold.geometry.face.areas, bct.manifold.geometry.centroids
 
 arguments
-    meshOrManifold
+    meshInput
     options.method (1,1) string {mustBeMember(options.method, ...
         ["native", "triangulation"])} = "native"
     options.precision (1,1) string {mustBeMember(options.precision, ...
@@ -42,40 +45,40 @@ arguments
 end
 
 % Normalize input
-mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
+mesh = bct.manifold.health.internal.normalizeInput(meshInput);
 V = mesh.V;
 F = mesh.F;
 nF = mesh.nF;
 
 % Validate inputs
 if ~mesh.hasV
-    error('bct:manifold:geometry:faceCircumcenters:NoVertices', ...
+    error('bct:manifold:geometry:face:circumcenters:NoVertices', ...
         'Vertices required to compute face circumcenters');
 end
 
 if nF == 0
-    faceCircumcenters = zeros(0, 3, options.precision);
+    circumcenters = zeros(0, 3, options.precision);
     header = struct('method', options.method, 'precision', options.precision);
     return;
 end
 
 % Compute circumcenters using selected method
 if options.method == "native"
-    faceCircumcenters = computeCircumcentersNative(V, F);
+    circumcenters = computeCircumcentersNative(V, F);
 else  % "triangulation"
-    faceCircumcenters = computeCircumcentersTriangulation(V, F);
+    circumcenters = computeCircumcentersTriangulation(V, F);
 end
 
 % Convert precision if requested
 if options.precision == "single"
-    faceCircumcenters = single(faceCircumcenters);
+    circumcenters = single(circumcenters);
 end
 
 % Check for invalid circumcenters
-invalidMask = any(isnan(faceCircumcenters) | isinf(faceCircumcenters), 2);
+invalidMask = any(isnan(circumcenters) | isinf(circumcenters), 2);
 if any(invalidMask)
     invalidIdx = find(invalidMask);
-    error('bct:manifold:geometry:faceCircumcenters:InvalidCircumcenters', ...
+    error('bct:manifold:geometry:face:circumcenters:InvalidCircumcenters', ...
         '%d faces have invalid circumcenters (NaN or Inf). Sample indices: %s', ...
         length(invalidIdx), mat2str(invalidIdx(1:min(5, end))'));
 end
@@ -140,7 +143,7 @@ try
     TR = triangulation(F, V);
     C = TR.circumcenter();
 catch ME
-    error('bct:manifold:geometry:faceCircumcenters:TriangulationFailed', ...
+    error('bct:manifold:geometry:face:circumcenters:TriangulationFailed', ...
         'Failed to compute circumcenters using triangulation: %s', ME.message);
 end
 

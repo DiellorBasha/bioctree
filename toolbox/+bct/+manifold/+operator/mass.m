@@ -1,12 +1,16 @@
-function [header, M] = mass(Manifold, options)
-%MASS Assemble FEM mass matrix from Manifold
+function [header, M] = mass(meshInput, varargin)
+%MASS Assemble FEM mass matrix from Manifold or mesh data
 %
 % Syntax:
-%   [header, M] = bct.manifold.operator.mass(Manifold)
-%   [header, M] = bct.manifold.operator.mass(Manifold, Name, Value)
+%   [header, M] = bct.manifold.operator.mass(M)
+%   [header, M] = bct.manifold.operator.mass(V, F)
+%   [header, M] = bct.manifold.operator.mass(..., Name, Value)
 %
 % Inputs:
-%   Manifold - bct.Manifold object
+%   M       - bct.Manifold object
+%   OR
+%   V       - [N×3] vertex coordinates
+%   F       - [nF×3] face connectivity (1-based)
 %
 % Name-Value Parameters:
 %   variant    - Mass matrix variant (default: 'voronoi')
@@ -43,14 +47,17 @@ function [header, M] = mass(Manifold, options)
 %   authoritative implementation. Dependency path is resolved via bct.config.
 %
 % Examples:
-%   % Default (voronoi, double precision, symmetrized)
+%   % Using Manifold object (default voronoi, double precision, symmetrized)
 %   [header, M] = bct.manifold.operator.mass(manifold);
+%
+%   % Using explicit V, F
+%   [header, M] = bct.manifold.operator.mass(V, F);
 %
 %   % Barycentric lumped mass
 %   [header, M] = bct.manifold.operator.mass(manifold, 'variant', 'barycentric');
 %
 %   % Full consistent mass without symmetrization
-%   [header, M] = bct.manifold.operator.mass(manifold, ...
+%   [header, M] = bct.manifold.operator.mass(V, F, ...
 %       'variant', 'full', 'symmetrize', false);
 %
 %   % Single precision output
@@ -61,27 +68,66 @@ function [header, M] = mass(Manifold, options)
 %   [~, M] = bct.manifold.operator.mass(manifold);
 %   norm_u = sqrt(u' * M * u);
 %
-% See also: bct.manifold.operator.stiffness, massmatrix
+% See also: bct.manifold.operator.stiffness, bct.manifold.operator.gradient, massmatrix
 
-arguments
-    Manifold (1,1) bct.Manifold
-    options.variant (1,1) string {mustBeMember(options.variant, ["voronoi","barycentric","full"])} = "voronoi"
-    options.symmetrize (1,1) logical = true
-    options.precision (1,1) string {mustBeMember(options.precision, ["double","single"])} = "double"
+% ----------------------------
+% Parse inputs
+% ----------------------------
+if nargin == 0
+    error('bct:manifold:operator:mass:NoInput', ...
+        'At least one input required: mass(M) or mass(V, F)');
 end
+
+% Check if first argument is Manifold or numeric
+if isa(meshInput, 'bct.Manifold')
+    % Case: mass(M, Name=Value...)
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+    nameValueStart = 1;
+elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
+    % Case: mass(V, F, Name=Value...)
+    V = meshInput;
+    F = varargin{1};
+    nameValueStart = 2;
+    
+    % Validate V, F
+    if size(V, 2) ~= 3
+        error('bct:manifold:operator:mass:InvalidVertices', ...
+            'V must be an [N×3] numeric array.');
+    end
+    if size(F, 2) ~= 3
+        error('bct:manifold:operator:mass:InvalidFaces', ...
+            'F must be an [nF×3] numeric array of vertex indices.');
+    end
+    if any(F(:) < 1) || any(F(:) ~= round(F(:)))
+        error('bct:manifold:operator:mass:InvalidFaces', ...
+            'F must contain positive 1-based integer indices.');
+    end
+    if max(F(:)) > size(V, 1)
+        error('bct:manifold:operator:mass:InvalidFaces', ...
+            'F references vertex index %d but V has only %d vertices.', ...
+            max(F(:)), size(V, 1));
+    end
+else
+    error('bct:manifold:operator:mass:InvalidInput', ...
+        'Input must be either mass(M) or mass(V, F). Got %s.', class(meshInput));
+end
+
+% Parse Name-Value pairs
+p = inputParser;
+p.addParameter('variant', 'voronoi', @(x) ismember(x, ["voronoi","barycentric","full"]));
+p.addParameter('symmetrize', true, @islogical);
+p.addParameter('precision', 'double', @(x) ismember(x, ["double","single"]));
+p.parse(varargin{nameValueStart:end});
 
 % Build header structure with input parameters
 header = struct();
-header.variant = char(options.variant);
-header.symmetrize = options.symmetrize;
-header.precision = char(options.precision);
+header.variant = char(p.Results.variant);
+header.symmetrize = p.Results.symmetrize;
+header.precision = char(p.Results.precision);
 
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
-
-% Get vertices and faces from manifold
-V = Manifold.Vertices;
-F = Manifold.Faces;
 
 % Call gptoolbox massmatrix function
 % Add path temporarily if not already present

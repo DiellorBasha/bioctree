@@ -1,11 +1,14 @@
-function [header, faceAreas] = faceAreas(meshOrManifold, options)
-%FACEAREAS Compute area of each triangular face.
+function [header, areas] = areas(meshInput, options)
+%AREAS Compute area of each triangular face.
 %
-%   [header, faceAreas] = bct.manifold.geometry.faceAreas(meshOrManifold)
-%   [header, faceAreas] = bct.manifold.geometry.faceAreas(__, 'precision', p)
+%   [header, areas] = bct.manifold.geometry.face.areas(M)
+%   [header, areas] = bct.manifold.geometry.face.areas(V, F)
+%   [header, areas] = bct.manifold.geometry.face.areas(__, 'precision', p)
 %
 % Inputs
-%   meshOrManifold : bct.Manifold object or {V, F} cell array
+%   M : bct.Manifold object
+%   OR
+%   V, F : Vertices [N×3] and Faces [nF×3] (can be passed as {V, F} cell)
 %
 % Name-Value Parameters
 %   precision : 'double' (default) | 'single'
@@ -14,38 +17,38 @@ function [header, faceAreas] = faceAreas(meshOrManifold, options)
 %   header : struct with fields
 %     .method    : 'crossProduct'
 %     .precision : precision used
-%   faceAreas : [nF × 1] area of each face
+%   areas : [nF × 1] area of each face
 %
 % Algorithm
 %   For each triangular face (v1, v2, v3):
 %     area = 0.5 * ||cross(v2 - v1, v3 - v1)||
 %
 % Example
-%   [header, A] = bct.manifold.geometry.faceAreas(M);
+%   [header, A] = bct.manifold.geometry.face.areas(M);
 %   totalArea = sum(A);
 %
-% See also: bct.manifold.geometry, bct.manifold.geometry.edgeLengths
+% See also: bct.manifold.geometry.face.circumcenters, bct.manifold.geometry.centroids
 
 arguments
-    meshOrManifold
+    meshInput
     options.precision (1,1) string {mustBeMember(options.precision, ...
         ["double", "single"])} = "double"
 end
 
 % Normalize input
-mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
+mesh = bct.manifold.health.internal.normalizeInput(meshInput);
 V = mesh.V;
 F = mesh.F;
 nF = mesh.nF;
 
 % Validate inputs
 if ~mesh.hasV
-    error('bct:manifold:geometry:faceAreas:NoVertices', ...
+    error('bct:manifold:geometry:face:areas:NoVertices', ...
         'Vertices required to compute face areas');
 end
 
 if nF == 0
-    faceAreas = zeros(0, 1, options.precision);
+    areas = zeros(0, 1, options.precision);
     header = struct('method', "crossProduct", 'precision', options.precision);
     return;
 end
@@ -63,18 +66,18 @@ e2 = v3 - v1;  % nF × 3
 cp = cross(e1, e2, 2);  % nF × 3
 
 % Area = 0.5 * ||cross product||
-faceAreas = 0.5 * sqrt(sum(cp.^2, 2));  % nF × 1
+areas = 0.5 * sqrt(sum(cp.^2, 2));  % nF × 1
 
 % Convert precision if requested
 if options.precision == "single"
-    faceAreas = single(faceAreas);
+    areas = single(areas);
 end
 
 % Check for degenerate faces (zero or NaN area)
-degenerateMask = isnan(faceAreas) | (faceAreas == 0);
+degenerateMask = isnan(areas) | (areas == 0);
 if any(degenerateMask)
     degenerateIdx = find(degenerateMask);
-    error('bct:manifold:geometry:faceAreas:DegenerateFaces', ...
+    error('bct:manifold:geometry:face:areas:DegenerateFaces', ...
         '%d faces have zero or NaN area. Sample indices: %s', ...
         length(degenerateIdx), mat2str(degenerateIdx(1:min(5, end))'));
 end

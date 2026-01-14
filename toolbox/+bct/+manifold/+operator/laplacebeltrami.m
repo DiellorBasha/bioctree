@@ -1,4 +1,4 @@
-function [header, L] = laplacebeltrami(Manifold, options)
+function [header, L] = laplacebeltrami(meshInput, varargin)
 %LAPLACEBELTRAMI Construct Laplace–Beltrami operator on a surface mesh
 %
 % Default behavior (eigenmode-ready):
@@ -9,11 +9,15 @@ function [header, L] = laplacebeltrami(Manifold, options)
 %   Returns strong-form matrix A = M \ S (maps vertex scalars -> vertex scalars).
 %
 % Syntax:
-%   [header, L] = bct.manifold.operator.laplacebeltrami(Manifold)
-%   [header, L] = bct.manifold.operator.laplacebeltrami(Manifold, Name, Value, ...)
+%   [header, L] = bct.manifold.operator.laplacebeltrami(M)
+%   [header, L] = bct.manifold.operator.laplacebeltrami(V, F)
+%   [header, L] = bct.manifold.operator.laplacebeltrami(..., Name, Value, ...)
 %
 % Inputs:
-%   Manifold - bct.Manifold object
+%   M  - bct.Manifold object
+%   OR
+%   V  - [N×3] vertex coordinates
+%   F  - [nF×3] face connectivity (1-based)
 %
 % Name-Value Parameters:
 %   method           - Construction method (default: 'fem')
@@ -67,16 +71,19 @@ function [header, L] = laplacebeltrami(Manifold, options)
 %   - On closed meshes, S*ones ≈ 0 (constant function in null space)
 %
 % Examples:
-%   % Default: generalized form for eigenmodes
+%   % Default: generalized form for eigenmodes (using Manifold)
 %   [header, L] = bct.manifold.operator.laplacebeltrami(M);
 %   [V, D] = eigs(L.S, L.M, 100, 'sm');  % First 100 eigenmodes
+%
+%   % Using vertex coordinates and faces directly
+%   [header, L] = bct.manifold.operator.laplacebeltrami(V, F);
 %
 %   % Strong-form matrix operator
 %   [header, L] = bct.manifold.operator.laplacebeltrami(M, 'form', 'matrix');
 %   Lu = L.A * u;  % Apply Laplacian to scalar field u
 %
-%   % Custom mass/stiffness configuration
-%   [header, L] = bct.manifold.operator.laplacebeltrami(M, ...
+%   % Custom mass/stiffness configuration with V, F
+%   [header, L] = bct.manifold.operator.laplacebeltrami(V, F, ...
 %       'massVariant', 'full', ...
 %       'stiffnessSign', 'positive', ...
 %       'precision', 'double');
@@ -87,19 +94,59 @@ function [header, L] = laplacebeltrami(Manifold, options)
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
 %           bct.manifold.eigenmodes
 
-arguments
-    Manifold (1,1) bct.Manifold
-
-    options.method (1,1) string {mustBeMember(options.method, ["fem","dec"])} = "fem"
-    options.form (1,1) string {mustBeMember(options.form, ["generalized","matrix"])} = "generalized"
-
-    options.massVariant (1,1) string {mustBeMember(options.massVariant, ["voronoi","barycentric","full"])} = "voronoi"
-    options.stiffnessVariant (1,1) string {mustBeMember(options.stiffnessVariant, ["cotan"])} = "cotan"
-    options.stiffnessSign (1,1) string {mustBeMember(options.stiffnessSign, ["positive","negative"])} = "positive"
-
-    options.symmetrize (1,1) logical = true
-    options.precision (1,1) string {mustBeMember(options.precision, ["double","single"])} = "double"
+% ----------------------------
+% Parse inputs
+% ----------------------------
+if nargin == 0
+    error('bct:manifold:operator:laplacebeltrami:NoInput', ...
+        'At least one input required: laplacebeltrami(M) or laplacebeltrami(V, F)');
 end
+
+% Check if first argument is Manifold or numeric
+if isa(meshInput, 'bct.Manifold')
+    % Case: laplacebeltrami(M, Name=Value...)
+    nameValueStart = 1;
+elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
+    % Case: laplacebeltrami(V, F, Name=Value...)
+    V = meshInput;
+    F = varargin{1};
+    nameValueStart = 2;
+    
+    % Validate V, F
+    if size(V, 2) ~= 3
+        error('bct:manifold:operator:laplacebeltrami:InvalidVertices', ...
+            'V must be an [N×3] numeric array.');
+    end
+    if size(F, 2) ~= 3
+        error('bct:manifold:operator:laplacebeltrami:InvalidFaces', ...
+            'F must be an [nF×3] numeric array of vertex indices.');
+    end
+    if any(F(:) < 1) || any(F(:) ~= round(F(:)))
+        error('bct:manifold:operator:laplacebeltrami:InvalidFaces', ...
+            'F must contain positive 1-based integer indices.');
+    end
+    if max(F(:)) > size(V, 1)
+        error('bct:manifold:operator:laplacebeltrami:InvalidFaces', ...
+            'F references vertex index %d but V has only %d vertices.', ...
+            max(F(:)), size(V, 1));
+    end
+else
+    error('bct:manifold:operator:laplacebeltrami:InvalidInput', ...
+        'Input must be either laplacebeltrami(M) or laplacebeltrami(V, F). Got %s.', class(meshInput));
+end
+
+% Parse Name-Value pairs
+p = inputParser;
+p.addParameter('method', 'fem', @(x) ismember(x, ["fem","dec"]));
+p.addParameter('form', 'generalized', @(x) ismember(x, ["generalized","matrix"]));
+p.addParameter('massVariant', 'voronoi', @(x) ismember(x, ["voronoi","barycentric","full"]));
+p.addParameter('stiffnessVariant', 'cotan', @(x) ismember(x, ["cotan"]));
+p.addParameter('stiffnessSign', 'positive', @(x) ismember(x, ["positive","negative"]));
+p.addParameter('symmetrize', true, @islogical);
+p.addParameter('precision', 'double', @(x) ismember(x, ["double","single"]));
+p.parse(varargin{nameValueStart:end});
+
+options = p.Results;
 
 % Initialize outputs
 header = struct();
@@ -119,16 +166,31 @@ L.form = options.form;
 switch options.method
     case "fem"
         % Build mass and stiffness using existing operator factories
-        [massHeader, M0] = bct.manifold.operator.mass(Manifold, ...
-            'variant', options.massVariant, ...
-            'symmetrize', options.symmetrize, ...
-            'precision', options.precision);
+        % Pass either Manifold or V, F depending on input
+        if isa(meshInput, 'bct.Manifold')
+            [massHeader, M0] = bct.manifold.operator.mass(meshInput, ...
+                'variant', options.massVariant, ...
+                'symmetrize', options.symmetrize, ...
+                'precision', options.precision);
 
-        [stiffHeader, S0] = bct.manifold.operator.stiffness(Manifold, ...
-            'variant', options.stiffnessVariant, ...
-            'sign', options.stiffnessSign, ...
-            'symmetrize', options.symmetrize, ...
-            'precision', options.precision);
+            [stiffHeader, S0] = bct.manifold.operator.stiffness(meshInput, ...
+                'variant', options.stiffnessVariant, ...
+                'sign', options.stiffnessSign, ...
+                'symmetrize', options.symmetrize, ...
+                'precision', options.precision);
+        else
+            % Using V, F
+            [massHeader, M0] = bct.manifold.operator.mass(V, F, ...
+                'variant', options.massVariant, ...
+                'symmetrize', options.symmetrize, ...
+                'precision', options.precision);
+
+            [stiffHeader, S0] = bct.manifold.operator.stiffness(V, F, ...
+                'variant', options.stiffnessVariant, ...
+                'sign', options.stiffnessSign, ...
+                'symmetrize', options.symmetrize, ...
+                'precision', options.precision);
+        end
 
         header.massHeader = massHeader;
         header.stiffnessHeader = stiffHeader;

@@ -1,11 +1,14 @@
-function [header, dualEdgeLengths] = dualEdgeLengths(meshOrManifold, options)
-%DUALEDGELENGTHS Compute circumcentric dual edge lengths.
+﻿function [header, edgeLengths] = edgeLengths(meshInput, options)
+%EDGELENGTHS Compute circumcentric dual edge lengths.
 %
-%   [header, L] = bct.manifold.geometry.dualEdgeLengths(meshOrManifold)
-%   [header, L] = bct.manifold.geometry.dualEdgeLengths(__, Name, Value)
+%   [header, L] = bct.manifold.geometry.dual.edgeLengths(M)
+%   [header, L] = bct.manifold.geometry.dual.edgeLengths(V, F)
+%   [header, L] = bct.manifold.geometry.dual.edgeLengths(__, Name, Value)
 %
 % Inputs
-%   meshOrManifold : bct.Manifold object or {V, F} cell array
+%   M : bct.Manifold object
+%   OR
+%   V, F : Vertices [NÃ—3] and Faces [nFÃ—3] (can be passed as {V, F} cell)
 %
 % Name-Value Parameters
 %   boundaryPolicy      : 'error' (default)
@@ -18,7 +21,7 @@ function [header, dualEdgeLengths] = dualEdgeLengths(meshOrManifold, options)
 %     .circumcenterMethod  : method used for circumcenters
 %     .precision           : precision used
 %     .numberOfBoundaryEdges : diagnostic count
-%   dualEdgeLengths : [nE × 1] length of dual edge per primal edge
+%   edgeLengths : [nE × 1] length of dual edge per primal edge
 %
 % Dual Edge Definition
 %   For each interior primal edge shared by two faces:
@@ -35,13 +38,13 @@ function [header, dualEdgeLengths] = dualEdgeLengths(meshOrManifold, options)
 %   - Non-degenerate faces
 %
 % Example
-%   [header, L] = bct.manifold.geometry.dualEdgeLengths(M);
+%   [header, L] = bct.manifold.geometry.dual.edgeLengths(M);
 %   meanDualLength = mean(L);
 %
-% See also: bct.manifold.geometry.faceCircumcenters, bct.manifold.geometry.dualVertexAreas
+% See also: bct.manifold.geometry.face.circumcenters, bct.manifold.geometry.dual.vertexAreas
 
 arguments
-    meshOrManifold
+    meshInput
     options.boundaryPolicy (1,1) string {mustBeMember(options.boundaryPolicy, ...
         ["error"])} = "error"
     options.circumcenterMethod (1,1) string {mustBeMember(options.circumcenterMethod, ...
@@ -51,7 +54,7 @@ arguments
 end
 
 % Normalize input
-mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
+mesh = bct.manifold.health.internal.normalizeInput(meshInput);
 V = mesh.V;
 F = mesh.F;
 nF = mesh.nF;
@@ -63,7 +66,7 @@ if ~mesh.hasV
 end
 
 if nF == 0
-    dualEdgeLengths = zeros(0, 1, options.precision);
+    edgeLengths = zeros(0, 1, options.precision);
     header = struct( ...
         'boundaryPolicy', options.boundaryPolicy, ...
         'circumcenterMethod', options.circumcenterMethod, ...
@@ -73,8 +76,8 @@ if nF == 0
 end
 
 % Get halfedge connectivity
-if isa(meshOrManifold, 'bct.Manifold')
-    he = meshOrManifold.halfedge();
+if isa(meshInput, 'bct.Manifold')
+    he = meshInput.halfedge();
 else
     he = bct.manifold.topology.halfedge(V, F);
 end
@@ -83,14 +86,14 @@ end
 nBoundary = sum(he.isBoundary);
 
 if nBoundary > 0 && options.boundaryPolicy == "error"
-    error('bct:manifold:geometry:dualEdgeLengths:BoundaryNotSupported', ...
+    error('bct:manifold:geometry:dual:edgeLengths:BoundaryNotSupported', ...
         ['Mesh has %d boundary edges. Circumcentric dual edge lengths require ', ...
          'a closed manifold. Set boundaryPolicy to a supported value when available.'], ...
         nBoundary);
 end
 
 % Compute face circumcenters
-[~, faceCircumcenters] = bct.manifold.geometry.faceCircumcenters(meshOrManifold, ...
+[~, faceCircumcenters] = bct.manifold.geometry.face.circumcenters(meshInput, ...
     'method', options.circumcenterMethod, ...
     'precision', 'double');  % Keep double for intermediate computation
 
