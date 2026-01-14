@@ -1416,4 +1416,377 @@ classdef Manifold < handle
             end
         end
     end
+    
+    % ===================================================================
+    % INDIVIDUAL OPERATOR WRAPPERS (Modular Caching)
+    % ===================================================================
+    methods
+        function [header, op] = mass(obj, varargin)
+            %MASS Get or compute mass matrix (modular caching)
+            %
+            % Syntax:
+            %   [header, M] = obj.mass()
+            %   [header, M] = obj.mass('variant', 'voronoi')
+            %
+            % Description:
+            %   Computes and caches the mass matrix operator. Updates only
+            %   the mass field in the operators cache, enabling modular access.
+            %
+            % See also: bct.manifold.operator.mass, operators
+            
+            % Check if mass is already in cache
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'mass')
+                op = obj.Cache.operators.data.mass;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            % Compute mass matrix
+            [header, op] = bct.manifold.operator.mass(obj, varargin{:});
+            
+            % Cache the result
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.mass = op;
+        end
+        
+        function [header, op] = stiffness(obj, varargin)
+            %STIFFNESS Get or compute stiffness matrix (modular caching)
+            %
+            % Syntax:
+            %   [header, K] = obj.stiffness()
+            %   [header, K] = obj.stiffness('variant', 'cotan')
+            %
+            % Description:
+            %   Computes and caches the stiffness matrix operator.
+            %
+            % See also: bct.manifold.operator.stiffness, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'stiffness')
+                op = obj.Cache.operators.data.stiffness;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.stiffness(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.stiffness = op;
+        end
+        
+        function [header, op] = laplacebeltrami(obj, varargin)
+            %LAPLACEBELTRAMI Get or compute Laplace-Beltrami operator (modular caching)
+            %
+            % Syntax:
+            %   [header, L] = obj.laplacebeltrami()
+            %
+            % Description:
+            %   Computes and caches the Laplace-Beltrami operator.
+            %
+            % See also: bct.manifold.operator.laplacebeltrami, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'laplacebeltrami')
+                op = obj.Cache.operators.data.laplacebeltrami;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.laplacebeltrami(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.laplacebeltrami = op;
+        end
+        
+        function [header, op] = graphlaplacian(obj, varargin)
+            %GRAPHLAPLACIAN Get or compute graph Laplacian (modular caching)
+            %
+            % Syntax:
+            %   [header, L] = obj.graphlaplacian()
+            %
+            % Description:
+            %   Computes and caches the graph Laplacian operator.
+            %
+            % See also: bct.manifold.operator.graphlaplacian, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'graphlaplacian')
+                op = obj.Cache.operators.data.graphlaplacian;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.graphlaplacian(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.graphlaplacian = op;
+        end
+        
+        function [header, op] = gradient(obj, varargin)
+            %GRADIENT Get or compute gradient operator (modular caching)
+            %
+            % Syntax:
+            %   [header, grad] = obj.gradient()
+            %
+            % Description:
+            %   Computes and caches the gradient operator.
+            %
+            % See also: bct.manifold.operator.gradient, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'gradient')
+                op = obj.Cache.operators.data.gradient;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.gradient(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.gradient = op;
+        end
+        
+        function [header, op] = divergence(obj, varargin)
+            %DIVERGENCE Get or compute divergence operator (modular caching)
+            %
+            % Syntax:
+            %   [header, div] = obj.divergence()
+            %
+            % Description:
+            %   Computes and caches the divergence operator.
+            %
+            % See also: bct.manifold.operator.divergence, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'divergence')
+                op = obj.Cache.operators.data.divergence;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.divergence(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.divergence = op;
+        end
+        
+        function [header, op] = curl(obj, varargin)
+            %CURL Get or compute curl operator (modular caching)
+            %
+            % Syntax:
+            %   [header, curl] = obj.curl()
+            %
+            % Description:
+            %   Computes and caches the curl operator.
+            %
+            % See also: bct.manifold.operator.curl, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'curl')
+                op = obj.Cache.operators.data.curl;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.curl(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.curl = op;
+        end
+        
+        function [header, op] = hodgelaplacian(obj, varargin)
+            %HODGELAPLACIAN Get or compute Hodge Laplacian operators (modular caching)
+            %
+            % Syntax:
+            %   [header, hodgeLap] = obj.hodgelaplacian()
+            %
+            % Description:
+            %   Computes and caches the Hodge Laplacian operators (struct).
+            %
+            % See also: bct.manifold.operator.hodgelaplacian, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'hodgelaplacian')
+                op = obj.Cache.operators.data.hodgelaplacian;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.hodgelaplacian(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.hodgelaplacian = op;
+        end
+        
+        function decOps = dec(obj, varargin)
+            %DEC Get or compute all DEC operators (modular caching)
+            %
+            % Syntax:
+            %   decOps = obj.dec()
+            %
+            % Description:
+            %   Computes and caches all DEC operators. Returns a structure
+            %   containing d0, d1, dd0, dd1, hd0-2, etc. This populates
+            %   the entire dec substructure in the cache.
+            %
+            % See also: bct.manifold.operator.dec, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'dec')
+                decOps = obj.Cache.operators.data.dec;
+                return;
+            end
+            
+            decOps = bct.manifold.operator.dec(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.dec = decOps;
+            
+            % Also populate top-level shortcuts
+            if isfield(decOps, 'd0')
+                obj.Cache.operators.data.d0 = decOps.d0;
+            end
+            if isfield(decOps, 'd1')
+                obj.Cache.operators.data.d1 = decOps.d1;
+            end
+            if isfield(decOps, 'dd0')
+                obj.Cache.operators.data.dd0 = decOps.dd0;
+            end
+            if isfield(decOps, 'dd1')
+                obj.Cache.operators.data.dd1 = decOps.dd1;
+            end
+        end
+        
+        function [header, op] = mft(obj, varargin)
+            %MFT Get or compute forward manifold Fourier transform operator (modular caching)
+            %
+            % Syntax:
+            %   [header, mft] = obj.mft()
+            %
+            % Description:
+            %   Computes and caches the MFT operator.
+            %
+            % See also: bct.manifold.operator.mft, imft, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'mft')
+                op = obj.Cache.operators.data.mft;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.mft(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.mft = op;
+        end
+        
+        function [header, op] = imft(obj, varargin)
+            %IMFT Get or compute inverse manifold Fourier transform operator (modular caching)
+            %
+            % Syntax:
+            %   [header, imft] = obj.imft()
+            %
+            % Description:
+            %   Computes and caches the IMFT operator.
+            %
+            % See also: bct.manifold.operator.imft, mft, operators
+            
+            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
+               isfield(obj.Cache.operators.data, 'imft')
+                op = obj.Cache.operators.data.imft;
+                if nargout > 1
+                    header = struct('source', 'cache');
+                end
+                return;
+            end
+            
+            [header, op] = bct.manifold.operator.imft(obj, varargin{:});
+            
+            if isempty(fieldnames(obj.Cache.operators.data))
+                obj.Cache.operators.data = struct();
+            end
+            obj.Cache.operators.data.imft = op;
+        end
+        
+        function localizedField = localize(obj, vertexIdx, filterSpec, varargin)
+            %LOCALIZE Localize a spectral filter to a vertex (not cached)
+            %
+            % Syntax:
+            %   localField = obj.localize(vertexIdx, filterSpec)
+            %   localField = obj.localize(vertexIdx, filterSpec, 'OutputFormat', 'cell')
+            %
+            % Inputs:
+            %   vertexIdx   - Vertex index for localization
+            %   filterSpec  - Filter struct from bct.filter.design
+            %
+            % Description:
+            %   Direct wrapper for bct.manifold.operator.localize.
+            %   Does not cache results as output depends on filter parameters.
+            %
+            % See also: bct.manifold.operator.localize, modulate
+            
+            localizedField = bct.manifold.operator.localize(obj, vertexIdx, filterSpec, varargin{:});
+        end
+        
+        function modulatedSignal = modulate(obj, signal, eigenmodeSpec, varargin)
+            %MODULATE Modulate a signal by an eigenmode (not cached)
+            %
+            % Syntax:
+            %   modulated = obj.modulate(signal, k)
+            %   modulated = obj.modulate(signal, eigenvector)
+            %   modulated = obj.modulate(signal, k, 'NormalizationScale', scale)
+            %
+            % Inputs:
+            %   signal        - [N×T] vertex-domain signal
+            %   eigenmodeSpec - Eigenmode index k or [N×1] eigenvector
+            %
+            % Description:
+            %   Direct wrapper for bct.manifold.operator.modulate.
+            %   Does not cache results as output depends on input signal.
+            %
+            % See also: bct.manifold.operator.modulate, localize
+            
+            modulatedSignal = bct.manifold.operator.modulate(obj, signal, eigenmodeSpec, varargin{:});
+        end
+    end
 end
