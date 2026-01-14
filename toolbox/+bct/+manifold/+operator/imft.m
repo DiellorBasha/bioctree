@@ -1,11 +1,15 @@
-function imft = imft(eigenvectors, options)
+function imft = imft(meshInput, options)
 %IMFT Construct inverse manifold Fourier transform operator matrix
 %
 % Syntax:
+%   imft = bct.manifold.operator.imft(M)
+%   imft = bct.manifold.operator.imft(M, Name=Value)
 %   imft = bct.manifold.operator.imft(eigenvectors)
 %   imft = bct.manifold.operator.imft(eigenvectors, Name=Value)
 %
 % Inputs:
+%   M            - bct.Manifold object (uses cached or computes eigenmodes)
+%   OR
 %   eigenvectors - [N×k] numeric matrix of eigenmodes
 %                  Columns are Mass-orthonormal eigenvectors from
 %                  bct.manifold.eigenmodes()
@@ -37,24 +41,23 @@ function imft = imft(eigenvectors, options)
 %   Operator units:  1/m (inverse length dimension, Lexp = -1)
 %
 % Examples:
-%   % Compute eigenmodes
-%   [eigvals, eigvecs] = bct.manifold.eigenmodes(M, 100);
+%   % Direct from Manifold (uses cached eigenmodes if available)
+%   imft = bct.manifold.operator.imft(M);
+%   spectrum = randn(size(imft, 2), 1);
+%   signal = imft * spectrum;
 %
-%   % Construct inverse transform operator
+%   % Explicit eigenvectors
+%   [eigvals, eigvecs] = bct.manifold.eigenmodes(M, 100);
 %   imft = bct.manifold.operator.imft(eigvecs);
 %   % size(imft) = [N, 100]
 %
-%   % Reconstruct signal from spectrum
-%   spectrum = randn(100, 1);
-%   signal = imft * spectrum;  % [N×1]
-%
 %   % With annotation
-%   imft = bct.manifold.operator.imft(eigvecs, 'Annotate', true);
+%   imft = bct.manifold.operator.imft(M, 'Annotate', true);
 %   % imft.unit = "1/m", imft.dim.Lexp = -1
 %
-%   % Round-trip example (with mass matrix)
-%   [~, Mass] = bct.manifold.operator.mass(M);
-%   mft = bct.manifold.operator.mft(eigvecs, Mass);
+%   % Round-trip example
+%   mft = bct.manifold.operator.mft(M);
+%   imft = bct.manifold.operator.imft(M);
 %   original = randn(M.numVertices(), 1);
 %   spectrum = mft * original;
 %   reconstructed = imft * spectrum;
@@ -63,26 +66,56 @@ function imft = imft(eigenvectors, options)
 % See also: bct.manifold.operator.mft, bct.manifold.eigenmodes,
 %           bct.manifold.operator.mass, bct.manifold.metric.quantity
 
-arguments
-    eigenvectors {mustBeNumeric}
-    options.Annotate (1,1) logical = false
-    options.Strict (1,1) logical = true
-end
-
-% Input validation
-if options.Strict
-    % Check numeric and 2D
-    if ~ismatrix(eigenvectors)
-        error('bct:manifold:operator:imft:InvalidEigenvectors', ...
-            'eigenvectors must be a 2D matrix');
+% Parse inputs
+if isa(meshInput, 'bct.Manifold')
+    % Case: imft(M, Name=Value...)
+    M = meshInput;
+    
+    % Parse name-value pairs from varargin
+    p = inputParser;
+    p.addParameter('Annotate', false, @islogical);
+    p.addParameter('Strict', true, @islogical);
+    p.parse(varargin{:});
+    
+    options.Annotate = p.Results.Annotate;
+    options.Strict = p.Results.Strict;
+    
+    % Get eigenmodes (cached or compute with default k=50)
+    Eigen = M.eigenmodes();
+    eigenvectors = Eigen.vectors;
+    
+elseif isnumeric(meshInput)
+    % Case: imft(eigenvectors, Name=Value...)
+    eigenvectors = meshInput;
+    
+    % Parse name-value pairs from varargin
+    p = inputParser;
+    p.addParameter('Annotate', false, @islogical);
+    p.addParameter('Strict', true, @islogical);
+    p.parse(varargin{:});
+    
+    options.Annotate = p.Results.Annotate;
+    options.Strict = p.Results.Strict;
+    
+    % Input validation
+    if options.Strict
+        % Check numeric and 2D
+        if ~ismatrix(eigenvectors)
+            error('bct:manifold:operator:imft:InvalidEigenvectors', ...
+                'eigenvectors must be a 2D matrix');
+        end
+        
+        % Check non-empty
+        [N, k] = size(eigenvectors);
+        if N < 1 || k < 1
+            error('bct:manifold:operator:imft:EmptyEigenvectors', ...
+                'eigenvectors must be non-empty, got [%d×%d]', N, k);
+        end
     end
     
-    % Check non-empty
-    [N, k] = size(eigenvectors);
-    if N < 1 || k < 1
-        error('bct:manifold:operator:imft:EmptyEigenvectors', ...
-            'eigenvectors must be non-empty, got [%d×%d]', N, k);
-    end
+else
+    error('bct:manifold:operator:imft:InvalidInput', ...
+        'First argument must be bct.Manifold or numeric eigenvectors matrix.');
 end
 
 % Compute inverse transform operator: imft = eigenvectors

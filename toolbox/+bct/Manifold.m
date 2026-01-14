@@ -759,10 +759,15 @@ classdef Manifold < handle
             p.addParameter('MassType', "voronoi", @(x) isstring(x) || ischar(x));
             p.addParameter('EigsOpts', struct(), @isstruct);
             p.addParameter('Force', false, @islogical);
-p.addParameter('annotate', false, @islogical);
+            p.addParameter('annotate', false, @islogical);
+            p.parse(varargin{:});
+            
+            k_requested = p.Results.k;
+            removeDC = p.Results.RemoveDC;
             massType = string(p.Results.MassType);
             eigsOpts = p.Results.EigsOpts;
             force = p.Results.Force;
+            annotate = p.Results.annotate;
             
             % Determine if we need to compute (early return if cached)
             if force
