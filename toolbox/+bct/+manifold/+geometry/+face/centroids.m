@@ -42,8 +42,12 @@ if nargin == 0
         'At least one input required: centroids(M) or centroids(V, F)');
 end
 
-% Check if first argument is Manifold or numeric
-if isa(meshInput, 'bct.Manifold')
+% Check if first argument is Manifold, surfaceMesh, or numeric
+if isa(meshInput, 'surfaceMesh')
+    % Case: centroids(surfaceMesh) - optimization path
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+elseif isa(meshInput, 'bct.Manifold')
     % Case: centroids(M)
     V = meshInput.Vertices;
     F = meshInput.Faces;
@@ -72,7 +76,7 @@ elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
     end
 else
     error('bct:geometry:face:centroids:InvalidInput', ...
-        'Input must be either centroids(M) or centroids(V, F). Got %s.', class(meshInput));
+        'Input must be centroids(M), centroids(surfaceMesh), or centroids(V, F). Got %s.', class(meshInput));
 end
 
 % Build header

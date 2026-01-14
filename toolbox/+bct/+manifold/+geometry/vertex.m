@@ -45,26 +45,28 @@ end
 % Validate input (Manifold or V,F)
 if isa(meshInput, 'bct.Manifold')
     % vertex(M)
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
 elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
     % vertex(V, F) - valid
+    V = meshInput;
+    F = varargin{1};
 else
     error('bct:manifold:geometry:vertex:InvalidInput', ...
         'Expected vertex(M) or vertex(V, F)');
 end
 
+% Create surfaceMesh once to avoid redundant creation in subfunctions
+mesh = surfaceMesh(V, F);
+
 % Initialize output structure
 out = struct();
 out.header = struct();
 
-% Compute vertex normals
-[normalHeader, out.normals] = bct.manifold.geometry.vertex.normals(meshInput, varargin{:});
-out.header.normals = normalHeader;
-
-% Compute vertex tangents
-[tangent1Header, out.tangent1] = bct.manifold.geometry.vertex.tangents1(meshInput, varargin{:});
-out.header.tangent1 = tangent1Header;
-
-[tangent2Header, out.tangent2] = bct.manifold.geometry.vertex.tangents2(meshInput, varargin{:});
-out.header.tangent2 = tangent2Header;
+% Compute vertex frame (normals + tangents) in one call to avoid redundancy
+% Pass surfaceMesh to avoid redundant creation
+[frameHeader, out.normals, out.tangent1, out.tangent2] = ...
+    bct.manifold.geometry.vertex.frame(mesh);
+out.header.frame = frameHeader;
 
 end

@@ -44,8 +44,12 @@ if nargin == 0
         'At least one input required: cotan(M) or cotan(V, F)');
 end
 
-% Check if first argument is Manifold or numeric
-if isa(meshInput, 'bct.Manifold')
+% Check if first argument is Manifold, surfaceMesh, or numeric
+if isa(meshInput, 'surfaceMesh')
+    % Case: cotan(surfaceMesh) - optimization path
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+elseif isa(meshInput, 'bct.Manifold')
     % Case: cotan(M)
     V = meshInput.Vertices;
     F = meshInput.Faces;
@@ -74,7 +78,7 @@ elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
     end
 else
     error('bct:geometry:face:cotan:InvalidInput', ...
-        'Input must be either cotan(M) or cotan(V, F). Got %s.', class(meshInput));
+        'Input must be cotan(M), cotan(surfaceMesh), or cotan(V, F). Got %s.', class(meshInput));
 end
 
 if size(F,2) ~= 3

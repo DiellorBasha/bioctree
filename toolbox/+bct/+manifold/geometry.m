@@ -14,6 +14,7 @@ function geom = geometry(M, varargin)
 %   'boundaryPolicy'     - 'error' (default) for dual measures with boundaries
 %   'dualCellType'       - 'circumcentric' (default) for dual vertex areas
 %   'annotate'           - false (default) or true to wrap outputs as quantity structs
+%   'includeDual'        - false (default) or true to compute dual geometry (can be slow)
 %
 % Outputs:
 %   geom - Structure with fields:
@@ -47,6 +48,10 @@ function geom = geometry(M, varargin)
 %   edge, and dual structures. Each aggregator calls the individual
 %   functions from bct.manifold.geometry submodules.
 %
+%   By default, dual geometry is NOT computed because it requires expensive
+%   halfedge data structures. Set 'includeDual' to true to compute dual
+%   edge lengths and vertex areas.
+%
 % Examples:
 %   % Compute all geometry
 %   M = bct.Manifold(V, F);
@@ -60,6 +65,9 @@ function geom = geometry(M, varargin)
 %   
 %   % Compute with single precision
 %   geom = bct.manifold.geometry(M, 'precision', 'single');
+%   
+%   % Compute with dual geometry (slower)
+%   geom = bct.manifold.geometry(M, 'includeDual', true);
 %   
 %   % Compute with unit annotations
 %   geom = bct.manifold.geometry(M, 'annotate', true);
@@ -78,6 +86,7 @@ addParameter(p, 'circumcenterMethod', 'native', @(x) ischar(x) || isstring(x));
 addParameter(p, 'boundaryPolicy', 'error', @(x) ischar(x) || isstring(x));
 addParameter(p, 'dualCellType', 'circumcentric', @(x) ischar(x) || isstring(x));
 addParameter(p, 'annotate', false, @islogical);
+addParameter(p, 'includeDual', false, @islogical);
 parse(p, M, varargin{:});
 
 precision = string(p.Results.precision);
@@ -85,6 +94,7 @@ circumcenterMethod = string(p.Results.circumcenterMethod);
 boundaryPolicy = string(p.Results.boundaryPolicy);
 dualCellType = string(p.Results.dualCellType);
 annotate = p.Results.annotate;
+includeDual = p.Results.includeDual;
 
 % Compute all geometry properties using aggregators
 geom = struct();
@@ -108,19 +118,27 @@ geom.vertex = bct.manifold.geometry.vertex(M);
 % Edge-based geometry (using aggregator)
 geom.edge = bct.manifold.geometry.edge(M, 'precision', precision);
 
-% Dual-based geometry (using aggregator, may error if boundary present)
-try
-    geom.dual = bct.manifold.geometry.dual(M, ...
-        'precision', precision, ...
-        'circumcenterMethod', circumcenterMethod, ...
-        'boundaryPolicy', boundaryPolicy, ...
-        'dualCellType', dualCellType);
-catch ME
-    % Store error info if dual computation fails (e.g., boundary present)
+% Dual-based geometry (optional, can be slow due to halfedge computation)
+if includeDual
+    try
+        geom.dual = bct.manifold.geometry.dual(M, ...
+            'precision', precision, ...
+            'circumcenterMethod', circumcenterMethod, ...
+            'boundaryPolicy', boundaryPolicy, ...
+            'dualCellType', dualCellType);
+    catch ME
+        % Store error info if dual computation fails (e.g., boundary present)
+        geom.dual = struct();
+        geom.dual.edgeLengths = [];
+        geom.dual.vertexAreas = [];
+        geom.dual.header = struct('error', ME.identifier, 'message', ME.message);
+    end
+else
+    % Skip dual computation (default for performance)
     geom.dual = struct();
     geom.dual.edgeLengths = [];
     geom.dual.vertexAreas = [];
-    geom.dual.header = struct('error', ME.identifier, 'message', ME.message);
+    geom.dual.header = struct('skipped', true, 'reason', 'includeDual=false');
 end
 
 % Apply unit annotation if requested

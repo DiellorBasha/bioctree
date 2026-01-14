@@ -57,11 +57,17 @@ if nargin == 0
         'At least one input required: frame(M) or frame(V, F)');
 end
 
-% Check if first argument is Manifold or numeric
-if isa(meshInput, 'bct.Manifold')
+% Check if first argument is Manifold, surfaceMesh, or numeric
+if isa(meshInput, 'surfaceMesh')
+    % Case: frame(surfaceMesh) - optimization path
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+    mesh = meshInput;  % Reuse existing surfaceMesh
+elseif isa(meshInput, 'bct.Manifold')
     % Case: frame(M)
     V = meshInput.Vertices;
     F = meshInput.Faces;
+    mesh = surfaceMesh(V, F);
 elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
     % Case: frame(V, F)
     V = meshInput;
@@ -85,17 +91,17 @@ elseif isnumeric(meshInput) && ~isempty(varargin) && isnumeric(varargin{1})
             'F references vertex index %d but V has only %d vertices.', ...
             max(F(:)), size(V, 1));
     end
+    mesh = surfaceMesh(V, F);
 else
     error('bct:manifold:geometry:vertex:frame:InvalidInput', ...
-        'Input must be either frame(M) or frame(V, F). Got %s.', class(meshInput));
+        'Input must be frame(M), frame(surfaceMesh), or frame(V, F). Got %s.', class(meshInput));
 end
 
 % ----------------------------
 % Compute vertex frames
 % ----------------------------
 
-% Compute vertex normals
-mesh = surfaceMesh(V, F);
+% Compute vertex normals (reuse mesh object)
 computeNormals(mesh, "vertex");
 normal = mesh.VertexNormals;  % [Nv×3], unit (area-weighted)
 

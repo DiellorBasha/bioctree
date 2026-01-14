@@ -3,15 +3,17 @@ function mesh = normalizeInput(varargin)
 %
 % Syntax:
 %   mesh = bct.manifold.health.internal.normalizeInput(M)
+%   mesh = bct.manifold.health.internal.normalizeInput(surfMesh)
 %   mesh = bct.manifold.health.internal.normalizeInput(F)
 %   mesh = bct.manifold.health.internal.normalizeInput(V, F)
 %   mesh = bct.manifold.health.internal.normalizeInput({V, F})
 %
 % Inputs:
-%   M      - bct.Manifold object (primary, preferred input)
-%   F      - [nF×3] face connectivity matrix
-%   V      - [nV×3] vertex coordinates
-%   {V, F} - cell array with vertices and faces
+%   M        - bct.Manifold object (primary, preferred input)
+%   surfMesh - surfaceMesh object (optimization path)
+%   F        - [nF×3] face connectivity matrix
+%   V        - [nV×3] vertex coordinates
+%   {V, F}   - cell array with vertices and faces
 %
 % Outputs:
 %   mesh - Structure with fields:
@@ -63,6 +65,13 @@ elseif nargin == 1
         hasV = true;
         source = "Manifold";
         
+    elseif isa(arg, 'surfaceMesh')
+        % Optimization path: surfaceMesh object (avoid redundant creation)
+        V = arg.Vertices;
+        F = arg.Faces;
+        hasV = true;
+        source = "surfaceMesh";
+        
     elseif iscell(arg) && numel(arg) == 2
         % Fallback: {V, F} cell array
         V = arg{1};
@@ -78,7 +87,7 @@ elseif nargin == 1
         
     else
         error('bct:manifold:health:normalizeInput:InvalidInput', ...
-            'Single input must be bct.Manifold, {V,F} cell, or F matrix');
+            'Single input must be bct.Manifold, surfaceMesh, {V,F} cell, or F matrix');
     end
     
 elseif nargin == 2

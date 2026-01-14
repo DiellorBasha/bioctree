@@ -328,7 +328,12 @@ classdef Manifold < handle
             E = obj.Edges;
             N = size(obj.Vertices, 1);
             geom = obj.geometry();
-            w = geom.edgeWeights.(options.Metric);
+            w = geom.edge.weights.(options.Metric);
+            
+            % Convert sparse weights to full for graph construction
+            if issparse(w)
+                w = full(w);
+            end
             
             [path, dist] = bct.manifold.query.shortestPath(E, w, N, s, t);
         end
@@ -957,6 +962,54 @@ classdef Manifold < handle
             end
             
             [N, e1, e2] = bct.manifold.geometry.tangents(obj, 'Domain', options.Domain);
+        end
+        
+        function Mflipped = flip(obj)
+            %FLIP Create new Manifold with flipped face orientation (normals pointing outward)
+            %
+            % Syntax:
+            %   Mflipped = M.flip()
+            %
+            % Outputs:
+            %   Mflipped - New bct.Manifold object with corrected face orientation
+            %
+            % Description:
+            %   Creates a new Manifold object with face orientation corrected to ensure
+            %   normals point outward. Uses signed volume computation to detect if faces
+            %   need flipping. If the signed volume is negative, all faces are flipped by
+            %   swapping their second and third vertices.
+            %
+            %   This is a wrapper for bct.manifold.geometry.face.flip() that returns a
+            %   new Manifold object rather than just the flipped faces. This is necessary
+            %   because the Vertices and Faces properties are private.
+            %
+            %   The original Manifold object is not modified - a new object is created.
+            %
+            % Examples:
+            %   % Check and correct face orientation
+            %   M = bct.Manifold(V, F);
+            %   Mflipped = M.flip();
+            %
+            %   % Check if faces were actually flipped
+            %   [header, ~] = bct.manifold.geometry.face.flip(M);
+            %   if header.flippedAllFaces
+            %       disp('Faces needed flipping');
+            %       M = M.flip();  % Update to corrected version
+            %   end
+            %
+            %   % Verify normals point outward after flipping
+            %   Mflipped = M.flip();
+            %   [~, FN] = bct.manifold.geometry.face.normals(Mflipped);
+            %   C = bct.manifold.geometry.face.centroids(Mflipped);
+            %   % Face normals should point away from centroid of surface
+            %
+            % See also: bct.manifold.geometry.face.flip, bct.manifold.geometry.face.normals
+            
+            % Get flipped faces using the geometry function
+            [~, Fflipped] = bct.manifold.geometry.face.flip(obj);
+            
+            % Create new Manifold with same vertices but flipped faces
+            Mflipped = bct.Manifold(obj.Vertices, Fflipped);
         end
         
         function geom = geometry(obj, varargin)
@@ -1792,8 +1845,8 @@ classdef Manifold < handle
             % First ensure DEC operators exist
             if isempty(fieldnames(obj.Cache.operators.data)) || ...
                ~isfield(obj.Cache.operators.data, 'dec')
-                % Compute all operators including DEC
-                obj.operators();
+                % Compute DEC operators (including d0 and sharpPD)
+                obj.dec();
             end
             
             [header, op] = bct.manifold.operator.gradient(obj, varargin{:});
@@ -1824,6 +1877,12 @@ classdef Manifold < handle
                 return;
             end
             
+            % Ensure DEC operators exist
+            if isempty(fieldnames(obj.Cache.operators.data)) || ...
+               ~isfield(obj.Cache.operators.data, 'dec')
+                obj.dec();
+            end
+            
             [header, op] = bct.manifold.operator.divergence(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
@@ -1852,6 +1911,12 @@ classdef Manifold < handle
                 return;
             end
             
+            % Ensure DEC operators exist
+            if isempty(fieldnames(obj.Cache.operators.data)) || ...
+               ~isfield(obj.Cache.operators.data, 'dec')
+                obj.dec();
+            end
+            
             [header, op] = bct.manifold.operator.curl(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
@@ -1868,6 +1933,7 @@ classdef Manifold < handle
             %
             % Description:
             %   Computes and caches the Hodge Laplacian operators (struct).
+            %   Ensures DEC operators are available before computation.
             %
             % See also: bct.manifold.operator.hodgelaplacian, operators
             
@@ -1878,6 +1944,12 @@ classdef Manifold < handle
                     header = struct('source', 'cache');
                 end
                 return;
+            end
+            
+            % Ensure DEC operators exist
+            if isempty(fieldnames(obj.Cache.operators.data)) || ...
+               ~isfield(obj.Cache.operators.data, 'dec')
+                obj.dec();
             end
             
             [header, op] = bct.manifold.operator.hodgelaplacian(obj, varargin{:});

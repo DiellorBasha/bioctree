@@ -74,6 +74,16 @@ parse(p, meshInput, varargin{:});
 precision = string(p.Results.precision);
 circumcenterMethod = string(p.Results.circumcenterMethod);
 
+% Create surfaceMesh once to avoid redundant creation in subfunctions
+if isa(meshInput, 'bct.Manifold')
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+else
+    V = meshInput;
+    F = varargin{1};
+end
+mesh = surfaceMesh(V, F);
+
 % Initialize output structure
 out = struct();
 out.header = struct(...
@@ -81,35 +91,27 @@ out.header = struct(...
     'circumcenterMethod', circumcenterMethod ...
 );
 
-% Compute face areas
-[areaHeader, out.areas] = bct.manifold.geometry.face.areas(meshInput, ...
+% Compute face areas (pass surfaceMesh)
+[areaHeader, out.areas] = bct.manifold.geometry.face.areas(mesh, ...
     'precision', precision);
 out.header.areas = areaHeader;
 
-% Compute face circumcenters
-[circumHeader, out.circumcenters] = bct.manifold.geometry.face.circumcenters(meshInput, ...
+% Compute face circumcenters (pass surfaceMesh)
+[circumHeader, out.circumcenters] = bct.manifold.geometry.face.circumcenters(mesh, ...
     'method', circumcenterMethod, ...
     'precision', precision);
 out.header.circumcenters = circumHeader;
 
-% Compute face centroids
-[centroidHeader, out.centroids] = bct.manifold.geometry.face.centroids(meshInput);
+% Compute face centroids (pass surfaceMesh)
+[centroidHeader, out.centroids] = bct.manifold.geometry.face.centroids(mesh);
 out.header.centroids = centroidHeader;
 
-% Compute cotangent weights
-[cotanHeader, out.cotan] = bct.manifold.geometry.face.cotan(meshInput);
+% Compute cotangent weights (pass surfaceMesh)
+[cotanHeader, out.cotan] = bct.manifold.geometry.face.cotan(mesh);
 out.header.cotan = cotanHeader;
 
-% Compute face normals
-[normalHeader, out.normals] = bct.manifold.geometry.face.normals(meshInput);
-out.header.normals = normalHeader;
-
-% Compute first tangent vectors
-[tangent1Header, out.tangent1] = bct.manifold.geometry.face.tangents1(meshInput);
-out.header.tangent1 = tangent1Header;
-
-% Compute second tangent vectors
-[tangent2Header, out.tangent2] = bct.manifold.geometry.face.tangents2(meshInput);
-out.header.tangent2 = tangent2Header;
+% Compute face frame (normals and tangents together for efficiency, pass surfaceMesh)
+[frameHeader, out.normals, out.tangent1, out.tangent2] = bct.manifold.geometry.face.frame(mesh);
+out.header.frame = frameHeader;
 
 end
