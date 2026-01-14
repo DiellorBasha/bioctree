@@ -48,6 +48,19 @@ heatField = bct.field.generate.heat(M, sourceIdx, t_heat);
 %% Compute field spectrum
 spectrum = mft_op * heatField.value;
 
+%% Generate heat advection field (time-varying)
+fromVertex = 500;
+toVertex = 3000;
+tau = 15.0;
+heatAdvField = bct.field.generate.heatadvection(fromVertex, toVertex, M, tau);
+
+%% Compute spectrum for each time point
+nTimePoints = size(heatAdvField.value, 2);
+advSpectrum = zeros(size(mft_op, 1), nTimePoints);
+for t = 1:nTimePoints
+    advSpectrum(:, t) = mft_op * heatAdvField.value(:, t);
+end
+
 %% Compute gradient of field amplitude
 amplitude = abs(heatField.value);
 gradAmplitude = grad_op * amplitude;
@@ -89,6 +102,37 @@ semilogy(abs(spectrum), 'LineWidth', 1.5);
 xlabel('Mode Index');
 ylabel('|Coefficient| (log scale)');
 title('Spectral Coefficient Magnitude (Log Scale)');
+grid on;
+
+% Heat advection field (show first, middle, and last frames)
+figure('Name', 'Heat Advection Field', 'Position', [300 300 1200 400]);
+timeIndices = [1, ceil(nTimePoints/2), nTimePoints];
+for i = 1:3
+    subplot(1,3,i);
+    t = timeIndices(i);
+    trisurf(M.Faces, M.Vertices(:,1), M.Vertices(:,2), M.Vertices(:,3), heatAdvField.value(:,t));
+    shading interp;
+    axis equal tight off;
+    view(90, 0);
+    colorbar;
+    title(sprintf('Time %d/%d (vertex %d)', t, nTimePoints, heatAdvField.meta.pathIndices(t)));
+end
+colormap('hot');
+
+% Heat advection spectrum evolution
+figure('Name', 'Heat Advection Spectrum Evolution', 'Position', [350 350 800 600]);
+subplot(2,1,1);
+imagesc(abs(advSpectrum));
+xlabel('Time Point');
+ylabel('Mode Index');
+title('Spectral Coefficients Evolution');
+colorbar;
+
+subplot(2,1,2);
+plot(1:nTimePoints, sum(abs(advSpectrum).^2, 1), 'LineWidth', 2);
+xlabel('Time Point');
+ylabel('Total Spectral Energy');
+title('Spectral Energy Along Path');
 grid on;
 
 %% Health check

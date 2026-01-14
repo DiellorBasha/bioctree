@@ -324,11 +324,26 @@ classdef Manifold < handle
                     ["euclidean", "cotangent"])} = "cotangent"
             end
             
-            % Get edges and weights from cache
+            % Get edges and weights
             E = obj.Edges;
             N = size(obj.Vertices, 1);
-            geom = obj.geometry();
-            w = geom.edge.weights.(options.Metric);
+            
+            % Get or compute edge weights
+            if obj.hasCached('geometry')
+                geom = obj.Cache.geometry.data;
+                if isfield(geom, 'edge') && isfield(geom.edge, 'weights')
+                    % Use cached edge weights
+                    w = geom.edge.weights.(options.Metric);
+                else
+                    % Compute edge weights directly
+                    edgeGeom = bct.manifold.geometry.edge(obj);
+                    w = edgeGeom.weights.(options.Metric);
+                end
+            else
+                % No cache, compute edge weights directly
+                edgeGeom = bct.manifold.geometry.edge(obj);
+                w = edgeGeom.weights.(options.Metric);
+            end
             
             % Convert sparse weights to full for graph construction
             if issparse(w)
