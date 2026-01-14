@@ -174,6 +174,9 @@ export class VisualizationManager {
       const downsampleFactor = 1; // Testing: no downsampling (was 100)
       const geometry = obj.geometry;
       
+      // Vertex normals should already be in geometry.attributes.normal (set by meshManager)
+      if (!geometry.attributes.normal) return; // Skip if no normals available
+      
       // Create downsampled geometry using meshBuilder
       const sparseGeometry = createDownsampledGeometry(geometry, downsampleFactor, false);
       if (!sparseGeometry) return;
@@ -243,17 +246,38 @@ export class VisualizationManager {
       const downsampleFactor = 1; // Testing: no downsampling (was 100)
       const geometry = obj.geometry;
       const positions = geometry.attributes.position;
-      const normals = geometry.attributes.normal;
-      const tangents = geometry.attributes.tangent;
-      const uvs = geometry.attributes.uv;
       
-      if (!positions || !normals || !tangents) return;
-
+      if (!positions) return;
+      
+      // Use pre-computed tangents from userData if available
+      const tangent1Data = geometry.userData?.vertexTangent1;
+      const tangent2Data = geometry.userData?.vertexTangent2;
+      
+      // Fall back to UV-based tangents attribute if available
+      const tangentAttr = geometry.attributes.tangent;
+      
+      if (!tangent1Data && !tangentAttr) return; // Skip if no tangents available
+      
       tangentCount++;
-
-      // Create downsampled geometry with tangents using meshBuilder
-      const sparseGeometry = createDownsampledGeometry(geometry, downsampleFactor, true);
+      
+      // Create downsampled geometry
+      const sparseGeometry = createDownsampledGeometry(geometry, downsampleFactor, false);
       if (!sparseGeometry) return;
+      
+      // Add tangent attribute to sparse geometry
+      if (tangent1Data) {
+        // Use pre-computed tangent1 from MATLAB geometry cache
+        // Need to downsample if downsampleFactor > 1
+        if (downsampleFactor === 1) {
+          sparseGeometry.setAttribute('tangent', new THREE.BufferAttribute(tangent1Data, 3));
+        } else {
+          // TODO: Implement downsampling of userData arrays
+          console.warn('[visualizationManager] Downsampling of userData tangents not implemented');
+        }
+      } else if (tangentAttr) {
+        // Copy UV-based tangent attribute (already handled by createDownsampledGeometry)
+        sparseGeometry.setAttribute('tangent', tangentAttr);
+      }
       
       // Create temporary mesh with LOCAL transforms only (no parent frame transform)
       // The helper will inherit the frame transform from being added to frameRoot
@@ -262,7 +286,7 @@ export class VisualizationManager {
       tempMesh.rotation.copy(obj.rotation);
       tempMesh.scale.copy(obj.scale);
       
-      // Create tangents helper (cyan)
+      // Create tangents helper (cyan for tangent1)
       const helper = new VertexTangentsHelper(tempMesh, 2, 0x00ffff);
       
       if (!this.tangentsHelper) {

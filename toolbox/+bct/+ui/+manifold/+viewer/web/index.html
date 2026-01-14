@@ -24,7 +24,7 @@
 
   <!-- MATLAB Bridge: setup function for uihtml communication -->
   <script type="module">
-    import { initViewer, setMeshFromData, setScalarData, clearMesh } from "./render.js";
+    import { initViewer, setMeshFromData, setScalarData, setVectorData, clearMesh } from "./render.js";
 
     // Global setup function for MATLAB uihtml component
     window.setup = function(htmlComponent) {
@@ -58,6 +58,11 @@
             // Check if scalar data is present
             if (data && data.scalar) {
               setScalarData(data.scalar);
+            }
+            
+            // Check if vector data is present
+            if (data && data.vector) {
+              setVectorData(data.vector);
             }
           } catch (err) {
             console.error('[MATLAB Bridge] DataChanged handler error:', err);

@@ -195,7 +195,11 @@ classdef Field < handle
             s.valueType = char(obj.ValueType);
             s.value = obj.Value;
             s.meta = obj.Meta;
-            s.metric = obj.Metric;
+            
+            % Only include metric if non-empty (metric is optional)
+            if ~isempty(obj.Metric) && ~isempty(fieldnames(obj.Metric))
+                s.metric = obj.Metric;
+            end
             
             % Only include time if non-empty (don't set empty [] to avoid validation warnings)
             if ~isempty(obj.Time)

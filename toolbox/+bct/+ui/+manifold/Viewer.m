@@ -93,14 +93,19 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %   - Arrays are flattened for JSON transfer
             %   - Updates HTMLComponent.Data to trigger JavaScript viewer
             %   - Pre-computed normals avoid expensive JavaScript computation
+            %   - When using bct.Manifold, also sends geometry cache:
+            %     * Face centroids (for quiver visualization)
+            %     * Face normals (for tangent projection)
+            %     * Vertex tangents (for future use)
             
             % Parse input arguments
+            M_obj = [];
             if nargin == 2 && isa(varargin{1}, 'bct.Manifold')
                 % Case 1: bct.Manifold object provided
-                M = varargin{1};
-                V = M.Vertices;   % Access property (not method)
-                F = M.Faces;      % Access property (not method)
-                N = M.normals();  % Compute vertex normals (this is a method)
+                M_obj = varargin{1};
+                V = M_obj.Vertices;   % Access property (not method)
+                F = M_obj.Faces;      % Access property (not method)
+                N = M_obj.vertexGeometry().normals;  % Get vertex normals from geometry cache
             elseif nargin == 3
                 % Case 2: V, F provided
                 V = varargin{1};
@@ -150,6 +155,23 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 % Flatten normals: [nx1 ny1 nz1 nx2 ny2 nz2 ...]
                 normalsFlat = reshape(N.', 1, []);
                 meshData.normals = normalsFlat;
+            end
+            
+            % Add geometry cache data if Manifold object provided
+            if ~isempty(M_obj)
+                % Get face geometry
+                faceGeom = M_obj.faceGeometry();
+                
+                % Add face centroids [cx1 cy1 cz1 cx2 cy2 cz2 ...]
+                meshData.faceCentroids = reshape(faceGeom.centroids.', 1, []);
+                
+                % Add face normals [nx1 ny1 nz1 nx2 ny2 nz2 ...]
+                meshData.faceNormals = reshape(faceGeom.normals.', 1, []);
+                
+                % Add vertex tangents
+                vertexGeom = M_obj.vertexGeometry();
+                meshData.vertexTangent1 = reshape(vertexGeom.tangent1.', 1, []);
+                meshData.vertexTangent2 = reshape(vertexGeom.tangent2.', 1, []);
             end
             
             % Set HTMLComponent.Data to trigger DataChanged event in JavaScript
@@ -248,6 +270,115 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             else
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Scalar data not sent.');
+            end
+        end
+        
+        function setVector(comp, vectorData, varargin)
+            % setVector - Visualize vector field with quiver plot
+            %
+            % Syntax:
+            %   comp.setVector(vectorData)
+            %   comp.setVector(vectorData, 'Support', 'vertex')
+            %   comp.setVector(vectorData, 'Stride', 5, 'LengthScale', 1.0)
+            %
+            % Inputs:
+            %   vectorData - [N×3] or [M×3] matrix of vectors
+            %                For vertex support: [numVertices×3]
+            %                For face support: [numFaces×3]
+            %
+            % Optional Parameters:
+            %   'Support'      - 'face' (default) or 'vertex'
+            %   'Stride'       - Draw every Nth vector (default: 5)
+            %   'LengthScale'  - Arrow length multiplier (default: 1.0)
+            %   'MaxLength'    - Maximum arrow length (default: 10.0)
+            %   'MinMagnitude' - Skip vectors below this magnitude (default: 1e-12)
+            %
+            % Examples:
+            %   % Visualize face-based gradient field
+            %   viewer.setVector(gradients, 'Support', 'face');
+            %
+            %   % Sparse vertex vectors with custom scaling
+            %   viewer.setVector(velocities, 'Support', 'vertex', 'Stride', 10, 'LengthScale', 0.5);
+            %
+            %   % Clear vector visualization
+            %   viewer.setVector([]);
+            %
+            % Notes:
+            %   - Vectors are displayed as 3D arrows (quiver plot)
+            %   - For face support, arrows placed at face centroids
+            %   - For vertex support, arrows placed at vertex positions
+            
+            arguments
+                comp (1,1) bct.ui.manifold.Viewer
+                vectorData (:,3) double = []
+            end
+            
+            arguments (Repeating)
+                varargin
+            end
+            
+            % Parse optional parameters
+            p = inputParser();
+            p.addParameter('Support', 'face', @(x) ismember(lower(x), {'face', 'vertex'}));
+            p.addParameter('Stride', 5, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('LengthScale', 1.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('MaxLength', 10.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('MinMagnitude', 1e-12, @(x) isnumeric(x) && isscalar(x) && x >= 0);
+            p.parse(varargin{:});
+            
+            support = lower(p.Results.Support);
+            stride = p.Results.Stride;
+            lengthScale = p.Results.LengthScale;
+            maxLength = p.Results.MaxLength;
+            minMagnitude = p.Results.MinMagnitude;
+            
+            % Validate vector data
+            if ~isempty(vectorData)
+                if ~all(isfinite(vectorData(:)))
+                    error('bct:ui:manifold:Viewer:InvalidVectorData', ...
+                        'Vector data must contain only finite values');
+                end
+                
+                % Validate size based on support
+                if ~isempty(comp.Vertices) && ~isempty(comp.Faces)
+                    expectedSize = size(comp.Faces, 1);
+                    if strcmp(support, 'vertex')
+                        expectedSize = size(comp.Vertices, 1);
+                    end
+                    
+                    if size(vectorData, 1) ~= expectedSize
+                        error('bct:ui:manifold:Viewer:VectorSizeMismatch', ...
+                            'Vector data rows (%d) must match %s count (%d)', ...
+                            size(vectorData, 1), support, expectedSize);
+                    end
+                end
+            end
+            
+            % Build vector payload
+            if isempty(vectorData)
+                % Clear vector visualization
+                vectorPayload = struct('action', 'clear');
+            else
+                % Flatten vector data: [vx1 vy1 vz1 vx2 vy2 vz2 ...]
+                vectorFlat = reshape(vectorData.', 1, []);
+                
+                vectorPayload = struct(...
+                    'action', 'update', ...
+                    'data', vectorFlat, ...
+                    'support', support, ...
+                    'stride', stride, ...
+                    'lengthScale', lengthScale, ...
+                    'maxLength', maxLength, ...
+                    'minMagnitude', minMagnitude ...
+                );
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('vector', vectorPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Vector data not sent.');
             end
         end
     end

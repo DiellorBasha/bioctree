@@ -209,7 +209,17 @@ export class MeshManager {
    */
   setMeshFromBuffers(meshData) {
     const t0 = performance.now();
-    const { vertices, faces, normals, indexBase = 0, frame = 'matlab' } = meshData;
+    const { 
+      vertices, 
+      faces, 
+      normals, 
+      faceCentroids, 
+      faceNormals, 
+      vertexTangent1, 
+      vertexTangent2,
+      indexBase = 0, 
+      frame = 'matlab' 
+    } = meshData;
 
     // Validate input
     if (!vertices || !faces) {
@@ -250,6 +260,20 @@ export class MeshManager {
     if (normals) {
       const normalArray = new Float32Array(normals);
       geometry.setAttribute('normal', new THREE.BufferAttribute(normalArray, 3));
+    }
+    
+    // Store pre-computed geometry cache in userData for reuse
+    if (faceCentroids) {
+      geometry.userData.faceCentroids = new Float32Array(faceCentroids);
+    }
+    if (faceNormals) {
+      geometry.userData.faceNormals = new Float32Array(faceNormals);
+    }
+    if (vertexTangent1) {
+      geometry.userData.vertexTangent1 = new Float32Array(vertexTangent1);
+    }
+    if (vertexTangent2) {
+      geometry.userData.vertexTangent2 = new Float32Array(vertexTangent2);
     }
     
     const t3 = performance.now();

@@ -1,7 +1,17 @@
 function R = orientation(meshOrManifold, options)
-%ORIENTATION Check orientation consistency and global outward direction.
+%ORIENTATION Check orientation consistency and global outward direction (DEPRECATED)
 %
 %   R = bct.manifold.health.orientation(meshOrManifold, options)
+%
+% DEPRECATED: This function is superseded by the modular health check architecture.
+% Use bct.manifold.health.check() instead, which provides the same functionality
+% with improved modularity and canonical edge indexing.
+%
+% Migration:
+%   OLD: R = bct.manifold.health.orientation(M, 'RequireConsistent', true);
+%   NEW: h = bct.manifold.health.check(M, 'Level', 'standard', 'RequireOriented', true);
+%
+% The new check() function returns h.is.oriented flag and h.stats with equivalent data.
 %
 % Checks performed:
 %   1. Orientation consistency across interior edges (combinatorial)
@@ -66,6 +76,11 @@ F = mesh.F;
 V = mesh.V;
 nF = mesh.nF;
 hasV = mesh.hasV;
+
+% Issue deprecation warning
+warning('bct:manifold:health:orientation:Deprecated', ...
+    ['bct.manifold.health.orientation() is deprecated. ', ...
+     'Use bct.manifold.health.check() with the new modular architecture instead.']);
 
 % Initialize report
 stats = struct('nF', nF);

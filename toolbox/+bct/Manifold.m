@@ -798,6 +798,32 @@ classdef Manifold < handle
             obj.Cache.eigenmodes.meta.removedDC = removeDC;
         end
         
+        function e = eigenvalues(obj)
+            %EIGENVALUES Get eigenvalues from cached eigenmodes
+            %
+            % Syntax:
+            %   e = M.eigenvalues()
+            %
+            % Outputs:
+            %   e - [k×1] eigenvalues from cached eigenmodes
+            %
+            % Description:
+            %   Returns the eigenvalues from the cached eigenmode structure.
+            %   If eigenmodes are not cached, returns empty array.
+            %
+            % Examples:
+            %   M.eigenmodes(100);
+            %   e = M.eigenvalues();  % Returns cached eigenvalues
+            %
+            % See also: eigenmodes
+            
+            if isempty(fieldnames(obj.Cache.eigenmodes.data))
+                e = [];
+            else
+                e = obj.Cache.eigenmodes.data.values;
+            end
+        end
+        
         % ===============================================================
         % GEOMETRIC QUERIES (thin delegations)
         % ===============================================================
@@ -870,45 +896,7 @@ classdef Manifold < handle
             C = bct.manifold.geometry.centroids(obj);
         end
         
-        function N = normals(obj, type)
-            %NORMALS Compute vertex or face normals
-            %
-            % Syntax:
-            %   N = M.normals()
-            %   N = M.normals(Type)
-            %
-            % Inputs:
-            %   Type - 'Vertex' (default) or 'Face'
-            %
-            % Outputs:
-            %   N - [N×3] vertex normals or [M×3] face normals
-            %
-            % Description:
-            %   Computes vertex or face normals using MATLAB's surfaceMesh object.
-            %   By default returns vertex normals. Specify 'Face' to get face normals.
-            %   This is a wrapper for bct.manifold.geometry.normals().
-            %
-            % Examples:
-            %   % Compute vertex normals (default)
-            %   M = bct.Manifold(V, F);
-            %   VN = M.normals();
-            %
-            %   % Compute face normals
-            %   FN = M.normals('Face');
-            %
-            %   % Visualize vertex normals
-            %   VN = M.normals();
-            %   quiver3(V(:,1), V(:,2), V(:,3), VN(:,1), VN(:,2), VN(:,3), 0.5);
-            %
-            % See also: bct.manifold.geometry.normals, centroids
-            
-            arguments
-                obj
-                type {mustBeTextScalar} = 'Vertex'
-            end
-            
-            N = bct.manifold.geometry.normals(obj, type);
-        end
+
         
         function [N, e1, e2] = tangents(obj, options)
             %TANGENTS Compute orthonormal tangent frame for each face or vertex
@@ -1425,63 +1413,80 @@ classdef Manifold < handle
             obj.Cache.topology.meta.halfedgeComputed = datetime('now');
         end
         
-        function R = health(obj, varargin)
+        function h = health(obj, varargin)
             %HEALTH Get or compute mesh health check (lazy creation with caching)
             %
             % Syntax:
-            %   R = M.health()
-            %   R = M.health(Name, Value)
+            %   h = M.health()
+            %   h = M.health(Name, Value)
             %
             % Optional Parameters:
-            %   Level             - "quick" | "standard" | "full" (default: "standard")
-            %                       - quick: topology only (indices, degeneracy, manifoldness)
-            %                       - standard: quick + orientation + boundary + geometry
-            %                       - full: standard + self-intersection + quality metrics
+            %   Level             - "quick" | "standard" (default) | "full"
+            %                       * quick: topology (faces, degeneracy, edges, boundary)
+            %                       * standard: quick + orientation + directed duplicates
+            %                       * full: standard + vertex manifoldness + outward
             %   RequireManifold   - logical, error on non-manifold edges (default: true)
-            %   RequireOriented   - logical, error on orientation conflicts (default: true)
+            %   RequireOriented   - logical, error on orientation inconsistency (default: true)
             %   RequireClosed     - logical, error on boundary edges (default: false)
             %   FailOnWarnings    - logical, set ok=false for warnings (default: false)
+            %   Verbose           - logical, store canonical E and index sets in h.data (default: false)
             %   Force             - false (default) or true to force recomputation
             %
             % Outputs:
-            %   R - Health check report structure with fields:
-            %     .ok       - logical, overall pass/fail
-            %     .severity - "ok" | "warn" | "error"
-            %     .scope    - "bct.manifold.health"
-            %     .level    - check level performed
-            %     .summary  - string array of high-level messages
-            %     .issues   - struct array of detected issues
-            %     .stats    - mesh statistics (nV, nF, nE, boundary/nonmanifold counts)
-            %     .timing   - performance timers
-            %     .data     - optional cached data
+            %   h - Health check report structure with fields:
+            %     .ok          - logical, overall pass/fail
+            %     .severity    - "ok" | "warn" | "error"
+            %     .scope       - "bct.manifold.health"
+            %     .level       - check level performed
+            %     .summary     - string array of high-level messages
+            %     .issues      - struct array of detected issues
+            %     .is          - canonical boolean flags (NEW):
+            %                    .facesValid, .facesNondegenerate, .hasDuplicateFaces,
+            %                    .hasDuplicateDirectedEdges, .edgeManifold, .hasBoundary,
+            %                    .oriented, .vertexManifold, .outward
+            %     .stats       - mesh statistics (nV, nF, nE, nBoundaryEdges, etc.)
+            %     .statsByCheck- detailed stats grouped by check
+            %     .timing      - performance timers
+            %     .data        - optional cached data (canonical E indices if Verbose)
             %
             % Description:
-            %   Performs comprehensive mesh health validation and caches the result.
-            %   First call computes health check, subsequent calls return cached
-            %   result unless 'Force' is true or parameters change.
+            %   Performs comprehensive mesh health validation using modular architecture
+            %   and caches the result. First call computes health check, subsequent
+            %   calls return cached result unless 'Force' is true.
             %
-            %   The health check validates mesh topology, orientation, and geometry
-            %   to ensure compatibility with DEC operators, FEM computations, and
-            %   graph algorithms.
+            %   All edge-indexed outputs (boundary, non-manifold, inconsistent) refer
+            %   to indices in M.Edges (canonical edge list).
+            %
+            %   New h.is flags provide direct boolean access to mesh state for gating
+            %   DEC operators and other analysis.
             %
             % Examples:
-            %   % Quick check during construction validation
+            %   % Quick DEC gating check
             %   M = bct.Manifold(V, F);
-            %   R = M.health('Level', 'quick');
-            %   assert(R.ok, 'Invalid mesh topology');
+            %   h = M.health('Level', 'quick');
+            %   assert(h.is.facesValid && h.is.edgeManifold && h.is.oriented);
             %
             %   % Standard check (cached)
-            %   R = M.health();  % First call computes
-            %   R = M.health();  % Second call returns cached
+            %   h = M.health();  % First call computes
+            %   h = M.health();  % Second call returns cached
             %
             %   % Force recomputation
-            %   R = M.health('Force', true);
+            %   h = M.health('Force', true);
             %
             %   % Check for DEC compatibility
-            %   R = M.health('RequireManifold', true, 'RequireOriented', true);
+            %   h = M.health('RequireManifold', true, 'RequireOriented', true);
+            %   if h.is.hasBoundary
+            %       fprintf('Mesh has %d boundary edges\n', h.stats.nBoundaryEdges);
+            %   end
+            %
+            %   % Access canonical edge indices (with Verbose)
+            %   h = M.health('Verbose', true);
+            %   if h.is.hasBoundary
+            %       boundaryEdges = M.Edges(h.data.boundaryEdges.boundaryEdgeIdx, :);
+            %   end
             %
             %   % View formatted report
-            %   disp(bct.manifold.health.report(R));
+            %   disp(bct.manifold.health.report(h));
             %
             % See also: bct.manifold.health.check, bct.manifold.health.report
             
@@ -1494,6 +1499,7 @@ classdef Manifold < handle
             addParameter(p, 'RequireOriented', true, @islogical);
             addParameter(p, 'RequireClosed', false, @islogical);
             addParameter(p, 'FailOnWarnings', false, @islogical);
+            addParameter(p, 'Verbose', false, @islogical);
             parse(p, varargin{:});
             
             force = p.Results.Force;
@@ -1501,20 +1507,21 @@ classdef Manifold < handle
             
             % Check if we have cached health report and not forcing recomputation
             if ~force && ~isempty(fieldnames(obj.Cache.health.data))
-                R = obj.Cache.health.data;
+                h = obj.Cache.health.data;
                 return;
             end
             
             % Compute health check using bct.manifold.health.check
-            R = bct.manifold.health.check(obj, ...
+            h = bct.manifold.health.check(obj, ...
                 'Level', level, ...
                 'RequireManifold', p.Results.RequireManifold, ...
                 'RequireOriented', p.Results.RequireOriented, ...
                 'RequireClosed', p.Results.RequireClosed, ...
-                'FailOnWarnings', p.Results.FailOnWarnings);
+                'FailOnWarnings', p.Results.FailOnWarnings, ...
+                'Verbose', p.Results.Verbose);
             
             % Cache the result
-            obj.Cache.health.data = R;
+            obj.Cache.health.data = h;
             obj.Cache.health.meta.computed = datetime('now');
             obj.Cache.health.meta.level = level;
             obj.Cache.health.meta.requireManifold = p.Results.RequireManifold;
@@ -1771,6 +1778,7 @@ classdef Manifold < handle
             %
             % See also: bct.manifold.operator.gradient, operators
             
+            % Check if gradient is already cached
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
                isfield(obj.Cache.operators.data, 'gradient')
                 op = obj.Cache.operators.data.gradient;
@@ -1778,6 +1786,14 @@ classdef Manifold < handle
                     header = struct('source', 'cache');
                 end
                 return;
+            end
+            
+            % Compute gradient operator
+            % First ensure DEC operators exist
+            if isempty(fieldnames(obj.Cache.operators.data)) || ...
+               ~isfield(obj.Cache.operators.data, 'dec')
+                % Compute all operators including DEC
+                obj.operators();
             end
             
             [header, op] = bct.manifold.operator.gradient(obj, varargin{:});
@@ -1891,7 +1907,7 @@ classdef Manifold < handle
                 return;
             end
             
-            decOps = bct.manifold.operator.dec(obj, varargin{:});
+            [~, decOps] = bct.manifold.operator.dec(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
                 obj.Cache.operators.data = struct();
@@ -1969,16 +1985,16 @@ classdef Manifold < handle
             obj.Cache.operators.data.imft = op;
         end
         
-        function localizedField = localize(obj, vertexIdx, filterSpec, varargin)
+        function localizedField = localize(obj, filterSpec, vertexIdx, varargin)
             %LOCALIZE Localize a spectral filter to a vertex (not cached)
             %
             % Syntax:
-            %   localField = obj.localize(vertexIdx, filterSpec)
-            %   localField = obj.localize(vertexIdx, filterSpec, 'OutputFormat', 'cell')
+            %   localField = obj.localize(filterSpec, vertexIdx)
+            %   localField = obj.localize(filterSpec, vertexIdx, 'OutputFormat', 'cell')
             %
             % Inputs:
-            %   vertexIdx   - Vertex index for localization
             %   filterSpec  - Filter struct from bct.filter.design
+            %   vertexIdx   - Vertex index for localization
             %
             % Description:
             %   Direct wrapper for bct.manifold.operator.localize.

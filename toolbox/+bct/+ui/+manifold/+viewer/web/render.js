@@ -10,6 +10,7 @@ import { VisualizationManager } from './runtime/visualizationManager.js';
 import { ScalarMapper } from './visualization/scalarMapper.js';
 import { Colorbar } from './ui/colorbar.js';
 import { StateManager, StateEvent, AppState } from './core/stateManager.js';
+import { createVectorQuiver, computeFaceCentroids, computeFaceNormals } from './visualization/quiver.js';
 
 // Application state manager
 let stateManager = null;
@@ -32,6 +33,9 @@ let colorbar = null;
 
 // Scalar data cache (for re-applying when colormap changes)
 let currentScalarData = null;
+
+// Vector quiver visualization
+let currentQuiver = null;
 
 // Debug visuals
 let targetMarker = null; // follows controls.target (rotation anchor)
@@ -518,6 +522,147 @@ export function setScalarData(scalarData) {
     console.error('[setScalarData] Error setting scalar data:', err);
     stateManager.dispatch(StateEvent.LOAD_DATA_FAILED, { error: err.message });
     console.error('[setScalarData] Stack trace:', err.stack);
+  }
+}
+
+/**
+ * Set vector data for quiver visualization
+ * Called from MATLAB via HTMLComponent.Data = {vector: vectorData}
+ * @param {Object} vectorData - Vector field configuration
+ * @param {string} vectorData.action - 'update' or 'clear'
+ * @param {Array} [vectorData.data] - Flat array of vector components [vx,vy,vz,...]
+ * @param {string} [vectorData.support] - 'face' or 'vertex'
+ * @param {number} [vectorData.stride] - Draw every Nth vector
+ * @param {number} [vectorData.lengthScale] - Arrow length scaling
+ * @param {number} [vectorData.maxLength] - Maximum arrow length
+ * @param {number} [vectorData.minMagnitude] - Minimum vector magnitude to display
+ */
+export function setVectorData(vectorData) {
+  if (!meshManager || !scene || !stateManager) {
+    console.error('[setVectorData] Viewer not initialized');
+    return;
+  }
+
+  try {
+    if (vectorData.action === 'clear') {
+      // Clear vector visualization
+      if (currentQuiver) {
+        scene.remove(currentQuiver);
+        currentQuiver.geometry?.dispose();
+        currentQuiver.material?.dispose();
+        currentQuiver = null;
+      }
+      console.log('[setVectorData] Vector visualization cleared');
+    } else if (vectorData.action === 'update') {
+      // Get loaded mesh
+      const loadedScene = meshManager.getLoadedScene();
+      if (!loadedScene) {
+        console.error('[setVectorData] No mesh loaded. Call setMesh first.');
+        return;
+      }
+
+      const { data, support, stride, lengthScale, maxLength, minMagnitude } = vectorData;
+      
+      if (!data || data.length === 0) {
+        console.error('[setVectorData] No vector data provided');
+        return;
+      }
+
+      // Remove old quiver if exists
+      if (currentQuiver) {
+        scene.remove(currentQuiver);
+        currentQuiver.geometry?.dispose();
+        currentQuiver.material?.dispose();
+        currentQuiver = null;
+      }
+
+      // Find mesh in loaded scene
+      let mesh = null;
+      loadedScene.traverse(obj => {
+        if (obj.isMesh && !mesh) {
+          mesh = obj;
+        }
+      });
+
+      if (!mesh) {
+        console.error('[setVectorData] No mesh found in loaded scene');
+        return;
+      }
+
+      const geometry = mesh.geometry;
+      const posAttr = geometry.attributes.position;
+      const vertices = posAttr.array;
+      
+      let positions, normals;
+      
+      if (support === 'face') {
+        // Use pre-computed face centroids and normals from mesh payload
+        const faceCentroidsAttr = geometry.userData?.faceCentroids;
+        const faceNormalsAttr = geometry.userData?.faceNormals;
+        
+        if (faceCentroidsAttr && faceNormalsAttr) {
+          // Use pre-computed from MATLAB
+          positions = faceCentroidsAttr;
+          normals = faceNormalsAttr;
+          console.log(`[setVectorData] Face support (pre-computed): ${positions.length / 3} centroids, ${data.length / 3} vectors`);
+        } else {
+          // Fallback: compute on-the-fly
+          const indexAttr = geometry.index;
+          if (!indexAttr) {
+            console.error('[setVectorData] Geometry has no index attribute');
+            return;
+          }
+          const faces = indexAttr.array;
+          positions = computeFaceCentroids(vertices, faces);
+          normals = computeFaceNormals(vertices, faces);
+          console.log(`[setVectorData] Face support (computed): ${faces.length / 3} faces, ${data.length / 3} vectors`);
+        }
+      } else {
+        // Vertex support: use vertex positions directly
+        positions = vertices;
+        
+        // Get vertex normals if available
+        const normalAttr = geometry.attributes.normal;
+        normals = normalAttr ? normalAttr.array : null;
+        
+        console.log(`[setVectorData] Vertex support: ${vertices.length / 3} vertices, ${data.length / 3} vectors`);
+      }
+
+      // Create quiver visualization
+      const vectorsFloat32 = new Float32Array(data);
+      
+      currentQuiver = createVectorQuiver({
+        positions: positions,
+        vectors: vectorsFloat32,
+        normals: normals,
+        stride: stride || 5,
+        lengthScale: lengthScale || 1.0,
+        maxLength: maxLength || 10.0,
+        minMagnitude: minMagnitude || 1e-12
+      });
+
+      // Determine which frame root the mesh is in
+      const modelRoot = meshManager.modelRoot;
+      let frameRoot = scene; // Default to scene
+      
+      if (modelRoot && modelRoot.parent) {
+        // Check if mesh is in matlab or threejs frame
+        if (modelRoot.parent === viewerCore.roots.matlab) {
+          frameRoot = viewerCore.roots.matlab;
+          console.log('[setVectorData] Adding quiver to MATLAB frame (Z-up → Y-up transform)');
+        } else if (modelRoot.parent === viewerCore.roots.threejs) {
+          frameRoot = viewerCore.roots.threejs;
+          console.log('[setVectorData] Adding quiver to three.js frame (no transform)');
+        }
+      }
+      
+      frameRoot.add(currentQuiver);
+      
+      console.log(`[setVectorData] Vector quiver added: ${currentQuiver.count} arrows`);
+    }
+  } catch (err) {
+    console.error('[setVectorData] Error setting vector data:', err);
+    console.error('[setVectorData] Stack trace:', err.stack);
   }
 }
 

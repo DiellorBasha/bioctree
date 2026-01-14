@@ -1,222 +1,319 @@
-function R = check(meshOrManifold, options)
-%CHECK Comprehensive health check for mesh or Manifold.
+function h = check(meshOrManifold, options)
+%CHECK Modular mesh health aggregator with canonical edge indexing
 %
-%   R = bct.manifold.health.check(meshOrManifold, options)
+% Syntax:
+%   h = bct.manifold.health.check(meshOrManifold)
+%   h = bct.manifold.health.check(M, Name, Value)
 %
-% Primary entry point for mesh health validation. Detects structural issues,
-% topological problems, and geometric degeneracies.
+% Primary entry point for mesh health validation using modular measure/check architecture.
+% All edge-indexed outputs refer to canonical edge list (M.Edges when input is bct.Manifold).
 %
-% Inputs
-%   meshOrManifold : bct.Manifold, F, {V,F}, or (V,F)
+% Inputs:
+%   meshOrManifold - bct.Manifold (preferred), F, {V,F}, or (V,F)
 %
-% Name-Value Parameters
-%   Level             : "quick" | "standard" | "full" (default: "standard")
-%                       - quick: topology only (indices, degeneracy, manifoldness)
-%                       - standard: quick + orientation + boundary + geometry
-%                       - full: standard + self-intersection + quality metrics
-%   Checks            : string array to override Level selection
-%                       Valid: ["topology", "orientation", "boundary", "geometry"]
-%   RequireManifold   : logical, error on non-manifold edges (default: true)
-%   RequireOriented   : logical, error on orientation conflicts (default: true)
-%   RequireClosed     : logical, error on boundary edges (default: false)
-%   FailOnWarnings    : logical, set ok=false for warnings (default: false)
-%   ToleranceArea     : double, area threshold for degeneracy (default: auto)
-%   ToleranceEdge     : double, edge length threshold (default: 0)
-%   MaxIssuesPerClass : int, max indices to store per issue (default: 50)
-%   Verbose           : logical, store additional data (default: false)
-%   ReturnEarlyOnError: logical, stop after first error (default: false)
+% Name-Value Parameters:
+%   Level             - "quick" | "standard" (default) | "full"
+%                       * quick: topology (faces, degeneracy, manifoldness, boundary)
+%                       * standard: quick + orientation + directed duplicates
+%                       * full: standard + vertex manifoldness + outward orientation
+%   RequireManifold   - logical, error on non-manifold edges (default: true)
+%   RequireOriented   - logical, error on orientation inconsistency (default: true)
+%   RequireClosed     - logical, error on boundary edges (default: false)
+%   FailOnWarnings    - logical, set ok=false for warnings (default: false)
+%   Verbose           - logical, store canonical E and index sets in h.data (default: false)
+%   UseSurfaceMesh    - logical, use surfaceMesh for vertex manifoldness (default: true)
 %
-% Output
-%   R : Report struct with fields:
-%     .ok       : logical, overall pass/fail
-%     .severity : "ok" | "warn" | "error"
-%     .scope    : "bct.manifold.health"
-%     .level    : check level performed
-%     .summary  : string array of high-level messages
-%     .issues   : struct array of detected issues
-%     .stats    : mesh statistics
-%     .timing   : performance timers
-%     .data     : optional cached data (if Verbose)
+% Outputs:
+%   h - Report structure with fields:
+%     .ok          - logical, overall pass/fail
+%     .severity    - "ok" | "warn" | "error"
+%     .scope       - "bct.manifold.health"
+%     .level       - check level performed
+%     .summary     - string array of high-level messages
+%     .issues      - struct array of detected issues
+%     .is          - canonical boolean flags (NEW):
+%                    .facesValid, .facesNondegenerate, .hasDuplicateFaces,
+%                    .hasDuplicateDirectedEdges, .edgeManifold, .hasBoundary,
+%                    .oriented, .vertexManifold, .outward
+%     .stats       - mesh statistics (nV, nF, nE, nBoundaryEdges, etc.)
+%     .statsByCheck- detailed stats grouped by check (avoids collisions)
+%     .timing      - performance timers
+%     .data        - optional cached data (canonical E, index sets if Verbose)
 %
-% Example
-%   % Quick topology check for DEC
-%   R = bct.manifold.health.check(M, 'Level', "quick");
-%   assert(R.ok, 'Mesh failed health check');
+% Description:
+%   Performs comprehensive mesh health validation using modular architecture:
+%   
+%   1. Normalizes input, prioritizing bct.Manifold
+%   2. Establishes canonical edge list E from M.Edges (or derives from F)
+%   3. Runs gating checks (facesValid, degenerateFaces)
+%   4. Builds edge incidence cache (ic, multiplicity, dE)
+%   5. Runs checks per Level using modular +measure/+check architecture
+%   6. Populates h.is flags and aggregates issues
 %
+%   All edge-based outputs (boundary, non-manifold, inconsistent) are
+%   indices into canonical E (M.Edges when input is bct.Manifold).
+%
+% Examples:
+%   % Quick DEC gating check
+%   h = bct.manifold.health.check(M, 'Level', 'quick');
+%   assert(h.is.facesValid && h.is.edgeManifold && h.is.oriented);
+%   
 %   % Standard check with boundary allowed
-%   R = bct.manifold.health.check({V,F}, 'Level', "standard", ...
-%       'RequireClosed', false);
-%   disp(bct.manifold.health.report(R));
+%   h = bct.manifold.health.check(M, 'RequireClosed', false);
+%   if h.is.hasBoundary
+%       fprintf('Mesh has %d boundary edges\n', h.stats.nBoundaryEdges);
+%   end
+%   
+%   % Full check with debug data
+%   h = bct.manifold.health.check(M, 'Level', 'full', 'Verbose', true);
+%   % h.data contains canonical E and all index sets
 %
-% See also: bct.manifold.health.topology, bct.manifold.health.report
+% See also: bct.manifold.health.measure, bct.manifold.health.check,
+%           bct.manifold.health.internal.buildEdgeIncidence
+
+% Copyright (c) 2025 bioctree
+% SPDX-License-Identifier: MIT
 
 arguments
     meshOrManifold
     options.Level (1,1) string {mustBeMember(options.Level, ...
         ["quick", "standard", "full"])} = "standard"
-    options.Checks (1,:) string = string.empty
     options.RequireManifold (1,1) logical = true
     options.RequireOriented (1,1) logical = true
     options.RequireClosed (1,1) logical = false
     options.FailOnWarnings (1,1) logical = false
-    options.ToleranceArea (1,1) double = nan
-    options.ToleranceEdge (1,1) double = 0
-    options.MaxIssuesPerClass (1,1) {mustBeInteger, mustBePositive} = 50
     options.Verbose (1,1) logical = false
-    options.ReturnEarlyOnError (1,1) logical = false
+    options.UseSurfaceMesh (1,1) logical = true
 end
 
 % Start timing
 tStart = tic;
 
-% Normalize input
+% Step 1: Normalize input
 mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
 
-% Initialize master report
-stats = struct('nV', mesh.nV, 'nF', mesh.nF);
-R = bct.manifold.health.internal.newReport("bct.manifold.health", options.Level, stats);
+% Step 2: Establish canonical edges (uses M.Edges if available, else derives from F)
+mesh = bct.manifold.health.internal.ensureCanonicalEdges(mesh);
 
-% Determine which checks to run based on Level
-if isempty(options.Checks)
-    checks = selectChecks(options.Level);
-else
-    checks = options.Checks;
+% Step 3: Initialize report structure
+h = struct();
+h.ok = true;
+h.severity = "ok";
+h.scope = "bct.manifold.health";
+h.level = options.Level;
+h.summary = string.empty;
+h.issues = struct([]);
+h.is = struct();  % Will be populated by computeIsFlags
+h.stats = struct('nV', mesh.nV, 'nF', mesh.nF, 'nE', mesh.nE);
+h.statsByCheck = struct();
+h.timing = struct();
+h.data = struct();
+
+% Initialize collections
+allIssues = {};
+allIsUpdates = {};
+cache = struct();
+
+% Step 4: Gating checks (must pass to build edge incidence)
+tGating = tic;
+
+% Check: faces valid
+[issues, isUpdate, statsUpdate, dataUpdate] = bct.manifold.health.check.faces(mesh, options, cache);
+allIssues{end+1} = issues;
+allIsUpdates{end+1} = isUpdate;
+h.statsByCheck.faces = statsUpdate;
+if options.Verbose
+    h.data.faces = dataUpdate;
 end
 
-% Run each check in sequence
-for i = 1:length(checks)
-    checkName = checks(i);
-    
-    switch checkName
-        case "topology"
-            Ri = bct.manifold.health.topology(meshOrManifold, ...
-                'RequireManifold', options.RequireManifold, ...
-                'RequireClosed', options.RequireClosed, ...
-                'MaxIssuesPerClass', options.MaxIssuesPerClass, ...
-                'Verbose', options.Verbose);
-            
-        case "orientation"
-            Ri = bct.manifold.health.orientation(meshOrManifold, ...
-                'Level', options.Level, ...
-                'RequireConsistent', options.RequireOriented, ...
-                'CheckOutward', true, ...
-                'RequireOutward', false, ...
-                'MaxIssuesPerClass', options.MaxIssuesPerClass, ...
-                'Verbose', options.Verbose);
-            
-        case "boundary"
-            % Placeholder: not yet implemented
-            Ri = placeholderReport("bct.manifold.health.boundary", options.Level);
-            
-        case "geometry"
-            % Placeholder: not yet implemented (requires V)
-            if mesh.hasV
-                Ri = placeholderReport("bct.manifold.health.geometry", options.Level);
-            else
-                % Skip geometry checks if no vertices
-                continue;
-            end
-            
-        otherwise
-            warning('bct:manifold:health:check:UnknownCheck', ...
-                'Unknown check type: %s', checkName);
-            continue;
+% Check: degenerate faces
+[issues, isUpdate, statsUpdate, dataUpdate] = bct.manifold.health.check.degenerateFaces(mesh, options, cache);
+allIssues{end+1} = issues;
+allIsUpdates{end+1} = isUpdate;
+h.statsByCheck.degenerateFaces = statsUpdate;
+if options.Verbose
+    h.data.degenerateFaces = dataUpdate;
+end
+
+h.timing.gating = toc(tGating);
+
+% Early exit if gating checks failed
+if ~isUpdate.facesNondegenerate || ~h.is.facesValid
+    h.issues = bct.manifold.health.internal.mergeIssues(allIssues{:});
+    h.is = bct.manifold.health.internal.computeIsFlags(allIsUpdates);
+    [h.ok, h.severity] = computeOverallStatus(h.issues, options.FailOnWarnings);
+    h.summary = generateSummary(h);
+    h.timing.total = toc(tStart);
+    return;
+end
+
+% Step 5: Build canonical edge incidence cache
+tCache = tic;
+try
+    [cache.ic, cache.multiplicity, cache.dE, cache.uE] = ...
+        bct.manifold.health.internal.buildEdgeIncidence(mesh.F, mesh.E);
+catch ME
+    % Edge incidence build failed (should not happen if faces valid)
+    h.issues = bct.manifold.health.internal.issue(...
+        'edgeIncidenceFailed', 'error', ...
+        sprintf('Edge incidence mapping failed: %s', ME.message), 'edges');
+    h.is = bct.manifold.health.internal.computeIsFlags(allIsUpdates);
+    [h.ok, h.severity] = computeOverallStatus(h.issues, options.FailOnWarnings);
+    h.summary = generateSummary(h);
+    h.timing.total = toc(tStart);
+    return;
+end
+h.timing.cacheBuilding = toc(tCache);
+
+% Store canonical E in data if verbose
+if options.Verbose
+    h.data.canonicalEdges = mesh.E;
+end
+
+% Step 6: Run checks based on Level
+tChecks = tic;
+
+% Always run (quick level and above)
+runCheckAndCollect('duplicateFaces', mesh, options, cache);
+
+% Multiplicity-based checks (quick level and above)
+runCheckAndCollect('boundaryEdges', mesh, options, cache);
+runCheckAndCollect('nonManifoldEdges', mesh, options, cache);
+
+% Standard level and above
+if ismember(options.Level, ["standard", "full"])
+    runCheckAndCollect('oriented', mesh, options, cache);
+    runCheckAndCollect('duplicateDirectedEdges', mesh, options, cache);
+end
+
+% Full level only
+if options.Level == "full"
+    % Vertex manifoldness (requires V and surfaceMesh)
+    if mesh.hasV
+        runCheckAndCollect('vertexManifold', mesh, options, cache);
     end
     
-    % Merge report
-    R = mergeReports(R, Ri);
-    
-    % Early return on error if requested
-    if options.ReturnEarlyOnError && R.severity == "error"
-        R.summary = [R.summary; sprintf("Stopped early after %s check", checkName)];
-        break;
+    % Outward orientation (requires V)
+    if mesh.hasV
+        runCheckAndCollect('outward', mesh, options, cache);
     end
 end
 
-% Apply FailOnWarnings policy
-if options.FailOnWarnings && R.severity == "warn"
-    R.ok = false;
-end
+h.timing.checks = toc(tChecks);
 
-% Record timing
-R.timing.total = toc(tStart);
+% Step 7: Aggregate results
+h.issues = bct.manifold.health.internal.mergeIssues(allIssues{:});
+h.is = bct.manifold.health.internal.computeIsFlags(allIsUpdates);
 
-% Generate summary if not already set
-if isempty(R.summary) && R.ok
-    R.summary = sprintf("All checks passed (%s level)", options.Level);
+% Step 8: Compute rollup stats
+h.stats.nBoundaryEdges = 0;
+h.stats.nInteriorEdges = 0;
+h.stats.nNonManifoldEdges = 0;
+h.stats.nInconsistentEdges = 0;
+
+if isfield(h.statsByCheck, 'boundaryEdges')
+    h.stats.nBoundaryEdges = h.statsByCheck.boundaryEdges.nBoundaryEdges;
 end
+if isfield(h.statsByCheck, 'nonManifoldEdges')
+    h.stats.nNonManifoldEdges = h.statsByCheck.nonManifoldEdges.nNonManifoldEdges;
+end
+if isfield(h.statsByCheck, 'oriented')
+    h.stats.nInconsistentEdges = h.statsByCheck.oriented.nInconsistentEdges;
+end
+h.stats.nInteriorEdges = mesh.nE - h.stats.nBoundaryEdges - h.stats.nNonManifoldEdges;
+
+% Step 9: Compute overall status
+[h.ok, h.severity] = computeOverallStatus(h.issues, options.FailOnWarnings);
+
+% Step 10: Generate summary
+h.summary = generateSummary(h);
+
+% Step 11: Record total timing
+h.timing.total = toc(tStart);
+
+%% Nested helper function for check invocation
+    function runCheckAndCollect(checkName, mesh, options, cache)
+        % Run a check wrapper and collect results
+        checkFn = str2func(sprintf('bct.manifold.health.check.%s', checkName));
+        [issues, isUpdate, statsUpdate, dataUpdate] = checkFn(mesh, options, cache);
+        
+        allIssues{end+1} = issues;
+        allIsUpdates{end+1} = isUpdate;
+        h.statsByCheck.(checkName) = statsUpdate;
+        
+        if options.Verbose && ~isempty(fieldnames(dataUpdate))
+            h.data.(checkName) = dataUpdate;
+        end
+    end
 
 end
 
 %% Helper functions
 
-function checks = selectChecks(level)
-%SELECTCHECKS Determine check list based on level.
+function [ok, severity] = computeOverallStatus(issues, failOnWarnings)
+%COMPUTEOVERALLSTATUS Determine ok and severity from issues
 
-switch level
-    case "quick"
-        checks = ["topology"];
-    case "standard"
-        checks = ["topology", "orientation", "boundary", "geometry"];
-    case "full"
-        checks = ["topology", "orientation", "boundary", "geometry"];
-    otherwise
-        checks = ["topology"];
+if isempty(issues)
+    ok = true;
+    severity = "ok";
+    return;
 end
 
-end
+% Check for errors
+hasError = any(arrayfun(@(iss) iss.severity == "error", issues));
+hasWarn = any(arrayfun(@(iss) iss.severity == "warn", issues));
 
-function R = placeholderReport(scope, level)
-%PLACEHOLDERREPORT Create empty report for unimplemented checks.
-
-R = bct.manifold.health.internal.newReport(scope, level, struct());
-R.summary = sprintf("%s: not yet implemented", scope);
-
-end
-
-function Rmerged = mergeReports(R1, R2)
-%MERGEREPORTS Combine two health check reports.
-
-Rmerged = R1;
-
-% Merge issues
-if ~isempty(R2.issues)
-    if isempty(Rmerged.issues)
-        Rmerged.issues = R2.issues;
+if hasError
+    ok = false;
+    severity = "error";
+elseif hasWarn
+    if failOnWarnings
+        ok = false;
     else
-        Rmerged.issues = [Rmerged.issues, R2.issues];
+        ok = true;
+    end
+    severity = "warn";
+else
+    ok = true;
+    severity = "ok";
+end
+
+end
+
+function summary = generateSummary(h)
+%GENERATESUMMARY Create high-level summary from h.is flags and issues
+
+lines = string.empty;
+
+if h.ok && isempty(h.issues)
+    lines(end+1) = sprintf("All checks passed (%s level)", h.level);
+else
+    % Report issues
+    nErrors = sum(arrayfun(@(iss) iss.severity == "error", h.issues));
+    nWarns = sum(arrayfun(@(iss) iss.severity == "warn", h.issues));
+    
+    if nErrors > 0
+        lines(end+1) = sprintf("%d error(s) detected", nErrors);
+    end
+    if nWarns > 0
+        lines(end+1) = sprintf("%d warning(s) detected", nWarns);
+    end
+    
+    % Key failures
+    if isfield(h.is, 'facesValid') && ~h.is.facesValid
+        lines(end+1) = "Invalid face indices";
+    end
+    if isfield(h.is, 'edgeManifold') && ~h.is.edgeManifold
+        lines(end+1) = sprintf("Non-manifold edges (%d)", h.stats.nNonManifoldEdges);
+    end
+    if isfield(h.is, 'oriented') && ~h.is.oriented
+        lines(end+1) = sprintf("Inconsistent orientation (%d edges)", h.stats.nInconsistentEdges);
+    end
+    if isfield(h.is, 'hasBoundary') && h.is.hasBoundary
+        lines(end+1) = sprintf("Boundary detected (%d edges)", h.stats.nBoundaryEdges);
     end
 end
 
-% Update severity and ok
-if R2.severity == "error"
-    Rmerged.severity = "error";
-    Rmerged.ok = false;
-elseif R2.severity == "warn" && Rmerged.severity == "ok"
-    Rmerged.severity = "warn";
-end
-
-% Merge summary
-if ~isempty(R2.summary)
-    Rmerged.summary = [Rmerged.summary; R2.summary];
-end
-
-% Merge stats (R2 overwrites R1)
-fields = fieldnames(R2.stats);
-for i = 1:length(fields)
-    Rmerged.stats.(fields{i}) = R2.stats.(fields{i});
-end
-
-% Merge data (R2 overwrites R1)
-fields = fieldnames(R2.data);
-for i = 1:length(fields)
-    Rmerged.data.(fields{i}) = R2.data.(fields{i});
-end
-
-% Merge timing
-fields = fieldnames(R2.timing);
-for i = 1:length(fields)
-    Rmerged.timing.(fields{i}) = R2.timing.(fields{i});
-end
+summary = lines;
 
 end

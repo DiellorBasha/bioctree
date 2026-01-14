@@ -6,7 +6,8 @@ classdef ManifoldFixture < matlab.unittest.fixtures.Fixture
     %   1. Runs bct.start to add all necessary paths
     %   2. Loads the default fsaverage_rh_pial mesh
     %   3. Creates a bct.Manifold object
-    %   4. Exposes V, F, and M properties for test use
+    %   4. Computes eigenmodes once (100 modes) for reuse across tests
+    %   5. Exposes V, F, M, and E properties for test use
     %
     % Example usage:
     %   function setupOnce(testCase)
@@ -14,12 +15,14 @@ classdef ManifoldFixture < matlab.unittest.fixtures.Fixture
     %       V = fixture.V;
     %       F = fixture.F;
     %       M = fixture.M;
+    %       E = fixture.E;  % Precomputed eigenmodes
     %   end
 
     properties (SetAccess = private)
         V double      % Vertices [N×3]
         F double      % Faces [M×3]
         M             % bct.Manifold object
+        E struct      % Eigenmodes (100 modes, precomputed)
     end
 
     properties (Access = private)
@@ -54,6 +57,11 @@ classdef ManifoldFixture < matlab.unittest.fixtures.Fixture
             
             % Create Manifold object
             fixture.M = bct.Manifold(fixture.V, fixture.F);
+            
+            % Compute eigenmodes once (100 modes) for reuse across tests
+            fprintf('Computing eigenmodes (100 modes) for test fixture...\n');
+            fixture.E = fixture.M.eigenmodes(100);
+            fprintf('Eigenmodes computed and cached in fixture.\n');
         end
 
         function teardown(fixture)

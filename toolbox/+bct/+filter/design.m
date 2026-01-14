@@ -170,18 +170,51 @@ end
 %% Evaluate kernel for each filter in bank
 weightsMatrix = zeros(k, J);
 
+% Get kernel evaluator from dictionary
+D = bct.kernel.dictionary();
+kernelEvaluator = D(kernelName);
+
+% Get parameter info from registry defs (struct array)
+defs = bct.registry.kernels.defs();
+kernelDef = [];
+for i = 1:numel(defs)
+    if defs(i).Id == kernelName
+        kernelDef = defs(i);
+        break;
+    end
+end
+
+if isempty(kernelDef)
+    error('bct:filter:design:KernelNotInRegistry', ...
+        'Kernel "%s" not found in registry', kernelName);
+end
+
+paramNames = kernelDef.ParamNames;
+
 for j = 1:J
     try
-        % Bind parameters to kernel
-        kernelFcn = bct.kernel.bind(kernelName, paramsArray(j));
+        % Validate params has all required fields
+        params = paramsArray(j);
+        for i = 1:numel(paramNames)
+            if ~isfield(params, paramNames(i))
+                error('MissingParameter', ...
+                    'Parameter "%s" required for kernel "%s"', paramNames(i), kernelName);
+            end
+        end
         
-        % Evaluate on eigenvalue axis
-        weights = kernelFcn(eigenvaluesColumn);
+        % Extract parameter values in correct order
+        paramValues = cell(1, numel(paramNames));
+        for i = 1:numel(paramNames)
+            paramValues{i} = params.(paramNames(i));
+        end
+        
+        % Evaluate kernel directly with parameters
+        weights = kernelEvaluator(eigenvaluesColumn, paramValues{:});
         weightsMatrix(:, j) = weights(:);
         
     catch ME
         error('bct:filter:design:KernelEvaluationFailed', ...
-            'Failed to bind/evaluate kernel "%s" for filter %d: %s', ...
+            'Failed to evaluate kernel "%s" for filter %d: %s', ...
             kernelName, j, ME.message);
     end
 end

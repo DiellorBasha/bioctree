@@ -12,7 +12,8 @@ function F = delta(varargin)
 %   M     - bct.Manifold object
 %
 %   Optional after manifold:
-%   'Support' - Support type: 'vertex' (default), 'face', 'edge'
+%   'Support'  - Support type: 'vertex' (default), 'face', 'edge'
+%   'Annotate' - Add metric annotation (default: false)
 %
 % Long Form (Name-Value Arguments):
 %   'Vertex'   - Vertex index (implies support='vertex')
@@ -21,6 +22,7 @@ function F = delta(varargin)
 %   'Manifold' - bct.Manifold object (required)
 %   'Support'  - Support type (alternative to Vertex/Face/Edge)
 %   'Index'    - Generic index (requires explicit Support)
+%   'Annotate' - Add metric annotation (default: false)
 %
 % Outputs:
 %   F - Field struct conforming to bct.field.schema
@@ -35,6 +37,10 @@ function F = delta(varargin)
 %   - Geodesic distance computation
 %   - Response function studies
 %
+%   The Annotate parameter controls whether to add metric information.
+%   When false (default), returns bare numerical field.
+%   When true, adds metric via bct.field.annotate().
+%
 % Examples:
 %   % Short form: Delta at vertex 4
 %   F = bct.field.generate.delta(4, M);
@@ -42,8 +48,8 @@ function F = delta(varargin)
 %   % Short form: Delta at face 50
 %   F = bct.field.generate.delta(50, M, 'Support', 'face');
 %
-%   % Long form: Delta at vertex 23
-%   F = bct.field.generate.delta('Vertex', 23, 'Manifold', M);
+%   % Long form: Delta at vertex 23 with annotation
+%   F = bct.field.generate.delta('Vertex', 23, 'Manifold', M, 'Annotate', true);
 %
 %   % Long form: Delta at edge 100
 %   F = bct.field.generate.delta('Edge', 100, 'Manifold', M);
@@ -65,6 +71,11 @@ end
 
 % Generate delta field
 F = generateDelta(options);
+
+% Optionally annotate with metric
+if options.Annotate
+    F = bct.field.annotate(F);
+end
 
 % Validate output
 bct.field.validate(F);
@@ -128,6 +139,7 @@ end
 % Parse optional name-value pairs after manifold
 p = inputParser();
 p.addParameter('Support', 'vertex', @(x) ischar(x) || isstring(x));
+p.addParameter('Annotate', false, @islogical);
 p.parse(varargin{:});
 
 % Build options struct
@@ -135,6 +147,7 @@ options = struct();
 options.Manifold = M;
 options.Index = index;
 options.Support = string(p.Results.Support);
+options.Annotate = p.Results.Annotate;
 
 end
 
@@ -148,6 +161,7 @@ p.addParameter('Face', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x)));
 p.addParameter('Edge', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x)));
 p.addParameter('Index', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x)));
 p.addParameter('Support', '', @(x) ischar(x) || isstring(x));
+p.addParameter('Annotate', false, @islogical);
 p.parse(varargin{:});
 
 r = p.Results;
@@ -166,6 +180,7 @@ options = struct();
 options.Manifold = r.Manifold;
 options.Support = support;
 options.Index = index;
+options.Annotate = r.Annotate;
 
 end
 

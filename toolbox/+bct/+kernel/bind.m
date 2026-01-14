@@ -40,26 +40,55 @@ arguments
     params (1,1) struct = struct()
 end
 
-% Get raw function and spec
-[f_raw, spec] = bct.kernel.get(id);
+% Get kernel evaluator from dictionary
+D = bct.kernel.dictionary();
+if ~isKey(D, id)
+    error('bct:kernel:bind:UnknownKernel', ...
+        'Kernel "%s" not found in dictionary', id);
+end
 
-% Validate and merge with defaults
-params = bct.kernel.validate(id, params);
+kernelEvaluator = D(id);
 
-% Map parameters to positional arguments based on signature
-args = cell(1, numel(spec.Signature));
-for i = 1:numel(spec.Signature)
-    paramName = spec.Signature(i);
-    if isfield(params, paramName)
-        args{i} = params.(paramName);
-    else
-        error('bct:kernel:MissingParameter', ...
-            'Parameter "%s" required but not provided for kernel "%s"', ...
-            paramName, id);
+% Get parameter info from authoritative registry (struct array)
+defs = bct.registry.kernels.defs();
+
+% Find the kernel definition in the struct array
+kernelDef = [];
+for i = 1:numel(defs)
+    if defs(i).Id == id
+        kernelDef = defs(i);
+        break;
     end
 end
 
+if isempty(kernelDef)
+    error('bct:kernel:bind:KernelNotInRegistry', ...
+        'Kernel "%s" not found in registry', id);
+end
+
+% Get parameter names in order
+paramNames = kernelDef.ParamNames;
+
+% Validate params has all required fields
+for i = 1:numel(paramNames)
+    if ~isfield(params, paramNames(i))
+        error('bct:kernel:bind:MissingParameter', ...
+            'Parameter "%s" required for kernel "%s"', paramNames(i), id);
+    end
+end
+
+% Extract parameter values in correct order
+paramValues = cell(1, numel(paramNames));
+for i = 1:numel(paramNames)
+    paramValues{i} = params.(paramNames(i));
+end
+
 % Create bound unary kernel handle
-k = @(x) f_raw(x, args{:});
+k = @(x) kernelEvaluator(x, paramValues{:});
+
+% Return spec if requested
+if nargout > 1
+    spec = kernelDef;
+end
 
 end

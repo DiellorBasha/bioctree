@@ -138,8 +138,6 @@ function bindObject(comp, obj)
     
     % Special handling for bct.Manifold with manifold.Viewer
     if isa(obj, 'bct.Manifold') && isa(comp, 'bct.ui.manifold.Viewer')
-        % Ensure normals are computed before setMesh
-        obj.normals();
         comp.setMesh(obj);
         return;
     end

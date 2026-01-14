@@ -145,7 +145,7 @@ strict = p.Results.Strict;
 % Validate inputs
 % ----------------------------
 if useManifold
-    nVertices = M.nVertices;
+    nVertices = M.numVertices();
 else
     nVertices = size(V, 1);
 end
@@ -171,9 +171,9 @@ deltaSignal = bct.manifold.query.delta(nVertices, vertexIdx);
 % Get transform operators
 % ----------------------------
 if useManifold
-    % Get MFT and IMFT operators from Manifold
-    mftOp = bct.manifold.operator.mft(M);
-    imftOp = bct.manifold.operator.imft(M);
+    % Get MFT and IMFT operators from Manifold (uses cached eigenmodes)
+    [~, mftOp] = bct.manifold.operator.mft(M);
+    [~, imftOp] = bct.manifold.operator.imft(M);
 else
     % Compute MFT and IMFT from V, F
     % Need eigenmodes and mass matrix
@@ -186,8 +186,8 @@ else
     [~, Mass] = bct.manifold.operator.mass(V, F_faces);
     
     % Construct transform operators
-    mftOp = bct.manifold.operator.mft(E.vectors, Mass);
-    imftOp = bct.manifold.operator.imft(E.vectors, Mass);
+    [~, mftOp] = bct.manifold.operator.mft(E.vectors, Mass);
+    [~, imftOp] = bct.manifold.operator.imft(E.vectors, Mass);
 end
 
 % ----------------------------

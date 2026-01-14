@@ -1,7 +1,17 @@
 function R = topology(meshOrManifold, options)
-%TOPOLOGY Check topological properties of a mesh.
+%TOPOLOGY Check topological properties of a mesh (DEPRECATED)
 %
 %   R = bct.manifold.health.topology(meshOrManifold, options)
+%
+% DEPRECATED: This function is superseded by the modular health check architecture.
+% Use bct.manifold.health.check() instead, which provides the same functionality
+% with improved modularity and canonical edge indexing.
+%
+% Migration:
+%   OLD: R = bct.manifold.health.topology(M, 'RequireManifold', true);
+%   NEW: h = bct.manifold.health.check(M, 'Level', 'quick', 'RequireManifold', true);
+%
+% The new check() function returns h.is flags and h.stats with equivalent data.
 %
 % Checks performed:
 %   1. Face format and index validity
@@ -41,6 +51,11 @@ mesh = bct.manifold.health.internal.normalizeInput(meshOrManifold);
 F = mesh.F;
 nV = mesh.nV;
 nF = mesh.nF;
+
+% Issue deprecation warning
+warning('bct:manifold:health:topology:Deprecated', ...
+    ['bct.manifold.health.topology() is deprecated. ', ...
+     'Use bct.manifold.health.check() with the new modular architecture instead.']);
 
 % Initialize report
 stats = struct('nV', nV, 'nF', nF);
