@@ -13,13 +13,15 @@ function out = vertex(meshInput, varargin)
 %
 % Outputs:
 %   out - Structure with fields:
-%     .normals  - [Nv×3] Vertex normal vectors (unit, area-weighted)
-%     .frame    - Structure with .normal, .tangent1, .tangent2 orthonormal frames
-%     .header   - Metadata about computation
+%     .normals   - [Nv×3] Vertex normal vectors (unit, area-weighted)
+%     .tangent1  - [Nv×3] First tangent vectors (unit, orthogonal to normals)
+%     .tangent2  - [Nv×3] Second tangent vectors (unit, orthogonal to normals and tangent1)
+%     .header    - Metadata about computation
 %
 % Description:
 %   Aggregator function that computes all vertex-based geometric properties
 %   by calling the individual functions in bct.manifold.geometry.vertex.*
+%   Returns normals and tangents directly without duplication in a frame structure.
 %
 % Examples:
 %   % Compute all vertex geometry
@@ -28,7 +30,8 @@ function out = vertex(meshInput, varargin)
 %   
 %   % Access individual properties
 %   normals = vertexGeom.normals;
-%   frame = vertexGeom.frame;
+%   tangent1 = vertexGeom.tangent1;
+%   tangent2 = vertexGeom.tangent2;
 %
 % See also: bct.manifold.geometry.face, bct.manifold.geometry.edge,
 %           bct.manifold.geometry
@@ -57,9 +60,11 @@ out.header = struct();
 [normalHeader, out.normals] = bct.manifold.geometry.vertex.normals(meshInput, varargin{:});
 out.header.normals = normalHeader;
 
-% Compute vertex frames
-[frameHeader, normal, tangent1, tangent2] = bct.manifold.geometry.vertex.frame(meshInput, varargin{:});
-out.frame = struct('normal', normal, 'tangent1', tangent1, 'tangent2', tangent2);
-out.header.frame = frameHeader;
+% Compute vertex tangents
+[tangent1Header, out.tangent1] = bct.manifold.geometry.vertex.tangents1(meshInput, varargin{:});
+out.header.tangent1 = tangent1Header;
+
+[tangent2Header, out.tangent2] = bct.manifold.geometry.vertex.tangents2(meshInput, varargin{:});
+out.header.tangent2 = tangent2Header;
 
 end

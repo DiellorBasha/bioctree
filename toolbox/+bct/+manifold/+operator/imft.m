@@ -1,4 +1,4 @@
-function imft = imft(meshInput, options)
+function [header, imft] = imft(meshInput, varargin)
 %IMFT Construct inverse manifold Fourier transform operator matrix
 %
 % Syntax:
@@ -121,6 +121,15 @@ end
 % Compute inverse transform operator: imft = eigenvectors
 % Output size: [N × k] where N = number of vertices, k = number of modes
 imft_matrix = eigenvectors;
+
+% Build header
+header = struct( ...
+    'operator', 'imft', ...
+    'k', size(eigenvectors, 2), ...
+    'N', size(eigenvectors, 1), ...
+    'normalization', 'mass-orthonormal', ...
+    'annotate', options.Annotate ...
+);
 
 % Return with or without annotation
 if options.Annotate

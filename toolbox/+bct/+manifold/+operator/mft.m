@@ -1,11 +1,11 @@
-function mft = mft(meshInput, varargin)
+function [header, mft] = mft(meshInput, varargin)
 %MFT Construct forward manifold Fourier transform operator matrix
 %
 % Syntax:
-%   mft = bct.manifold.operator.mft(M)
-%   mft = bct.manifold.operator.mft(M, Name=Value)
-%   mft = bct.manifold.operator.mft(eigenvectors, Mass)
-%   mft = bct.manifold.operator.mft(eigenvectors, Mass, Name=Value)
+%   [header, mft] = bct.manifold.operator.mft(M)
+%   [header, mft] = bct.manifold.operator.mft(M, Name=Value)
+%   [header, mft] = bct.manifold.operator.mft(eigenvectors, Mass)
+%   [header, mft] = bct.manifold.operator.mft(eigenvectors, Mass, Name=Value)
 %
 % Inputs:
 %   M            - bct.Manifold object (uses cached or computes eigenmodes)
@@ -20,11 +20,13 @@ function mft = mft(meshInput, varargin)
 % Name-Value Arguments:
 %   Annotate - Wrap output as quantity struct (default: false)
 %   Strict   - Enforce input validation (default: true)
+%   k        - Number of eigenmodes (required if using Manifold input)
 %
 % Outputs:
-%   mft - Forward transform operator matrix [k×N]
-%         If Annotate=false: numeric matrix
-%         If Annotate=true: quantity struct with .value, .unit, .dim, .meta
+%   header - Struct with computation metadata
+%   mft    - Forward transform operator matrix [k×N]
+%            If Annotate=false: numeric matrix
+%            If Annotate=true: quantity struct with .value, .unit, .dim, .meta
 %
 % Description:
 %   Constructs the forward manifold Fourier transform operator:
@@ -165,6 +167,15 @@ end
 % Compute forward transform operator: mft = eigenvectors' * Mass
 % Output size: [k × N] where k = number of modes, N = number of vertices
 mft_matrix = eigenvectors' * Mass;
+
+% Build header
+header = struct( ...
+    'operator', 'mft', ...
+    'k', size(eigenvectors, 2), ...
+    'N', size(eigenvectors, 1), ...
+    'normalization', 'mass-orthonormal', ...
+    'annotate', options.Annotate ...
+);
 
 % Return with or without annotation
 if options.Annotate

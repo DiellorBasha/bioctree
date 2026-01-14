@@ -1,10 +1,10 @@
-function L = graphlaplacian(input, varargin)
+function [header, L] = graphlaplacian(input, varargin)
 %GRAPHLAPLACIAN Compute graph Laplacian matrix from manifold or adjacency matrix
 %
 % Syntax:
-%   L = bct.manifold.operator.graphlaplacian(M)
-%   L = bct.manifold.operator.graphlaplacian(A)
-%   L = bct.manifold.operator.graphlaplacian(..., 'Type', laplacianType)
+%   [header, L] = bct.manifold.operator.graphlaplacian(M)
+%   [header, L] = bct.manifold.operator.graphlaplacian(A)
+%   [header, L] = bct.manifold.operator.graphlaplacian(..., 'Type', laplacianType)
 %
 % Inputs:
 %   M - bct.Manifold object
@@ -14,8 +14,9 @@ function L = graphlaplacian(input, varargin)
 % Name-Value Arguments:
 %   Type - "combinatorial" (default), "normalized", or "randomwalk"
 %
-% Returns:
-%   L - [N×N] sparse graph Laplacian matrix
+% Outputs:
+%   header - Struct with computation metadata
+%   L      - [N×N] sparse graph Laplacian matrix
 %
 % Laplacian types:
 %   - "combinatorial": L = D - A (unnormalized)
@@ -112,5 +113,12 @@ switch laplacianType
         Dinv = spdiags(1./d, 0, N, N);
         L = speye(N) - Dinv * A;
 end
+
+% Build header
+header = struct( ...
+    'operator', 'graphlaplacian', ...
+    'type', laplacianType, ...
+    'nodes', N ...
+);
 
 end

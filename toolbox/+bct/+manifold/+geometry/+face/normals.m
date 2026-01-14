@@ -85,10 +85,13 @@ end
 % Compute face normals
 % ----------------------------
 if useManifold
-    % Use cached frames for Manifold objects (efficient)
-    fr = bct.manifold.geometry.frame(meshInput);
-    N = fr.Face.N;
-    method = 'frame';
+    % For Manifold objects, extract V and F and compute via surfaceMesh
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+    mesh = surfaceMesh(V, F);
+    computeNormals(mesh, "face");
+    N = mesh.FaceNormals;
+    method = 'surfaceMesh';
 else
     % For V, F inputs, compute directly using surfaceMesh
     mesh = surfaceMesh(V, F);

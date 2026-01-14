@@ -101,8 +101,8 @@ if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')
     eigsOpts = p.Results.EigsOpts;
     
     % Get FEM matrices from manifold (uses caching)
-    K = Manifold.cotmatrix();
-    M = Manifold.massmatrix('Type', massType);
+    [~, K] = Manifold.stiffness('variant', 'cotan', 'sign', 'positive', 'symmetrize', true);
+    [~, M] = Manifold.mass('variant', massType);
     
 elseif nargin >= 3 && (issparse(varargin{1}) || ismatrix(varargin{1})) && ...
                       (issparse(varargin{2}) || ismatrix(varargin{2}))

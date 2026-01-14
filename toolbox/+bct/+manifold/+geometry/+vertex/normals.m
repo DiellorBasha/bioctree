@@ -86,10 +86,13 @@ end
 % Compute vertex normals
 % ----------------------------
 if useManifold
-    % Use cached frames for Manifold objects (efficient)
-    fr = bct.manifold.geometry.frame(meshInput);
-    N = fr.Vertex.N;
-    method = 'frame';
+    % For Manifold objects, extract V and F and compute via surfaceMesh
+    V = meshInput.Vertices;
+    F = meshInput.Faces;
+    mesh = surfaceMesh(V, F);
+    computeNormals(mesh, "vertex");
+    N = mesh.VertexNormals;
+    method = 'surfaceMesh';
 else
     % For V, F inputs, compute directly using surfaceMesh
     mesh = surfaceMesh(V, F);

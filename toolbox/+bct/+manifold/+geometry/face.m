@@ -23,12 +23,14 @@ function out = face(meshInput, varargin)
 %     .centroids      - [Nf×3] Centroid (barycenter) of each face
 %     .cotan          - [Nf×3] Cotangent weights per face vertex
 %     .normals        - [Nf×3] Face normal vectors (unit)
-%     .frame          - Structure with .normal, .tangent1, .tangent2 orthonormal frames
+%     .tangent1       - [Nf×3] First tangent vectors (unit)
+%     .tangent2       - [Nf×3] Second tangent vectors (unit)
 %     .header         - Metadata about computation options
 %
 % Description:
 %   Aggregator function that computes all face-based geometric properties
 %   by calling the individual functions in bct.manifold.geometry.face.*
+%   The normals, tangent1, and tangent2 form right-handed orthonormal frames.
 %
 % Examples:
 %   % Compute all face geometry
@@ -38,7 +40,7 @@ function out = face(meshInput, varargin)
 %   % Access individual properties
 %   areas = faceGeom.areas;
 %   normals = faceGeom.normals;
-%   frame = faceGeom.frame;
+%   tangent1 = faceGeom.tangent1;
 %   
 %   % Compute with single precision
 %   faceGeom = bct.manifold.geometry.face(M, 'precision', 'single');
@@ -102,9 +104,12 @@ out.header.cotan = cotanHeader;
 [normalHeader, out.normals] = bct.manifold.geometry.face.normals(meshInput);
 out.header.normals = normalHeader;
 
-% Compute face frames
-[frameHeader, normal, tangent1, tangent2] = bct.manifold.geometry.face.frame(meshInput);
-out.frame = struct('normal', normal, 'tangent1', tangent1, 'tangent2', tangent2);
-out.header.frame = frameHeader;
+% Compute first tangent vectors
+[tangent1Header, out.tangent1] = bct.manifold.geometry.face.tangents1(meshInput);
+out.header.tangent1 = tangent1Header;
+
+% Compute second tangent vectors
+[tangent2Header, out.tangent2] = bct.manifold.geometry.face.tangents2(meshInput);
+out.header.tangent2 = tangent2Header;
 
 end

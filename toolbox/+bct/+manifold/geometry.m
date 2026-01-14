@@ -23,11 +23,13 @@ function geom = geometry(M, varargin)
 %               .centroids      - [nF×3] Face centroids (barycenters)
 %               .cotan          - [nF×3] Cotangent weights per face vertex
 %               .normals        - [nF×3] Face normal vectors
-%               .frame          - Structure with .normal, .tangent1, .tangent2
+%               .tangent1       - [nF×3] First tangent vectors
+%               .tangent2       - [nF×3] Second tangent vectors
 %               .header         - Metadata
 %     .vertex - Structure with vertex-based geometry:
 %               .normals        - [nV×3] Vertex normal vectors
-%               .frame          - Structure with .normal, .tangent1, .tangent2
+%               .tangent1       - [nV×3] First tangent vectors
+%               .tangent2       - [nV×3] Second tangent vectors
 %               .header         - Metadata
 %     .edge   - Structure with edge-based geometry:
 %               .lengths        - [nE×1] Edge lengths

@@ -218,95 +218,6 @@ classdef Manifold < handle
             obj.Cache.operators.meta.stiffnessSign = string(p.Results.StiffnessSign);
             obj.Cache.operators.meta.symmetrize = p.Results.Symmetrize;
         end
-
-        function M = massmatrix(obj, options)
-            %MASSMATRIX Get or compute FEM mass matrix (lazy creation with caching)
-            %
-            % Syntax:
-            %   M = manifold.massmatrix()
-            %   M = manifold.massmatrix('Type', massType)
-            %
-            % Name-Value Parameters:
-            %   Type - Mass matrix type (default: 'voronoi')
-            %          'voronoi'     - Voronoi area cells (diagonal, default)
-            %          'barycentric' - Equal area distribution (diagonal)
-            %          'full'        - Consistent FEM mass matrix (sparse)
-            %
-            % Outputs:
-            %   M - [N×N] sparse mass matrix
-            %
-            % Description:
-            %   Returns the FEM mass matrix for the manifold. If type matches
-            %   cached operators, returns from cache. Otherwise computes directly.
-            %
-            %   Note: Default 'voronoi' is recommended for discrete analysis.
-            %
-            % Examples:
-            %   M = manifold.massmatrix();  % Default voronoi
-            %   M = manifold.massmatrix('Type', 'barycentric');
-            %
-            % See also: bct.manifold.operator.mass, operators, cotmatrix
-            
-            arguments
-                obj
-                options.Type (1,1) string {mustBeMember(options.Type, ["voronoi","barycentric","full"])} = "voronoi"
-            end
-            
-            massType = options.Type;
-            
-            % Check if cached operators exist and have matching mass variant
-            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
-               isfield(obj.Cache.operators.meta, 'massVariant') && ...
-               obj.Cache.operators.meta.massVariant == massType
-                M = obj.Cache.operators.data.mass;
-                return;
-            end
-            
-            % Compute mass matrix directly using bct.manifold.operator.mass
-            [~, M] = bct.manifold.operator.mass(obj, 'variant', massType);
-        end
-        
-        function K = cotmatrix(obj)
-            %COTMATRIX Get or compute FEM stiffness/cotangent matrix (lazy creation with caching)
-            %
-            % Syntax:
-            %   K = manifold.cotmatrix()
-            %
-            % Outputs:
-            %   K - [N×N] sparse stiffness matrix (cotangent Laplacian)
-            %
-            % Description:
-            %   Returns the FEM stiffness matrix (cotangent Laplacian) for the
-            %   manifold. Returns from cached operators if available, otherwise
-            %   computes directly.
-            %
-            %   The cotangent matrix represents:
-            %   - Discrete Dirichlet energy: E(u) = u' * K * u
-            %   - Laplace-Beltrami operator: Δu = M^(-1) * K * u
-            %   - Positive semidefinite form (λ ≥ 0)
-            %
-            % Examples:
-            %   K = manifold.cotmatrix();
-            %   energy = u' * K * u;  % Dirichlet energy
-            %
-            % See also: bct.manifold.operator.stiffness, operators, massmatrix
-            
-            % Check if cached operators exist with matching stiffness parameters
-            if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
-               isfield(obj.Cache.operators.meta, 'stiffnessVariant') && ...
-               obj.Cache.operators.meta.stiffnessVariant == "cotan" && ...
-               obj.Cache.operators.meta.stiffnessSign == "positive" && ...
-               obj.Cache.operators.meta.symmetrize == true
-                K = obj.Cache.operators.data.stiffness;
-                return;
-            end
-            
-            % Compute stiffness matrix directly using bct.manifold.operator.stiffness
-            [~, K] = bct.manifold.operator.stiffness(obj, ...
-                'variant', 'cotan', ...
-                'sign', 'positive', ...
-                'symmetrize', true);
-        end
         
         % ===============================================================
         % GRAPH QUERY METHODS
@@ -1068,18 +979,20 @@ classdef Manifold < handle
             %   geom = M.geometry(Name, Value)
             %
             % Name-Value Arguments:
-            %   'NormalType'    - 'vertex' (default) or 'face'
-            %   'TangentDomain' - 'face' (default) or 'vertex'
-            %   'ForceFrame'    - false (default) or true to force recomputation
-            %   'Force'         - false (default) or true to force full recomputation
+            %   'precision'          - 'double' (default) or 'single' for numeric precision
+            %   'circumcenterMethod' - 'native' (default) or 'triangulation'
+            %   'boundaryPolicy'     - 'error' (default) for dual measures with boundaries
+            %   'dualCellType'       - 'circumcentric' (default) for dual vertex areas
+            %   'annotate'           - false (default) or true to wrap outputs as quantity structs
+            %   'Force'              - false (default) or true to force recomputation
             %
             % Outputs:
             %   geom - Structure with fields:
-            %     .centroids - [nF×3] Face centroids
-            %     .normals   - [nV×3] or [nF×3] Normal vectors
-            %     .tangents  - Structure with N, e1, e2 tangent frames
-            %     .frame     - Cached orthonormal frame structure
-            %     .cotan     - [nF×3] Cotangent values per face
+            %     .face   - Face geometry (areas, centroids, normals, frame, cotan)
+            %     .vertex - Vertex geometry (normals, frame)
+            %     .edge   - Edge geometry (lengths, weights)
+            %     .dual   - Dual mesh geometry (edgeLengths, vertexAreas)
+            %     .header - Metadata about computation options
             %
             % Description:
             %   Computes all geometric properties of the manifold and caches
@@ -1095,25 +1008,29 @@ classdef Manifold < handle
             %   geom = M.geometry();
             %   
             %   % Access individual properties
-            %   C = geom.centroids;
-            %   N = geom.normals;
-            %   T1 = geom.tangents.e1;
+            %   C = geom.face.centroids;    % [nF×3] Face centroids
+            %   A = geom.face.areas;        % [nF×1] Face areas
+            %   VN = geom.vertex.normals;   % [nV×3] Vertex normals
+            %   L = geom.edge.lengths;      % [nE×1] Edge lengths
             %   
             %   % Force recomputation
             %   geom = M.geometry('Force', true);
             %   
-            %   % Compute with custom parameters
-            %   geom = M.geometry('NormalType', 'face', 'TangentDomain', 'vertex');
+            %   % Compute with single precision
+            %   geom = M.geometry('precision', 'single');
             %
-            % See also: bct.manifold.geometry, centroids, normals, tangents
+            % See also: bct.manifold.geometry, bct.manifold.geometry.face,
+            %           bct.manifold.geometry.vertex, bct.manifold.geometry.edge
             
             % Parse inputs
             p = inputParser;
             p.FunctionName = 'bct.Manifold.geometry';
             addParameter(p, 'Force', false, @islogical);
-            addParameter(p, 'NormalType', 'vertex', @(x) ischar(x) || isstring(x));
-            addParameter(p, 'TangentDomain', 'face', @(x) ischar(x) || isstring(x));
-            addParameter(p, 'ForceFrame', false, @islogical);
+            addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'circumcenterMethod', 'native', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'boundaryPolicy', 'error', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'dualCellType', 'circumcentric', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'annotate', false, @islogical);
             parse(p, varargin{:});
             
             force = p.Results.Force;
@@ -1126,15 +1043,246 @@ classdef Manifold < handle
             
             % Compute all geometry using bct.manifold.geometry
             geom = bct.manifold.geometry(obj, ...
-                'NormalType', p.Results.NormalType, ...
-                'TangentDomain', p.Results.TangentDomain, ...
-                'ForceFrame', p.Results.ForceFrame);
+                'precision', p.Results.precision, ...
+                'circumcenterMethod', p.Results.circumcenterMethod, ...
+                'boundaryPolicy', p.Results.boundaryPolicy, ...
+                'dualCellType', p.Results.dualCellType, ...
+                'annotate', p.Results.annotate);
             
             % Cache the result
             obj.Cache.geometry.data = geom;
             obj.Cache.geometry.meta.computed = datetime('now');
-            obj.Cache.geometry.meta.normalType = p.Results.NormalType;
-            obj.Cache.geometry.meta.tangentDomain = p.Results.TangentDomain;
+            obj.Cache.geometry.meta.precision = p.Results.precision;
+            obj.Cache.geometry.meta.circumcenterMethod = p.Results.circumcenterMethod;
+        end
+        
+        function faceGeom = faceGeometry(obj, varargin)
+            %FACEGEOMETRY Get or compute face-based geometry
+            %
+            % Syntax:
+            %   faceGeom = M.faceGeometry()
+            %   faceGeom = M.faceGeometry('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force'     - false (default) or true to force recomputation
+            %   'precision' - 'double' (default) or 'single'
+            %
+            % Outputs:
+            %   faceGeom - Structure with fields:
+            %     .areas          - [nF×1] Face areas
+            %     .centroids      - [nF×3] Face centroids (barycenters)
+            %     .circumcenters  - [nF×3] Face circumcenters
+            %     .normals        - [nF×3] Face normal vectors
+            %     .cotan          - [nF×3] Cotangent weights per face vertex
+            %     .tangent1       - [nF×3] First tangent vectors
+            %     .tangent2       - [nF×3] Second tangent vectors
+            %
+            % Description:
+            %   Returns cached face geometry if available, or computes using
+            %   bct.manifold.geometry.face(). Result is cached in geometry
+            %   namespace for future calls.
+            %
+            % Examples:
+            %   M = bct.Manifold(V, F);
+            %   faceGeom = M.faceGeometry();
+            %   areas = faceGeom.areas;
+            %   normals = faceGeom.normals;
+            %
+            % See also: bct.manifold.geometry.face, vertexGeometry, edgeGeometry
+            
+            p = inputParser;
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if cached
+            if ~force && ~isempty(fieldnames(obj.Cache.geometry.data)) && ...
+               isfield(obj.Cache.geometry.data, 'face')
+                faceGeom = obj.Cache.geometry.data.face;
+                return;
+            end
+            
+            % Compute face geometry
+            faceGeom = bct.manifold.geometry.face(obj, 'precision', p.Results.precision);
+            
+            % Cache the result
+            if isempty(fieldnames(obj.Cache.geometry.data))
+                obj.Cache.geometry.data = struct();
+            end
+            obj.Cache.geometry.data.face = faceGeom;
+            obj.Cache.geometry.meta.faceComputed = datetime('now');
+        end
+        
+        function vertexGeom = vertexGeometry(obj, varargin)
+            %VERTEXGEOMETRY Get or compute vertex-based geometry
+            %
+            % Syntax:
+            %   vertexGeom = M.vertexGeometry()
+            %   vertexGeom = M.vertexGeometry('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force'     - false (default) or true to force recomputation
+            %   'precision' - 'double' (default) or 'single'
+            %
+            % Outputs:
+            %   vertexGeom - Structure with fields:
+            %     .normals  - [nV×3] Vertex normal vectors
+            %     .tangent1 - [nV×3] First tangent vectors
+            %     .tangent2 - [nV×3] Second tangent vectors
+            %
+            % Description:
+            %   Returns cached vertex geometry if available, or computes using
+            %   bct.manifold.geometry.vertex(). Result is cached in geometry
+            %   namespace for future calls.
+            %
+            % Examples:
+            %   M = bct.Manifold(V, F);
+            %   vertexGeom = M.vertexGeometry();
+            %   normals = vertexGeom.normals;
+            %
+            % See also: bct.manifold.geometry.vertex, faceGeometry, edgeGeometry
+            
+            p = inputParser;
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if cached
+            if ~force && ~isempty(fieldnames(obj.Cache.geometry.data)) && ...
+               isfield(obj.Cache.geometry.data, 'vertex')
+                vertexGeom = obj.Cache.geometry.data.vertex;
+                return;
+            end
+            
+            % Compute vertex geometry
+            vertexGeom = bct.manifold.geometry.vertex(obj, 'precision', p.Results.precision);
+            
+            % Cache the result
+            if isempty(fieldnames(obj.Cache.geometry.data))
+                obj.Cache.geometry.data = struct();
+            end
+            obj.Cache.geometry.data.vertex = vertexGeom;
+            obj.Cache.geometry.meta.vertexComputed = datetime('now');
+        end
+        
+        function edgeGeom = edgeGeometry(obj, varargin)
+            %EDGEGEOMETRY Get or compute edge-based geometry
+            %
+            % Syntax:
+            %   edgeGeom = M.edgeGeometry()
+            %   edgeGeom = M.edgeGeometry('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force'     - false (default) or true to force recomputation
+            %   'precision' - 'double' (default) or 'single'
+            %
+            % Outputs:
+            %   edgeGeom - Structure with fields:
+            %     .lengths - [nE×1] Edge lengths
+            %     .weights - Structure with .cotangent and .euclidean
+            %
+            % Description:
+            %   Returns cached edge geometry if available, or computes using
+            %   bct.manifold.geometry.edge(). Result is cached in geometry
+            %   namespace for future calls.
+            %
+            % Examples:
+            %   M = bct.Manifold(V, F);
+            %   edgeGeom = M.edgeGeometry();
+            %   lengths = edgeGeom.lengths;
+            %
+            % See also: bct.manifold.geometry.edge, faceGeometry, vertexGeometry
+            
+            p = inputParser;
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if cached
+            if ~force && ~isempty(fieldnames(obj.Cache.geometry.data)) && ...
+               isfield(obj.Cache.geometry.data, 'edge')
+                edgeGeom = obj.Cache.geometry.data.edge;
+                return;
+            end
+            
+            % Compute edge geometry
+            edgeGeom = bct.manifold.geometry.edge(obj, 'precision', p.Results.precision);
+            
+            % Cache the result
+            if isempty(fieldnames(obj.Cache.geometry.data))
+                obj.Cache.geometry.data = struct();
+            end
+            obj.Cache.geometry.data.edge = edgeGeom;
+            obj.Cache.geometry.meta.edgeComputed = datetime('now');
+        end
+        
+        function dualGeom = dualGeometry(obj, varargin)
+            %DUALGEOMETRY Get or compute dual mesh geometry
+            %
+            % Syntax:
+            %   dualGeom = M.dualGeometry()
+            %   dualGeom = M.dualGeometry('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force'          - false (default) or true to force recomputation
+            %   'precision'      - 'double' (default) or 'single'
+            %   'boundaryPolicy' - 'error' (default) for boundary handling
+            %   'dualCellType'   - 'circumcentric' (default) for dual vertex areas
+            %
+            % Outputs:
+            %   dualGeom - Structure with fields:
+            %     .edgeLengths - [nE×1] Dual edge lengths
+            %     .vertexAreas - [nV×1] Dual vertex areas (Voronoi cells)
+            %
+            % Description:
+            %   Returns cached dual geometry if available, or computes using
+            %   bct.manifold.geometry.dual(). Result is cached in geometry
+            %   namespace for future calls.
+            %
+            %   Dual geometry requires closed mesh (no boundary edges).
+            %
+            % Examples:
+            %   M = bct.Manifold(V, F);
+            %   dualGeom = M.dualGeometry();
+            %   dualEdges = dualGeom.edgeLengths;
+            %   voronoiAreas = dualGeom.vertexAreas;
+            %
+            % See also: bct.manifold.geometry.dual, faceGeometry, edgeGeometry
+            
+            p = inputParser;
+            addParameter(p, 'Force', false, @islogical);
+            addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'boundaryPolicy', 'error', @(x) ischar(x) || isstring(x));
+            addParameter(p, 'dualCellType', 'circumcentric', @(x) ischar(x) || isstring(x));
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if cached
+            if ~force && ~isempty(fieldnames(obj.Cache.geometry.data)) && ...
+               isfield(obj.Cache.geometry.data, 'dual')
+                dualGeom = obj.Cache.geometry.data.dual;
+                return;
+            end
+            
+            % Compute dual geometry
+            dualGeom = bct.manifold.geometry.dual(obj, ...
+                'precision', p.Results.precision, ...
+                'boundaryPolicy', p.Results.boundaryPolicy, ...
+                'dualCellType', p.Results.dualCellType);
+            
+            % Cache the result
+            if isempty(fieldnames(obj.Cache.geometry.data))
+                obj.Cache.geometry.data = struct();
+            end
+            obj.Cache.geometry.data.dual = dualGeom;
+            obj.Cache.geometry.meta.dualComputed = datetime('now');
         end
         
         function topo = topology(obj, varargin)
@@ -1202,6 +1350,79 @@ classdef Manifold < handle
             % Cache the result
             obj.Cache.topology.data = topo;
             obj.Cache.topology.meta.computed = datetime('now');
+        end
+        
+        function he = halfedge(obj, varargin)
+            %HALFEDGE Get or compute halfedge data structure
+            %
+            % Syntax:
+            %   he = M.halfedge()
+            %   he = M.halfedge('Force', true)
+            %
+            % Name-Value Arguments:
+            %   'Force' - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   he - Halfedge data structure with fields:
+            %        .next       - [nH×1] Next halfedge in face
+            %        .twin       - [nH×1] Opposite halfedge
+            %        .vertex     - [nH×1] Vertex at halfedge origin
+            %        .face       - [nH×1] Face containing halfedge
+            %        .edge       - [nH×1] Edge index for halfedge
+            %        .isBoundary - [nH×1] Logical array for boundary halfedges
+            %        .E          - [nE×2] Unique edge list
+            %
+            % Description:
+            %   Returns cached halfedge structure if available, or computes
+            %   using bct.manifold.topology.halfedge() with mesh connectivity.
+            %   Result is cached within topology namespace for future calls.
+            %
+            %   The halfedge structure enables efficient mesh navigation and
+            %   is used internally by dual mesh computations and differential
+            %   operators.
+            %
+            % Examples:
+            %   % Get halfedge structure
+            %   M = bct.Manifold(V, F);
+            %   he = M.halfedge();
+            %   
+            %   % Navigate mesh
+            %   h = 1;  % First halfedge
+            %   next_h = he.next(h);
+            %   twin_h = he.twin(h);
+            %   
+            %   % Get edge list
+            %   E = he.E;
+            %   
+            %   % Force recomputation
+            %   he = M.halfedge('Force', true);
+            %
+            % See also: bct.manifold.topology.halfedge, topology
+            
+            % Parse inputs
+            p = inputParser;
+            p.FunctionName = 'bct.Manifold.halfedge';
+            addParameter(p, 'Force', false, @islogical);
+            parse(p, varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if topology is cached and has halfedge
+            if ~force && ~isempty(fieldnames(obj.Cache.topology.data)) && ...
+               isfield(obj.Cache.topology.data, 'halfedge')
+                he = obj.Cache.topology.data.halfedge;
+                return;
+            end
+            
+            % Compute halfedge using bct.manifold.topology.halfedge
+            he = bct.manifold.topology.halfedge(obj.Vertices, obj.Faces);
+            
+            % Cache the result in topology namespace
+            if isempty(fieldnames(obj.Cache.topology.data))
+                obj.Cache.topology.data = struct();
+            end
+            obj.Cache.topology.data.halfedge = he;
+            obj.Cache.topology.meta.halfedgeComputed = datetime('now');
         end
         
         function R = health(obj, varargin)

@@ -61,9 +61,9 @@ end
 % Get canonical edge list
 % Prefer halfedge if available (Manifold object)
 if isa(meshInput, 'bct.Manifold')
-    he = meshInput.halfedge();
-    E = he.E;
-    edgeSource = "halfedge";
+    topo = meshInput.topology();
+    E = topo.edges;
+    edgeSource = "topology.edges";
 else
     % Use topology.edges as fallback
     E = bct.manifold.topology.edges(F);
