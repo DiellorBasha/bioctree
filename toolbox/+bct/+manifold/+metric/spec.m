@@ -121,6 +121,10 @@ function m = operatorSpec()
     m('hodge0') = struct('unit', "m^2", 'Lexp', 2, 'meta', struct('maps', '0-form to 2-form'));
     m('hodge1') = struct('unit', "1", 'Lexp', 0, 'meta', struct('maps', '1-form to 1-form'));
     m('hodge2') = struct('unit', "1/m^2", 'Lexp', -2, 'meta', struct('maps', '2-form to 0-form'));
+    
+    % Spectral transform operators
+    m('mft') = struct('unit', "m", 'Lexp', 1, 'meta', struct('operator', 'forward_transform', 'normalization', 'mass-orthonormal'));
+    m('imft') = struct('unit', "1/m", 'Lexp', -1, 'meta', struct('operator', 'inverse_transform', 'normalization', 'mass-orthonormal'));
 end
 
 function m = eigenSpec()
@@ -130,7 +134,7 @@ function m = eigenSpec()
     m('Values') = struct('unit', "1/m^2", 'Lexp', -2, 'meta', struct('operator', 'Laplacian'));
     m('lambda') = struct('unit', "1/m^2", 'Lexp', -2, 'meta', struct('operator', 'Laplacian'));
     
-    % Eigenmodes (dimensionless, normalized)
-    m('Vectors') = struct('unit', "1", 'Lexp', 0, 'meta', struct('normalized', true, 'orthogonality', 'mass'));
-    m('phi') = struct('unit', "1", 'Lexp', 0, 'meta', struct('normalized', true, 'orthogonality', 'mass'));
+    % Eigenmodes (Mass-orthonormal, units 1/m)
+    m('Vectors') = struct('unit', "1/m", 'Lexp', -1, 'meta', struct('normalized', true, 'orthogonality', 'mass'));
+    m('phi') = struct('unit', "1/m", 'Lexp', -1, 'meta', struct('normalized', true, 'orthogonality', 'mass'));
 end
