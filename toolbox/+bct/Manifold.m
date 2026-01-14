@@ -534,6 +534,53 @@ classdef Manifold < handle
             deg = bct.manifold.query.degree(A, varargin{:});
         end
         
+        function d = delta(obj, vertexIdx)
+            %DELTA Create Dirac delta vector at specified vertex
+            %
+            % Syntax:
+            %   d = M.delta(vertexIdx)
+            %
+            % Inputs:
+            %   vertexIdx - Index of vertex where delta is 1 (scalar, 1-based)
+            %
+            % Outputs:
+            %   d - [N×1] sparse column vector
+            %       Value is 1 at vertexIdx, 0 elsewhere
+            %
+            % Description:
+            %   Creates a Dirac delta function on the discrete manifold - a vector
+            %   with value 1 at the specified vertex and 0 at all other vertices.
+            %   This is useful for:
+            %   - Point source initialization
+            %   - Green's function computation
+            %   - Testing operators at specific locations
+            %   - Localized field generation
+            %
+            % Examples:
+            %   M = bct.manifold.load();
+            %   
+            %   % Create delta at vertex 23
+            %   d = M.delta(23);
+            %   % d(23) = 1, all other entries are 0
+            %   
+            %   % Use as point source for heat equation
+            %   ops = M.operators();
+            %   result = ops.laplacebeltrami * d;
+            %   
+            %   % Create field with multiple sources
+            %   sources = [10, 50, 100];
+            %   field = M.delta(sources(1)) + M.delta(sources(2)) + M.delta(sources(3));
+            %
+            % See also: bct.manifold.query.delta
+            
+            arguments
+                obj (1,1) bct.Manifold
+                vertexIdx (1,1) {mustBeInteger, mustBePositive}
+            end
+            
+            d = bct.manifold.query.delta(obj.numVertices(), vertexIdx);
+        end
+        
         % ===============================================================
         % CACHE INSPECTION
         % ===============================================================
