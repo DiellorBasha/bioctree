@@ -51,6 +51,7 @@ p.addParameter('meshId', '', @(x) ischar(x) || isstring(x));
 p.addParameter('time', struct([]), @isstruct);
 p.addParameter('frame', [], @isnumeric);
 p.addParameter('metadata', struct(), @isstruct);
+p.addParameter('metric', struct([]), @isstruct);
 p.addParameter('schemaVersion', 'bct.field@1', @(x) ischar(x) || isstring(x));
 
 p.parse(varargin{:});
@@ -164,6 +165,14 @@ end
 
 if ~isempty(fieldnames(args.metadata))
     F.metadata = args.metadata;
+end
+
+% Add metric (required field)
+if ~isempty(args.metric)
+    F.metric = args.metric;
+else
+    % Use default metric
+    F.metric = bct.field.metric.default();
 end
 
 % Final validation

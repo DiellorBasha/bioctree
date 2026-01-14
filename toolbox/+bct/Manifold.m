@@ -746,20 +746,20 @@ classdef Manifold < handle
             %
             %   % Force recomputation
             %   E = M.eigenmodes('Force', true);
-            %
-            % See also: bct.manifold.eigenmodes
-            
-            % Parse input arguments
+%   
+%   % With unit annotations
+%   E = M.eigenmodes(100, 'annotate', true);
+%   E.values.unit   % '1/m^2' (Laplacian eigenvalues)
+%   E.vectors.unit  % '1' (normalized modes)
+%
+% See also: bct.manifold.eigenmodes, bct.manifold.metric.annotate
             p = inputParser;
             p.addOptional('k', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
             p.addParameter('RemoveDC', true, @islogical);
             p.addParameter('MassType', "voronoi", @(x) isstring(x) || ischar(x));
             p.addParameter('EigsOpts', struct(), @isstruct);
             p.addParameter('Force', false, @islogical);
-            p.parse(varargin{:});
-            
-            k_requested = p.Results.k;
-            removeDC = p.Results.RemoveDC;
+p.addParameter('annotate', false, @islogical);
             massType = string(p.Results.MassType);
             eigsOpts = p.Results.EigsOpts;
             force = p.Results.Force;
@@ -783,6 +783,10 @@ classdef Manifold < handle
             else
                 % Return cached
                 Eigen = obj.Cache.eigenmodes.data;
+                % Apply annotation if requested
+                if annotate
+                    Eigen = bct.manifold.metric.annotate(Eigen, 'eigen');
+                end
                 return;
             end
             
@@ -804,10 +808,29 @@ classdef Manifold < handle
             Eigen.massType = massType;
             Eigen.removedDC = removeDC;
             
-            % Cache for future use
-            obj.Cache.eigenmodes.data = Eigen;
+            % Apply annotation if requested (before caching to keep cache numeric)
+            if annotate
+                Eigen = bct.manifold.metric.annotate(Eigen, 'eigen');
+            end
+            
+            % Cache for future use (always cache numeric version)
+            if annotate
+                % Store un-annotated version in cache
+                EigenNumeric = struct();
+                EigenNumeric.values = eigenvalues;
+                EigenNumeric.vectors = eigenvectors;
+                EigenNumeric.k = length(eigenvalues);
+                EigenNumeric.operator = "Laplace-Beltrami";
+                EigenNumeric.basis = "P1-FEM";
+                EigenNumeric.ordering = "ascending";
+                EigenNumeric.massType = massType;
+                EigenNumeric.removedDC = removeDC;
+                obj.Cache.eigenmodes.data = EigenNumeric;
+            else
+                obj.Cache.eigenmodes.data = Eigen;
+            end
             obj.Cache.eigenmodes.meta.computed = datetime('now');
-            obj.Cache.eigenmodes.meta.k = Eigen.k;
+            obj.Cache.eigenmodes.meta.k = length(eigenvalues);
             obj.Cache.eigenmodes.meta.massType = massType;
             obj.Cache.eigenmodes.meta.removedDC = removeDC;
         end

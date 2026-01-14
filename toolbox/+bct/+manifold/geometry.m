@@ -16,6 +16,7 @@ function geom = geometry(M, varargin)
 %   'circumcenterMethod' - 'native' (default) or 'triangulation' for circumcenters
 %   'boundaryPolicy'     - 'error' (default) for dual measures with boundaries
 %   'dualCellType'       - 'circumcentric' (default) for dual vertex areas
+%   'annotate'           - false (default) or true to wrap outputs as quantity structs
 %
 % Outputs:
 %   geom - Structure with fields:
@@ -49,10 +50,15 @@ function geom = geometry(M, varargin)
 %   
 %   % Compute with single precision
 %   geom = bct.manifold.geometry(M, 'precision', 'single');
+%   
+%   % Compute with unit annotations
+%   geom = bct.manifold.geometry(M, 'annotate', true);
+%   geom.faceAreas.unit       % 'm^2'
+%   geom.edgeLengths.unit     % 'm'
 %
 % See also: bct.manifold.geometry.faceAreas, bct.manifold.geometry.edgeLengths,
 %           bct.manifold.geometry.faceCircumcenters, bct.manifold.geometry.dualEdgeLengths,
-%           bct.manifold.geometry.dualVertexAreas
+%           bct.manifold.geometry.dualVertexAreas, bct.manifold.metric.annotate
 
 % Parse inputs
 p = inputParser;
@@ -65,6 +71,7 @@ addParameter(p, 'precision', 'double', @(x) ischar(x) || isstring(x));
 addParameter(p, 'circumcenterMethod', 'native', @(x) ischar(x) || isstring(x));
 addParameter(p, 'boundaryPolicy', 'error', @(x) ischar(x) || isstring(x));
 addParameter(p, 'dualCellType', 'circumcentric', @(x) ischar(x) || isstring(x));
+addParameter(p, 'annotate', false, @islogical);
 parse(p, M, varargin{:});
 
 normalType = p.Results.NormalType;
@@ -74,6 +81,7 @@ precision = string(p.Results.precision);
 circumcenterMethod = string(p.Results.circumcenterMethod);
 boundaryPolicy = string(p.Results.boundaryPolicy);
 dualCellType = string(p.Results.dualCellType);
+annotate = p.Results.annotate;
 
 % Validate inputs
 if ~ismember(lower(normalType), {'vertex', 'face'})
@@ -162,6 +170,11 @@ catch ME
     % Store error info if dual computation fails
     geom.dualVertexAreas = [];
     geom.header.dualVertexAreas = struct('error', ME.identifier, 'message', ME.message);
+end
+
+% Apply unit annotation if requested
+if annotate
+    geom = bct.manifold.metric.annotate(geom, 'geometry');
 end
 
 end

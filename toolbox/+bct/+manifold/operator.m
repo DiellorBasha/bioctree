@@ -16,6 +16,7 @@ function ops = operator(meshInput, varargin)
 %   StiffnessVariant - 'cotan' (default)
 %   StiffnessSign    - 'positive' (default), 'negative'
 %   Symmetrize       - true (default), false
+%   annotate         - false (default) or true to wrap outputs as quantity structs
 %
 % Outputs:
 %   ops - Structure with fields:
@@ -77,12 +78,17 @@ function ops = operator(meshInput, varargin)
 %   
 %   % Direct V, F input
 %   ops = bct.manifold.operator(V, F);
+%   
+%   % Compute with unit annotations
+%   ops = bct.manifold.operator(M, 'annotate', true);
+%   ops.gradient.unit         % '1/m'
+%   ops.laplacebeltrami.unit  % '1/m^2'
 %
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
 %           bct.manifold.operator.dec, bct.manifold.operator.gradient,
 %           bct.manifold.operator.divergence, bct.manifold.operator.curl,
 %           bct.manifold.operator.hodgelaplacian, bct.manifold.operator.graphlaplacian,
-%           bct.manifold.geometry, bct.manifold.topology
+%           bct.manifold.geometry, bct.manifold.topology, bct.manifold.metric.annotate
 
 % Parse inputs
 p = inputParser;
@@ -93,6 +99,7 @@ p.addParameter('MassVariant', 'voronoi', @(x) ischar(x) || isstring(x));
 p.addParameter('StiffnessVariant', 'cotan', @(x) ischar(x) || isstring(x));
 p.addParameter('StiffnessSign', 'positive', @(x) ischar(x) || isstring(x));
 p.addParameter('Symmetrize', true, @islogical);
+p.addParameter('annotate', false, @islogical);
 p.parse(meshInput, varargin{:});
 
 % Extract mesh data
@@ -115,6 +122,7 @@ massVariant = string(p.Results.MassVariant);
 stiffnessVariant = string(p.Results.StiffnessVariant);
 stiffnessSign = string(p.Results.StiffnessSign);
 symmetrize = p.Results.Symmetrize;
+annotate = p.Results.annotate;
 
 % Initialize output structure
 ops = struct();
@@ -192,5 +200,10 @@ ops.hodgelaplacian = struct();
 % Graph Laplacian: combinatorial (D - A) based on topology only
 % Unlike Laplace-Beltrami which uses geometric weighting
 ops.graphlaplacian = bct.manifold.operator.graphlaplacian(M, 'Type', 'combinatorial');
+
+% Apply unit annotation if requested
+if annotate
+    ops = bct.manifold.metric.annotate(ops, 'operator');
+end
 
 end

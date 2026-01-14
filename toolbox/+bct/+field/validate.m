@@ -45,7 +45,7 @@ end
 schema = bct.field.schema();
 
 % Check required fields
-requiredFields = ["schemaVersion", "support", "valueType", "value"];
+requiredFields = ["schemaVersion", "support", "valueType", "value", "metric"];
 for i = 1:length(requiredFields)
     if ~isfield(F, requiredFields(i))
         error('bct:Field:MissingField', ...
@@ -160,5 +160,8 @@ if isfield(F, 'metadata')
             'metadata must be a struct');
     end
 end
+
+% Validate metric (required field)
+bct.field.metric.validate(F.metric);
 
 end

@@ -29,7 +29,7 @@ s.valueTypes = ["scalar", "vector3", "tangent2", "complexScalar", "complexVector
 
 % Required fields for a valid Field
 s.requiredFields = ["schemaVersion", "meshId", "support", "value", ...
-                    "valueType", "time", "meta"];
+                    "valueType", "time", "meta", "metric"];
 
 % Optional fields
 s.optionalFields = ["frame", "units", "provenance"];

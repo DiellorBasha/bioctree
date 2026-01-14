@@ -66,7 +66,8 @@ classdef Field < handle
         ValueType    % "scalar"|"vector3"|"tangent2"|"complexScalar"|"complexVector3"
         ManifoldID   % string - manifold identifier
         Time         % [] or time struct with fields: fs, t0, nSamples, units
-        Meta         % struct - metadata (units, provenance, etc.)
+        Meta         % struct - metadata (provenance, etc.)
+        Metric       % struct - physical units and dimensions
         Frame        % [] or tangent frame basis (for tangent2 fields)
     end
 
@@ -96,6 +97,7 @@ classdef Field < handle
                 options.Time = []
                 options.Frame {mustBeNumeric} = []
                 options.Meta struct = struct()
+                options.Metric struct = struct()
                 options.Internal (1,1) logical = false
             end
 
@@ -115,6 +117,13 @@ classdef Field < handle
             obj.Value = value;
             obj.Meta = options.Meta;
             obj.Frame = options.Frame;
+            
+            % Initialize Metric (required field)
+            if ~isempty(fieldnames(options.Metric))
+                obj.Metric = options.Metric;
+            else
+                obj.Metric = bct.field.metric.default();
+            end
             
             % Only set Time if non-empty
             if ~isempty(options.Time)
@@ -186,6 +195,7 @@ classdef Field < handle
             s.valueType = char(obj.ValueType);
             s.value = obj.Value;
             s.meta = obj.Meta;
+            s.metric = obj.Metric;
             
             % Only include time if non-empty (don't set empty [] to avoid validation warnings)
             if ~isempty(obj.Time)
@@ -252,6 +262,11 @@ classdef Field < handle
                 fprintf('           Meta: [struct with %d fields]\n', length(fieldnames(obj.Meta)));
             end
             
+            % Show metric status
+            if ~isempty(obj.Metric)
+                fprintf('     MetricUnit: %s (status: %s)\n', obj.Metric.unit, obj.Metric.status);
+            end
+            
             fprintf('\n');
         end
     end
@@ -285,6 +300,13 @@ classdef Field < handle
             obj.Support = string(s.support);
             obj.ValueType = string(s.valueType);
             obj.Value = s.value;
+            
+            % Handle metric (required field)
+            if isfield(s, 'metric')
+                obj.Metric = s.metric;
+            else
+                obj.Metric = bct.field.metric.default();
+            end
             
             if isfield(s, 'time') && ~isempty(s.time)
                 obj.Time = s.time;
