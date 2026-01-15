@@ -225,9 +225,9 @@ tests/
 Use MATLAB's `matlab.unittest` framework for production tests. These are official, publication-ready test files.
 
 Requirements:
-- Unit tests for core classes (Manifold, Graph, FEM, Eigenpairs)
+- Unit tests for core classes (Manifold, Field, Operator)
 - Unit tests for operators (gradient, divergence, curl)
-- Unit tests for data loading (manifold.load, fields.load)
+- Unit tests for data loading (bct.data.load, bct.field.load)
 - Integration tests for complete workflows
 - Performance tests (eigensolver, FEM assembly)
 
@@ -237,6 +237,30 @@ dev/test/
 ```
 
 **IMPORTANT**: During development, Copilot must write temporary test files in `dev/test/` directory, NOT in `tests/`. These development test files serve an important purpose: they allow you to test and refine code during development without polluting the production test suite. Only write production tests in `tests/` when explicitly instructed by the user.
+
+**Canonical Testing Manifold:**
+
+**CRITICAL**: All tests (development and production) must use the canonical testing manifold:
+
+```matlab
+M = bct.data.load('Id', 'fsaverage_rh_pial');
+```
+
+- **Never use icosphere or other synthetic meshes for testing**
+- The `fsaverage_rh_pial` manifold is the standard test surface from the mesh catalog
+- Located at `toolbox/+bct/+data/assets/mesh/fsaverage_rh_pial.mat`
+- Provides realistic cortical surface geometry for validation
+- Ensures consistency across all test files
+
+Example test structure:
+```matlab
+% Load canonical test manifold
+M = bct.data.load('Id', 'fsaverage_rh_pial');
+
+% Test your functionality
+ops = M.operators();
+assert(~isempty(ops.laplacebeltrami));
+```
 
 📚 DOCUMENTATION REQUIREMENTS
 
@@ -278,6 +302,19 @@ dev/demo/
 ```
 
 **IMPORTANT**: During development, Copilot must write temporary demo files in `dev/demo/` directory, NOT in `demo/`. These development demos allow you to validate and demonstrate functionality during development. Only write production demos in `demo/` when explicitly instructed by the user.
+
+**Default Demo Manifold:**
+
+**Unless specified otherwise**, all demos (development and production) must use the canonical manifold:
+
+```matlab
+M = bct.data.load('Id', 'fsaverage_rh_pial');
+```
+
+- This ensures consistency across all demonstrations
+- Provides realistic cortical surface for visual demonstrations
+- Users can easily reproduce demos with the bundled catalog asset
+- Only use alternative manifolds when explicitly requested or when demonstrating specific features (e.g., sphere topology)
 
 ⚙ DEPENDENCIES
 
@@ -334,13 +371,13 @@ When generating code, you must:
 1. **Use Manifold-centric design**: All geometry operations start with `bct.Manifold`
 2. **Respect field abstraction**: Use `bct.field` for all field operations
 3. **Use operator registry**: Apply operators via `bct.operators.apply()`, not direct computation
-4. **Follow package structure**: Place code in correct subpackage (+geometry, +topology, +graph, etc.)
+4. **Follow package structure**: Place code in correct subpackage (+geometry, +topology, +operator, etc.)
 5. **Validate schemas**: All registered artifacts must pass schema validation
 6. **Write development tests**: During development, test all new functions in `dev/test/` (NOT `tests/`)
 7. **Write development demos**: During development, demonstrate functionality in `dev/demo/` (NOT `demo/`)
 8. **Document in notes/**: During development, add summaries and specifications in `notes/` (NOT `docs/`)
-9. **Maintain clean OOP style**: Use MATLAB classes with properties, methods, and validation
-10. **Avoid duplication**: Leverage existing FEM, Graph, and Eigenpairs functionality
+9. **Use canonical test manifold**: Load `M = bct.data.load('Id', 'fsaverage_rh_pial');` for all tests and demos
+10. **Maintain clean OOP style**: Use MATLAB classes with properties, methods, and validation
 11. **Handle metadata**: Preserve provenance and metadata through all operations
 12. **Production files only when requested**: Write to `tests/`, `demo/`, or `docs/` only when explicitly instructed by the user
 
