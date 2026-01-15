@@ -156,13 +156,12 @@ F = bct.field.load('Id', 'test_scalarField_vertex');
 
 🧪 TESTING FRAMEWORK
 
-All tests must go under:
-
+**Production Tests:**
 ```
 tests/
 ```
 
-Use MATLAB's `matlab.unittest` framework.
+Use MATLAB's `matlab.unittest` framework for production tests. These are official, publication-ready test files.
 
 Requirements:
 - Unit tests for core classes (Manifold, Graph, FEM, Eigenpairs)
@@ -171,15 +170,21 @@ Requirements:
 - Integration tests for complete workflows
 - Performance tests (eigensolver, FEM assembly)
 
+**Development Tests:**
+```
+dev/test/
+```
+
+**IMPORTANT**: During development, Copilot must write temporary test files in `dev/test/` directory, NOT in `tests/`. These development test files serve an important purpose: they allow you to test and refine code during development without polluting the production test suite. Only write production tests in `tests/` when explicitly instructed by the user.
+
 📚 DOCUMENTATION REQUIREMENTS
 
-All documentation must go under:
-
+**Production Documentation:**
 ```
 docs/
 ```
 
-Documentation must describe:
+Official publication documentation using mkdocs. Must describe:
 - Manifold-field paradigm
 - FEM and spectral methods
 - Operator system and registry
@@ -188,12 +193,30 @@ Documentation must describe:
 - API references
 - Usage examples
 
-Additional notes in:
+**IMPORTANT**: Do NOT add documentation files to `docs/` during development. This folder contains official publication documentation for bct. 
+
+**Development Notes and Summaries:**
 ```
 notes/
 ```
 
-Contains contract specifications for subsystems (see `notes/*.md`).
+**IMPORTANT**: Any summaries, explanations, or documentation needed during development must go into `notes/`. This directory contains contract specifications and development documentation for subsystems (see `notes/*.md`).
+
+🎬 DEMONSTRATION SCRIPTS
+
+**Production Demos:**
+```
+demo/
+```
+
+Official demonstration scripts that will be published with the repository.
+
+**Development Demos:**
+```
+dev/demo/
+```
+
+**IMPORTANT**: During development, Copilot must write temporary demo files in `dev/demo/` directory, NOT in `demo/`. These development demos allow you to validate and demonstrate functionality during development. Only write production demos in `demo/` when explicitly instructed by the user.
 
 ⚙ DEPENDENCIES
 
@@ -252,11 +275,13 @@ When generating code, you must:
 3. **Use operator registry**: Apply operators via `bct.operators.apply()`, not direct computation
 4. **Follow package structure**: Place code in correct subpackage (+geometry, +topology, +graph, etc.)
 5. **Validate schemas**: All registered artifacts must pass schema validation
-6. **Write unit tests**: Test all new functions in `tests/`
-7. **Document in notes/**: Add contract specifications for new subsystems
-8. **Maintain clean OOP style**: Use MATLAB classes with properties, methods, and validation
-9. **Avoid duplication**: Leverage existing FEM, Graph, and Eigenpairs functionality
-10. **Handle metadata**: Preserve provenance and metadata through all operations
+6. **Write development tests**: During development, test all new functions in `dev/test/` (NOT `tests/`)
+7. **Write development demos**: During development, demonstrate functionality in `dev/demo/` (NOT `demo/`)
+8. **Document in notes/**: During development, add summaries and specifications in `notes/` (NOT `docs/`)
+9. **Maintain clean OOP style**: Use MATLAB classes with properties, methods, and validation
+10. **Avoid duplication**: Leverage existing FEM, Graph, and Eigenpairs functionality
+11. **Handle metadata**: Preserve provenance and metadata through all operations
+12. **Production files only when requested**: Write to `tests/`, `demo/`, or `docs/` only when explicitly instructed by the user
 
 **Deprecated concepts (DO NOT USE):**
 - `@Domain`, `@Lambda`, `@Omega`, `@Time`, `@Joint` classes (removed)
