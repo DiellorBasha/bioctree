@@ -2,7 +2,7 @@
 
 You are working inside a MATLAB-based scientific computing toolbox called bioctree, whose core computational engine is the bct package.
 
-Your purpose is to write and maintain code for a spatiotemporal signal-processing system that analyzes fields (signals) defined on triangulated surfaces (manifolds), using finite element methods (FEM) and spectral graph theory with the Laplace–Beltrami operator.
+Your purpose is to write and maintain code for a spatiotemporal signal-processing system that analyzes fields (signals) defined on triangulated surfaces (manifolds), using finite element methods (FEM) , discrete exterior calculus (DEC) and spectral graph theory with the Laplace–Beltrami operator.
 
 **Core Philosophy:**
 - Surfaces are **manifolds** over which dynamics evolve
@@ -22,80 +22,138 @@ It contains:
 
 **Core Classes:**
 
-- `Manifold` — Triangulated surface with integrated FEM capabilities
-- `Graph` — Sparse graph representation with algorithms  
-- `FEM` — Finite element matrices (stiffness, mass, gradient, divergence)
-- `Eigenpairs` — Eigendecomposition with metadata and spectral operations
-- `operators` — Operator application interface
+- `Manifold` — Triangulated surface with unified caching and lazy computation
+- `Field` — Data-on-manifold with support semantics and type safety
+- `Operator` — Wrapper for differential and transform operators with metadata
 
 **Subpackages:**
 
-- `+data` — Catalog system and bundled mesh/field assets
-- `+fields` — Field artifact management with validation
-- `+manifold` — Mesh I/O and format conversion
-- `+geometry` — Geometric computations (normals, frames, cotangent weights)
-- `+topology` — Topological analysis (halfedge, edges, adjacency)
-- `+graph` — Graph-theoretic operations (eigensolve, distances, paths)
-- `+operators` — Differential and transform operators
-- `+registry` — Artifact registration (operators, kernels, colormaps, brushes)
+- `+manifold` — Manifold operations: I/O, geometry, topology, operators, eigenmodes, health
+  - `+geometry` — Geometric computations (normals, tangent frames, areas, curvature)
+  - `+topology` — Topological analysis (edges, adjacency, halfedge structure)
+  - `+operator` — FEM and DEC operator construction (mass, stiffness, derivatives)
+  - `+eigen` — Eigenmode computation and spectral analysis utilities
+  - `+health` — Mesh quality checking and repair (orientation, connectivity, scale)
+  - `+metric` — Metric operations (rescaling, unit conversion)
+  - `+query` — Spatial queries and nearest-neighbor searches
+- `+field` — Field construction, validation, and manipulation
+  - `+generate` — Field generation utilities
+  - `+metric` — Field metrics and statistics
+- `+operators` — High-level operator application interface
+- `+filter` — Spectral filtering (synthesis, analysis, design, inverse)
+- `+brush` — Localization windows and spatial modulation
+  - `+design` — Brush design tools
+  - `+dynamic` — Dynamic brushes
+  - `+patch` — Patch-based operations
+- `+kernel` — Spectral kernel generators (heat, wave, diffusion)
+- `+registry` — Artifact registration system
+  - `+operators` — Operator registry definitions
+  - `+kernels` — Kernel registry definitions
+  - `+colormaps` — Colormap registry
+  - `+brushes` — Brush registry
 - `+runtime` — Runtime resolution and caching
-- `+kernel` — Spectral kernel generators
+- `+data` — Catalog system and bundled mesh/field assets
 - `+ui` — Visualization and interaction tools
+  - `+manifold` — 3D surface visualization (WebGL-based)
+  - `+eigenspectrum` — Eigenmode and spectrum visualization
+  - `+color` — Color controls and colormaps
+  - `+component` — UI component library
+- `+config` — Configuration management
+- `+install` — Installation and dependency management
+- `+file` — File I/O utilities
 
 📚 CORE ARCHITECTURAL PRINCIPLES
 
 ### 1. Manifold-Centric Design
 
 The `bct.Manifold` class is the foundation. It represents a triangulated 2-manifold with:
-- Vertices (V) and Faces (F) defining the mesh topology
-- Integrated FEM computation (Laplacian, mass matrix, eigenmodes)
-- Geometric properties (normals, frames, areas, cotangent weights)
-- Metadata (name, source, hemisphere, etc.)
+- Vertices (V) and Faces (F) defining the mesh topology (immutable)
+- Unified caching system for computed properties (geometry, topology, operators, eigenmodes)
+- Lazy computation with automatic cache management
+- Metric provenance tracking (units, rescaling status)
 
 ```matlab
-M = bct.manifold.load();  % Load from catalog
-E = bct.graph.eigensolve(M, 100);  % Compute eigenpairs
+M = bct.manifold.load();         % Load from catalog
+ops = M.operators();             % Get all operators (mass, stiffness, DEC)
+geom = M.geometry();             % Get all geometry (centroids, normals, tangents)
+[lambda, U] = M.eigenmodes(100); % Compute 100 eigenmodes
 ```
 
 ### 2. Field Abstraction
 
-Fields are signals defined on manifolds. The `bct.field` package manages:
-- **Support**: `vertex` (values at mesh vertices) or `face` (values at face centers)
-- **Value type**: `scalar` (one value per location) or `vector` (tangent vectors)
-- **Validation**: Schema checking and manifold compatibility
+Fields are signals defined on manifolds. The `bct.Field` class and `bct.field` package provide:
+- **Support types**: `vertex`, `face`, `edge`, `halfedge`, `dualFace`, `dualVertex`
+- **Value types**: `scalar`, `vector3`, `tangent2`, `complexScalar`, `complexVector3`
+- **Time-varying fields**: Automatic time metadata handling
+- **Schema validation**: Automatic type inference and manifold compatibility checking
 
 ```matlab
-F = bct.field.load();  % Load field from catalog
-F = bct.field.make(M, values, 'support', 'vertex', 'valueType', 'scalar');
+F = bct.field.load('Id', 'test_scalarField_vertex');  % Load from catalog
+F = bct.field.make(M, values, 'support', 'vertex', 'valueType', 'scalar');  % Create field
+F = bct.Field(M, values);  % Object-oriented interface with auto-inference
 ```
 
 ### 3. Operator System
 
-Operators are registered artifacts that transform fields. The `bct.operators` system provides:
-- **Differential operators**: gradient, divergence, Laplacian, curl
-- **Domain/codomain resolution**: Automatic type inference based on input field
-- **Registry-based**: All operators registered in `+registry/+operators/`
+Operators are computed via `bct.manifold.operator` functions and wrapped in `bct.Operator` objects:
+- **FEM operators**: mass matrix, stiffness matrix, Laplace-Beltrami operator
+- **DEC operators**: exterior derivatives (d0, d1), codifferentials (dd0, dd1), Hodge stars
+- **Composition operators**: gradient, divergence, curl, Hodge Laplacian
+- **Registry-based high-level interface**: `bct.operators.apply()` for field transformations
 
 ```matlab
-gradF = bct.operators.apply('gradient', F);  % ∇: scalar(vertex) → vector(face)
-divF = bct.operators.apply('divergence', gradF);  % ∇·: vector(face) → scalar(vertex)
-lapF = bct.operators.apply('laplacian', F);  % Δ: scalar(vertex) → scalar(vertex)
+% Access operators from Manifold
+ops = M.operators();
+L = ops.laplacebeltrami;  % [N×N] Laplace-Beltrami operator
+d0 = ops.d0;              % Exterior derivative (vertex → edge)
+
+% Apply to fields using bct.operators interface
+gradF = bct.operators.apply('gradient', F);      % ∇: scalar(vertex) → tangent2(face)
+divF = bct.operators.apply('divergence', vecF);  % ∇·: tangent2(face) → scalar(vertex)
+lapF = bct.operators.apply('laplacian', F);      % Δ: scalar(vertex) → scalar(vertex)
 ```
 
 ### 4. Spectral Analysis
 
 Eigenmodes of the Laplace-Beltrami operator form a natural basis for the manifold:
-- `bct.graph.eigensolve()` computes eigenpairs
-- `bct.Eigenpairs` class encapsulates vectors, values, and metadata
-- Spectral filtering applies kernels in eigenmode domain
+- `bct.manifold.eigenmodes()` computes eigenpairs via generalized eigenvalue problem
+- Eigenvectors are M-orthonormal: U' * M * U = I
+- Spectral filtering via `bct.filter` package (synthesis, analysis, design, inverse)
+- Kernel-based filtering with registered kernels (heat, wave, diffusion)
 
 ```matlab
-E = bct.graph.eigensolve(M, 100);
-spectrum = E.vectors' * F.value;  % Project field onto eigenmodes
-filtered = E.vectors * (kernel .* spectrum);  % Spectral filtering
+% Compute eigenmodes
+[lambda, U] = bct.manifold.eigenmodes(M, 100);
+
+% Project field onto eigenmodes
+Mass = M.massmatrix();
+spectrum = U' * Mass * F.value;  % Spectral coefficients
+
+% Spectral filtering
+tau = 10;
+kernel = exp(-lambda * tau);      % Heat kernel
+filtered = U * (kernel .* spectrum);  % Apply filter in spectral domain
 ```
 
-### 5. Registry System
+### 5. Discrete Exterior Calculus (DEC)
+
+Full DEC machinery integrated into operator system:
+- **Differential forms**: 0-forms (vertices), 1-forms (edges), 2-forms (faces)
+- **Exterior derivatives**: d0 (0→1), d1 (1→2)
+- **Codifferentials**: dd0 (1→0), dd1 (2→1)
+- **Hodge stars**: Map between primal and dual forms
+- **Vector calculus**: gradient, divergence, curl via DEC composition
+
+```matlab
+ops = M.operators();
+d0 = ops.dec.d0;         % Exterior derivative d0
+hd1 = ops.dec.hd1;       % Hodge star *₁
+grad = ops.gradient;     % Gradient = sharp ∘ d0
+div = ops.divergence;    % Divergence = dd0
+curl = ops.curl;         % Curl = dd1 (edge → face)
+```
+
+### 6. Registry System
 
 Extensibility through registries for:
 - **Operators** (`+registry/+operators/`) — Differential, transform, field operators
@@ -106,20 +164,23 @@ Extensibility through registries for:
 Each registry has:
 - `defs.m` — Registry definitions
 - `schema.m` — Validation schema
-- `list.m` — Query registered items
-- `validate.m` — Schema validation
+- Accessor functions in `+registry/` for runtime resolution
 
-### 6. Runtime Resolution
+### 7. Manifold Health System
 
-The `+runtime` package handles:
-- Lazy loading and caching of registered artifacts
-- Provenance tracking for operators
-- Dynamic binding of kernels to manifolds
-- Inspector resolution for UI components
+Comprehensive mesh quality checking and repair via `+manifold/+health`:
+- **Checks**: orientation, connectivity, scale, topology
+- **Measures**: quantitative metrics for each check type
+- **Repairs**: automatic fixes (orient consistently/outward, split components, rescale)
 
 ```matlab
-op = bct.runtime.operators('gradient');  % Resolve operator
-kernel = bct.runtime.kernels('heat', M, 't', 10);  % Bind kernel to manifold
+% Check manifold health
+issues = M.check();  % Run all checks
+issues = M.check('Checks', {'oriented', 'connectivity'});  % Specific checks
+
+% Repair issues
+M_fixed = M.repair(issues);  % Automatic repair
+M_fixed = M.repair('Repairs', {'orientOutward', 'splitComponents'});  % Manual selection
 ```
 
 📂 DATA LOCATIONS
