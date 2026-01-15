@@ -88,9 +88,11 @@ markdown_extensions:
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/mesh-viewer.js
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/viewer.css
 
 extra:
   social:

@@ -1,0 +1,268 @@
+/* ============================================
+   Bioctree Custom Styles
+   ============================================ */
+
+/* Enhanced grid cards with hover effects */
+.md-typeset .grid.cards>ol>li,
+.md-typeset .grid.cards>ul>li {
+    border: 1px solid var(--md-default-fg-color--lightest);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.md-typeset .grid.cards>ol>li:hover,
+.md-typeset .grid.cards>ul>li:hover {
+    border-color: var(--md-primary-fg-color);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(63, 81, 181, 0.15);
+}
+
+/* Smooth transitions for all interactive elements */
+.md-header,
+.md-tabs,
+.md-nav__link,
+.md-footer,
+.md-typeset a {
+    transition: all 0.3s ease;
+}
+
+/* Enhanced code blocks */
+.md-typeset pre {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.md-typeset code {
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+}
+
+/* Enhanced tables */
+.md-typeset table:not([class]) {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.md-typeset table:not([class]) th {
+    background: var(--md-primary-fg-color);
+    color: white;
+    font-weight: 600;
+}
+
+/* Admonition enhancements */
+.md-typeset .admonition,
+.md-typeset details {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-left: 4px solid var(--md-primary-fg-color);
+}
+
+/* Enhanced buttons */
+.md-button {
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.md-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(63, 81, 181, 0.2);
+}
+
+.md-button--primary {
+    background-color: var(--md-primary-fg-color);
+}
+
+/* Animated icons */
+.twemoji {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+a:hover .twemoji {
+    transform: scale(1.1);
+}
+
+/* Enhanced navigation */
+.md-nav__link--active {
+    font-weight: 600;
+    color: var(--md-primary-fg-color);
+}
+
+.md-tabs__link--active {
+    background: linear-gradient(to bottom, 
+        transparent 0%, 
+        rgba(63, 81, 181, 0.1) 100%);
+}
+
+/* Search enhancements */
+.md-search__input {
+    border-radius: 8px;
+}
+
+.md-search__input::placeholder {
+    opacity: 0.6;
+}
+
+/* Footer enhancements */
+.md-footer {
+    background: linear-gradient(to bottom, 
+        var(--md-default-bg-color) 0%, 
+        var(--md-footer-bg-color) 20%);
+}
+
+/* Scrollbar styling (webkit browsers) */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--md-default-bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--md-default-fg-color--light);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--md-primary-fg-color);
+}
+
+/* Enhanced content spacing */
+.md-content {
+    padding-bottom: 3rem;
+}
+
+/* Animated underlines for links */
+.md-typeset a:not(.md-button) {
+    position: relative;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+}
+
+.md-typeset a:not(.md-button)::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--md-primary-fg-color);
+    transition: width 0.3s ease;
+}
+
+.md-typeset a:not(.md-button):hover::after {
+    width: 100%;
+}
+
+/* Card grid responsive improvements */
+@media (max-width: 768px) {
+    .md-typeset .grid.cards>ol,
+    .md-typeset .grid.cards>ul {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Highlight current section in TOC */
+.md-nav__link--active,
+.md-nav__link--active:hover {
+    color: var(--md-primary-fg-color);
+    font-weight: 600;
+}
+
+/* Enhanced version selector */
+.md-version {
+    border-radius: 6px;
+}
+
+/* Code annotation improvements */
+.md-annotation {
+    border-radius: 6px;
+}
+
+/* Tab enhancements */
+.tabbed-set {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.tabbed-labels>label {
+    border-radius: 8px 8px 0 0;
+    transition: all 0.3s ease;
+}
+
+.tabbed-labels>label:hover {
+    background: rgba(63, 81, 181, 0.1);
+}
+
+/* Task list enhancements */
+.md-typeset .task-list-item input[type="checkbox"] {
+    border-radius: 3px;
+}
+
+/* Enhanced kbd elements */
+.md-typeset kbd {
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Progress bar for instant navigation */
+.md-progress {
+    background: linear-gradient(to right, 
+        var(--md-primary-fg-color), 
+        var(--md-accent-fg-color));
+    height: 3px;
+}
+
+/* Announcement bar styling */
+.md-banner {
+    border-radius: 0 0 8px 8px;
+}
+
+/* Enhanced tooltips */
+[data-md-tooltip] {
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Dark mode specific enhancements */
+[data-md-color-scheme="slate"] {
+    --md-code-bg-color: #1e1e2e;
+    --md-code-fg-color: #cdd6f4;
+}
+
+[data-md-color-scheme="slate"] .md-typeset pre {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* Feature highlights on homepage */
+.feature-highlight {
+    padding: 2rem;
+    border-left: 4px solid var(--md-primary-fg-color);
+    background: linear-gradient(to right, 
+        rgba(63, 81, 181, 0.05), 
+        transparent);
+    border-radius: 0 8px 8px 0;
+    margin: 2rem 0;
+}
+
+/* Emoji sizing */
+.md-typeset h1 .twemoji,
+.md-typeset h2 .twemoji {
+    height: 1em;
+    vertical-align: text-top;
+}
+
+/* Loading animation for instant navigation */
+@keyframes md-progress {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}

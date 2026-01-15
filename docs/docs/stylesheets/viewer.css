@@ -1,0 +1,41 @@
+/* Mesh Viewer Styles */
+
+.mesh-viewer {
+    margin: 2em 0;
+    position: relative;
+}
+
+.mesh-viewer iframe {
+    display: block;
+    width: 100%;
+}
+
+/* Optional: Add figure styling for captions */
+figure.mesh-viewer-figure {
+    margin: 2em 0;
+}
+
+figure.mesh-viewer-figure figcaption {
+    margin-top: 0.5em;
+    text-align: center;
+    font-style: italic;
+    color: var(--md-default-fg-color--light);
+    font-size: 0.9em;
+}
+
+/* Viewer loading state */
+.mesh-viewer::before {
+    content: 'Loading 3D model...';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #999;
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.mesh-viewer iframe[src]::before {
+    display: none;
+}
