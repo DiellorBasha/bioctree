@@ -4,21 +4,22 @@ function M = rescale(M, options)
 % Syntax:
 %   M = bct.manifold.metric.rescale(M, 'From', fromUnit)
 %   M = bct.manifold.metric.rescale(M, 'From', fromUnit, 'Force', true)
+%   M = bct.manifold.metric.rescale(M, 'Factor', scaleFactor)
 %
 % Inputs:
 %   M - bct.Manifold object
 %
 % Name-Value Arguments:
-%   From  - Source unit (required): "m" | "cm" | "mm" | "um" | "nm"
-%   Force - Allow rescaling even if already applied (default: false)
+%   From   - Source unit: "m" | "cm" | "mm" | "um" | "nm"
+%   Factor - Direct scaling factor (alternative to 'From')
+%   Force  - Allow rescaling even if already applied (default: false)
 %
 % Outputs:
-%   M - Manifold with rescaled vertices in SI meters
+%   M - New Manifold with rescaled vertices
 %
 % Description:
 %   Rescales manifold vertex coordinates from a known decimal length unit
-%   to SI meters. All bct.Manifold objects are interpreted as meters, so
-%   if input data was in mm, cm, etc., use this function to correct.
+%   to SI meters, or by a direct scaling factor.
 %
 %   Conversion factors:
 %   - "m"  → 1 (identity)
@@ -27,37 +28,52 @@ function M = rescale(M, options)
 %   - "um" → 1e-6
 %   - "nm" → 1e-9
 %
+%   Alternatively, use 'Factor' for direct scaling (uses surfaceMesh.scale).
+%
 %   Guardrails:
 %   - Prevents double-rescaling unless Force=true
-%   - Invalidates all metric-dependent caches (geometry, operators, spectral)
-%   - Records rescaling provenance in M.Metric
+%   - Returns new Manifold (original unchanged)
 %
 % Examples:
 %   % Data originally in millimeters
 %   M = bct.Manifold(V_mm, F);
 %   M = bct.manifold.metric.rescale(M, 'From', 'mm');
 %
+%   % Direct scaling factor
+%   M = bct.manifold.metric.rescale(M, 'Factor', 0.001);
+%
 %   % Force re-rescaling (use with caution)
 %   M = bct.manifold.metric.rescale(M, 'From', 'cm', 'Force', true);
 %
-% See also: bct.manifold.metric.validateUnit, bct.manifold.metric.info
+% See also: bct.manifold.metric.validateUnit, surfaceMesh.scale
 
 arguments
     M (1,1) bct.Manifold
-    options.From (1,1) string
+    options.From (1,1) string = ""
+    options.Factor (1,1) double = NaN
     options.Force (1,1) logical = false
 end
 
-% Validate source unit
-bct.manifold.metric.validateUnit(options.From);
-
-% Define conversion factors to meters
-unitToMeters = containers.Map( ...
-    {'m', 'cm', 'mm', 'um', 'nm'}, ...
-    {1, 1e-2, 1e-3, 1e-6, 1e-9} ...
-);
-
-factor = unitToMeters(char(options.From));
+% Determine scaling factor
+if ~isnan(options.Factor)
+    % Direct factor provided - use surfaceMesh.scale() method
+    factor = options.Factor;
+    
+elseif options.From ~= ""
+    % Unit conversion
+    bct.manifold.metric.validateUnit(options.From);
+    
+    % Define conversion factors to meters
+    unitToMeters = containers.Map( ...
+        {'m', 'cm', 'mm', 'um', 'nm'}, ...
+        {1, 1e-2, 1e-3, 1e-6, 1e-9} ...
+    );
+    
+    factor = unitToMeters(char(options.From));
+else
+    error('bct:manifold:metric:NoScalingSpecified', ...
+        'Must specify either ''From'' (unit) or ''Factor'' (scaling factor)');
+end
 
 % Guardrail: prevent double-rescaling
 if M.Metric.rescale.applied && ~options.Force
@@ -68,17 +84,11 @@ if M.Metric.rescale.applied && ~options.Force
         M.Metric.rescale.fromUnit, M.Metric.rescale.factor);
 end
 
-% Apply scaling to vertices
-M.Vertices = M.Vertices * factor;
+% Use surfaceMesh.scale() for actual scaling
+mesh = surfaceMesh(M.Vertices, M.Faces);
+scale(mesh, factor);  % Modifies mesh in-place
 
-% Update metric record
-M.Metric.unit = "m";
-M.Metric.rescale.applied = true;
-M.Metric.rescale.fromUnit = options.From;
-M.Metric.rescale.factor = factor;
-M.Metric.rescale.timestamp = string(datetime('now'));
-
-% Invalidate all metric-dependent caches
-M = M.invalidateMetricDependentCaches();
+% Create new Manifold with scaled vertices
+M = bct.Manifold(mesh.Vertices, mesh.Faces);
 
 end

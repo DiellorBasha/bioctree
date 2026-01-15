@@ -54,12 +54,44 @@ toVertex = 3000;
 tau = 15.0;
 heatAdvField = bct.field.generate.heatadvection(fromVertex, toVertex, M, tau);
 
-%% Compute spectrum for each time point
+%% Compute spectrum of time-averaged heat advection field
 nTimePoints = size(heatAdvField.value, 2);
-advSpectrum = zeros(size(mft_op, 1), nTimePoints);
-for t = 1:nTimePoints
-    advSpectrum(:, t) = mft_op * heatAdvField.value(:, t);
-end
+timeAvgField = mean(heatAdvField.value, 2);
+advSpectrum = mft_op * timeAvgField;
+plot(advSpectrum)
+
+timeSumField = sum(heatAdvField.value, 2);
+[viewer , fig] =bct.ui.show(M);
+viewer.setScalar(timeSumField);
+viewer.setScalar(timeAvgField);
+%% Compute gradient of field amplitude
+amplitude = abs(timeAvgField);
+gradAmplitude = grad_op * amplitude;
+nF = M.numFaces();
+gradAmplitude_reshaped = reshape(gradAmplitude, nF, 3);
+gradMagnitude = sqrt(sum(gradAmplitude_reshaped.^2, 2));
+%%
+dec = DiscreteExteriorCalculus(double(M.Faces), double(M.Vertices));
+U=dec.gradient(amplitude);
+% Project onto the tangent space of the surface if necessary
+U = U - dot(U, N) * N;
+% Perform Helmholtz-Hodge decomposition
+[divU, rotU, harmU, scalarP, vectorP] = ...
+    dec.helmholtzHodgeDecomposition(U, 1e-8);
+
+% Normalize rows for plotting
+plotU = U ./ vecnorm(U, 2, 2);
+plotDivU = divU ./ vecnorm(divU, 2, 2);
+plotRotU = rotU ./ vecnorm(rotU, 2, 2);
+plotHU = harmU ./ vecnorm(harmU, 2, 2);
+
+% Option 1: Show gradient magnitude as colors
+viewer.setScalar(gradMagnitude);  % Map magnitude to face colors (interpolated to vertices)
+
+% Option 2: Show gradient vectors as arrows
+viewer.setVector(gradAmplitude_reshaped, 'Support', 'face', 'Stride', 5, 'LengthScale', 1.0);
+viewer.setVector(divU, 'Support', 'face', 'Stride', 5, 'LengthScale', 1.0);
+viewer.setVector(rotU, 'Support', 'face', 'Stride', 5, 'LengthScale', 1.0);
 
 %% Compute gradient of field amplitude
 amplitude = abs(heatField.value);
@@ -119,20 +151,22 @@ for i = 1:3
 end
 colormap('hot');
 
-% Heat advection spectrum evolution
-figure('Name', 'Heat Advection Spectrum Evolution', 'Position', [350 350 800 600]);
-subplot(2,1,1);
-imagesc(abs(advSpectrum));
-xlabel('Time Point');
-ylabel('Mode Index');
-title('Spectral Coefficients Evolution');
+% Time-averaged heat advection field and its spectrum
+figure('Name', 'Time-Averaged Heat Advection', 'Position', [350 350 1200 400]);
+subplot(1,2,1);
+trisurf(M.Faces, M.Vertices(:,1), M.Vertices(:,2), M.Vertices(:,3), timeAvgField);
+shading interp;
+axis equal tight off;
+view(90, 0);
 colorbar;
+title('Time-Averaged Field');
+colormap('hot');
 
-subplot(2,1,2);
-plot(1:nTimePoints, sum(abs(advSpectrum).^2, 1), 'LineWidth', 2);
-xlabel('Time Point');
-ylabel('Total Spectral Energy');
-title('Spectral Energy Along Path');
+subplot(1,2,2);
+plot(abs(advSpectrum), 'LineWidth', 1.5);
+xlabel('Mode Index');
+ylabel('|Coefficient|');
+title('Spectrum of Time-Averaged Field');
 grid on;
 
 %% Health check

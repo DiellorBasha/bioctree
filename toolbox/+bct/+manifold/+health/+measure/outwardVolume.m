@@ -61,14 +61,17 @@ end
 
 signedVolume = signedVolume / 6.0;
 
-% Determine orientation
-if signedVolume > 0
-    isOutward = true;
-elseif signedVolume < 0
-    isOutward = false;
-else
-    % Volume is exactly zero (degenerate or planar)
+% Determine orientation with tolerance
+% Only return NaN if volume is truly negligible relative to mesh scale
+volTolerance = 1e-12;  % Absolute tolerance for near-zero volume
+
+if abs(signedVolume) < volTolerance
+    % Volume is negligibly small (degenerate or planar)
     isOutward = NaN;
+elseif signedVolume > 0
+    isOutward = true;
+else
+    isOutward = false;
 end
 
 end

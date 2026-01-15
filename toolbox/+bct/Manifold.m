@@ -1597,6 +1597,194 @@ classdef Manifold < handle
             obj.Cache.health.meta.requireClosed = p.Results.RequireClosed;
         end
         
+        function M_repaired = repair(obj)
+            %REPAIR Automatically repair all detected mesh defects
+            %
+            % Syntax:
+            %   M_repaired = M.repair()
+            %
+            % Outputs:
+            %   M_repaired - New Manifold with defects repaired
+            %
+            % Description:
+            %   Convenience method that runs health check and automatically
+            %   applies repairs for all detected issues. Equivalent to:
+            %   
+            %   h = M.health();
+            %   M_repaired = bct.manifold.health.repair(M, h);
+            %
+            %   Repairs applied (in optimal order):
+            %   - duplicate-vertices
+            %   - unreferenced-vertices  
+            %   - duplicate-faces
+            %   - degenerate-faces
+            %   - nonmanifold-edges
+            %
+            % Examples:
+            %   % Quick repair
+            %   M_clean = M.repair();
+            %
+            %   % Check what was fixed
+            %   h_before = M.health();
+            %   M_clean = M.repair();
+            %   h_after = M_clean.health();
+            %
+            % See also: bct.Manifold.health, bct.manifold.health.repair
+            
+            % Get health report
+            h = obj.health();
+            
+            % Apply repairs via bct.manifold.health.repair
+            M_repaired = bct.manifold.health.repair(obj, h);
+        end
+        
+        function M_scaled = rescale(obj, varargin)
+            %RESCALE Rescale manifold vertices from source unit to meters
+            %
+            % Syntax:
+            %   M_scaled = M.rescale('From', unit)
+            %   M_scaled = M.rescale('Factor', scaleFactor)
+            %
+            % Inputs:
+            %   unit        - Source unit: "m" | "cm" | "mm" | "um" | "nm"
+            %   scaleFactor - Direct scaling factor
+            %
+            % Outputs:
+            %   M_scaled - New Manifold with rescaled vertices
+            %
+            % Examples:
+            %   % Anatomical data in millimeters
+            %   M = bct.Manifold(anat.Vertices, anat.Faces);
+            %   M = M.rescale('From', 'mm');
+            %
+            %   % Direct scaling
+            %   M = M.rescale('Factor', 0.001);
+            %
+            % See also: bct.manifold.metric.rescale
+            
+            % Delegate to bct.manifold.metric.rescale
+            M_scaled = bct.manifold.metric.rescale(obj, varargin{:});
+        end
+        
+        function result = components(obj)
+            %COMPONENTS Get connected component vertex indices
+            %
+            % Syntax:
+            %   result = M.components()
+            %
+            % Outputs:
+            %   result - 'connected' if single component, or cell array of
+            %            vertex index vectors for each component
+            %
+            % Description:
+            %   Detects disconnected components and returns vertex indices
+            %   for each component. If manifold is connected (single component),
+            %   returns the string 'connected'.
+            %
+            % Examples:
+            %   result = M.components();
+            %   if ischar(result)
+            %       fprintf('Manifold is connected\n');
+            %   else
+            %       fprintf('Found %d components\n', length(result));
+            %       for i = 1:length(result)
+            %           fprintf('  Component %d: %d vertices\n', ...
+            %               i, length(result{i}));
+            %       end
+            %   end
+            %
+            % See also: bct.Manifold.split, bct.manifold.health.check.connectivity
+            
+            % Run connectivity check with verbose to get component indices
+            h = obj.health('Verbose', true);
+            
+            if h.is.connected
+                result = 'connected';
+            else
+                % Return component vertex indices
+                if isfield(h.data, 'connectivity') && ...
+                   isfield(h.data.connectivity, 'components')
+                    result = h.data.connectivity.components;
+                else
+                    % Fallback if data not available
+                    result = 'connected';
+                end
+            end
+        end
+        
+        function manifolds = split(obj)
+            %SPLIT Split disconnected manifold into component manifolds
+            %
+            % Syntax:
+            %   manifolds = M.split()
+            %
+            % Outputs:
+            %   manifolds - Cell array of Manifold objects (one per component)
+            %
+            % Description:
+            %   Detects disconnected components and returns each as a separate
+            %   Manifold object with compacted vertex indices.
+            %   
+            %   If already connected, returns {M} (cell array with original).
+            %   
+            %   Components are sorted by size (largest first).
+            %
+            % Examples:
+            %   % Split disconnected mesh
+            %   manifolds = M.split();
+            %   if length(manifolds) > 1
+            %       fprintf('Split into %d components\n', length(manifolds));
+            %       M1 = manifolds{1};  % Largest component
+            %       M2 = manifolds{2};  % Second largest
+            %   end
+            %
+            % See also: bct.Manifold.components, 
+            %           bct.manifold.health.repair.splitComponents
+            
+            % Get component indices
+            comp = obj.components();
+            
+            % If connected, return original as cell array
+            if ischar(comp) && strcmp(comp, 'connected')
+                manifolds = {obj};
+                return;
+            end
+            
+            % Multiple components - use splitComponents function
+            manifolds = bct.manifold.health.repair.splitComponents(obj);
+        end
+        
+        function components = splitComponents(obj, varargin)
+            %SPLITCOMPONENTS Split disconnected components into separate manifolds
+            %
+            % Syntax:
+            %   components = M.splitComponents()
+            %   components = M.splitComponents('MinSize', n)
+            %
+            % Outputs:
+            %   components - Cell array of Manifold objects
+            %
+            % Description:
+            %   Automatically detects disconnected components and returns
+            %   each as a separate Manifold (sorted by size, largest first).
+            %
+            % Examples:
+            %   % Split and analyze each component
+            %   comps = M.splitComponents();
+            %   for i = 1:length(comps)
+            %       fprintf('Component %d: %d vertices\n', ...
+            %           i, comps{i}.numVertices);
+            %   end
+            %
+            %   % Keep only large components
+            %   comps = M.splitComponents('MinSize', 100);
+            %
+            % See also: bct.manifold.health.repair.splitComponents
+            
+            % Delegate to repair function
+            components = bct.manifold.health.repair.splitComponents(obj, varargin{:});
+        end
+        
         function write(obj, fileName, options)
             %WRITE Write Manifold to mesh file
             %

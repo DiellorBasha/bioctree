@@ -7,7 +7,8 @@ function [issues, isUpdate, statsUpdate, dataUpdate] = outward(mesh, options, ca
 %
 % Inputs:
 %   mesh    - Normalized mesh structure
-%   options - Options structure (unused)
+%   options - Options structure with optional:
+%             .RequireOutward - true to upgrade to warn (default: true)
 %   cache   - Cache structure (unused)
 %
 % Outputs:
@@ -19,15 +20,24 @@ function [issues, isUpdate, statsUpdate, dataUpdate] = outward(mesh, options, ca
 % Description:
 %   Checks if mesh has outward orientation using signed volume.
 %   
-%   This is an optional convention check (not required for DEC).
+%   Checks global orientation convention using signed volume.
 %   Returns NaN if cannot determine (e.g., no vertices, planar mesh).
 %   
-%   Severity: info
+%   Policy:
+%   - Default severity: error (RequireOutward=true)
+%   - If RequireOutward=false: info
 %
 % See also: bct.manifold.health.measure.outwardVolume
 
 % Copyright (c) 2025 bioctree
 % SPDX-License-Identifier: MIT
+
+% Parse options
+if isfield(options, 'RequireOutward')
+    requireOutward = options.RequireOutward;
+else
+    requireOutward = true;  % Default: error on inward orientation
+end
 
 % Run measure
 [signedVolume, isOutward] = bct.manifold.health.measure.outwardVolume(mesh, cache, []);
@@ -43,8 +53,15 @@ if isnan(isOutward)
     
 elseif ~isOutward
     % Inward orientation
+    % Determine severity
+    if requireOutward
+        severity = 'error';
+    else
+        severity = 'info';
+    end
+    
     issues = bct.manifold.health.internal.issue( ...
-        'inwardOrientation', 'info', ...
+        'inwardOrientation', severity, ...
         sprintf('Mesh has inward orientation (signed volume: %.6g)', signedVolume), ...
         'mesh', ...
         'data', struct('signedVolume', signedVolume));

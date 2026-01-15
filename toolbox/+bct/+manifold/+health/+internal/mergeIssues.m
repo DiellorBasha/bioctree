@@ -34,6 +34,27 @@ if isempty(validIssues)
     return;
 end
 
+% Collect all unique field names across all issue arrays
+allFields = {};
+for i = 1:length(validIssues)
+    allFields = [allFields, fieldnames(validIssues{i})']; %#ok<AGROW>
+end
+allFields = unique(allFields);
+
+% Normalize all issue structures to have the same fields
+for i = 1:length(validIssues)
+    for j = 1:length(validIssues{i})
+        for k = 1:length(allFields)
+            if ~isfield(validIssues{i}(j), allFields{k})
+                % Add missing field with empty value
+                validIssues{i}(j).(allFields{k}) = [];
+            end
+        end
+        % Reorder fields to match
+        validIssues{i}(j) = orderfields(validIssues{i}(j), allFields);
+    end
+end
+
 % Vertically concatenate all issue arrays
 mergedIssues = vertcat(validIssues{:});
 

@@ -93,10 +93,8 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %   - Arrays are flattened for JSON transfer
             %   - Updates HTMLComponent.Data to trigger JavaScript viewer
             %   - Pre-computed normals avoid expensive JavaScript computation
-            %   - When using bct.Manifold, also sends geometry cache:
-            %     * Face centroids (for quiver visualization)
-            %     * Face normals (for tangent projection)
-            %     * Vertex tangents (for future use)
+            %   - Lightweight construction: only sends mesh geometry
+            %   - Use setScalar(), setVector() etc. to add visualizations later
             
             % Parse input arguments
             M_obj = [];
@@ -105,7 +103,8 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 M_obj = varargin{1};
                 V = M_obj.Vertices;   % Access property (not method)
                 F = M_obj.Faces;      % Access property (not method)
-                N = M_obj.vertexGeometry().normals;  % Get vertex normals from geometry cache
+                % Let JavaScript compute normals as fallback for now
+                N = [];
             elseif nargin == 3
                 % Case 2: V, F provided
                 V = varargin{1};
@@ -155,23 +154,6 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 % Flatten normals: [nx1 ny1 nz1 nx2 ny2 nz2 ...]
                 normalsFlat = reshape(N.', 1, []);
                 meshData.normals = normalsFlat;
-            end
-            
-            % Add geometry cache data if Manifold object provided
-            if ~isempty(M_obj)
-                % Get face geometry
-                faceGeom = M_obj.faceGeometry();
-                
-                % Add face centroids [cx1 cy1 cz1 cx2 cy2 cz2 ...]
-                meshData.faceCentroids = reshape(faceGeom.centroids.', 1, []);
-                
-                % Add face normals [nx1 ny1 nz1 nx2 ny2 nz2 ...]
-                meshData.faceNormals = reshape(faceGeom.normals.', 1, []);
-                
-                % Add vertex tangents
-                vertexGeom = M_obj.vertexGeometry();
-                meshData.vertexTangent1 = reshape(vertexGeom.tangent1.', 1, []);
-                meshData.vertexTangent2 = reshape(vertexGeom.tangent2.', 1, []);
             end
             
             % Set HTMLComponent.Data to trigger DataChanged event in JavaScript

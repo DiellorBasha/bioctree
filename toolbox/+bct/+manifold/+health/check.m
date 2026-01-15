@@ -14,10 +14,11 @@ function h = check(meshOrManifold, options)
 % Name-Value Parameters:
 %   Level             - "quick" | "standard" (default) | "full"
 %                       * quick: topology (faces, degeneracy, manifoldness, boundary)
-%                       * standard: quick + orientation + directed duplicates
-%                       * full: standard + vertex manifoldness + outward orientation
+%                       * standard: quick + orientation + duplicates + scale + connectivity
+%                       * full: standard + vertex manifoldness
 %   RequireManifold   - logical, error on non-manifold edges (default: true)
 %   RequireOriented   - logical, error on orientation inconsistency (default: true)
+%   RequireOutward    - logical, error on inward orientation (default: true)
 %   RequireClosed     - logical, error on boundary edges (default: false)
 %   FailOnWarnings    - logical, set ok=false for warnings (default: false)
 %   Verbose           - logical, store canonical E and index sets in h.data (default: false)
@@ -34,7 +35,8 @@ function h = check(meshOrManifold, options)
 %     .is          - canonical boolean flags (NEW):
 %                    .facesValid, .facesNondegenerate, .hasDuplicateFaces,
 %                    .hasDuplicateDirectedEdges, .edgeManifold, .hasBoundary,
-%                    .oriented, .vertexManifold, .outward
+%                    .oriented, .vertexManifold, .outward, .scaleAppropriate,
+%                    .connected
 %     .stats       - mesh statistics (nV, nF, nE, nBoundaryEdges, etc.)
 %     .statsByCheck- detailed stats grouped by check (avoids collisions)
 %     .timing      - performance timers
@@ -80,6 +82,7 @@ arguments
         ["quick", "standard", "full"])} = "standard"
     options.RequireManifold (1,1) logical = true
     options.RequireOriented (1,1) logical = true
+    options.RequireOutward (1,1) logical = true
     options.RequireClosed (1,1) logical = false
     options.FailOnWarnings (1,1) logical = false
     options.Verbose (1,1) logical = false
@@ -138,9 +141,12 @@ end
 h.timing.gating = toc(tGating);
 
 % Early exit if gating checks failed
-if ~isUpdate.facesNondegenerate || ~h.is.facesValid
+% Check isUpdate structs directly (h.is not computed until after this check)
+facesValidUpdate = allIsUpdates{1};  % From check.faces
+degenerateUpdate = allIsUpdates{2};  % From check.degenerateFaces
+if ~facesValidUpdate.facesValid || ~degenerateUpdate.facesNondegenerate
     h.issues = bct.manifold.health.internal.mergeIssues(allIssues{:});
-    h.is = bct.manifold.health.internal.computeIsFlags(allIsUpdates);
+    h.is = bct.manifold.health.internal.computeIsFlags(allIsUpdates{:});
     [h.ok, h.severity] = computeOverallStatus(h.issues, options.FailOnWarnings);
     h.summary = generateSummary(h);
     h.timing.total = toc(tStart);
@@ -184,6 +190,19 @@ runCheckAndCollect('nonManifoldEdges', mesh, options, cache);
 if ismember(options.Level, ["standard", "full"])
     runCheckAndCollect('oriented', mesh, options, cache);
     runCheckAndCollect('duplicateDirectedEdges', mesh, options, cache);
+    
+    % Outward orientation (requires V)
+    if mesh.hasV
+        runCheckAndCollect('outward', mesh, options, cache);
+    end
+    
+    % Scale check (requires V) - warning level
+    if mesh.hasV
+        runCheckAndCollect('scale', mesh, options, cache);
+    end
+    
+    % Connectivity check
+    runCheckAndCollect('connectivity', mesh, options, cache);
 end
 
 % Full level only
@@ -191,11 +210,6 @@ if options.Level == "full"
     % Vertex manifoldness (requires V and surfaceMesh)
     if mesh.hasV
         runCheckAndCollect('vertexManifold', mesh, options, cache);
-    end
-    
-    % Outward orientation (requires V)
-    if mesh.hasV
-        runCheckAndCollect('outward', mesh, options, cache);
     end
 end
 

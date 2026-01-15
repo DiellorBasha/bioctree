@@ -145,4 +145,11 @@ mesh = struct( ...
     'source', source ...
 );
 
+% Add adjacency if from Manifold object (for connectivity check)
+if isManifoldObj && ~isempty(M)
+    mesh.adjacency = M.adjacency();
+else
+    mesh.adjacency = [];
+end
+
 end
