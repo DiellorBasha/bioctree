@@ -9,7 +9,7 @@ site_author: "Diellor Basha"
 theme:
   name: material
   logo: images/bioctree_logo.png
-  custom_dir: overrides
+  # custom_dir: overrides  # Disabled - saved in experimental/theme-overrides for future use
 
   palette:
     - scheme: default
@@ -88,7 +88,6 @@ markdown_extensions:
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-  - javascripts/mesh-viewer.js
 
 extra_css:
   - stylesheets/extra.css
@@ -114,17 +113,27 @@ edit_uri: edit/main/docs/docs/
 # ---------------------------------------------------------
 nav:
   - Home: index.md
+  - Documentation: documentation.md
   - Getting Started:
       - getting-started/index.md
       - Introduction: getting-started/introduction.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
 
+  - Manifolds:
+      - manifolds/index.md
+      - Geometry: manifolds/geometry.md
+      - Topology: manifolds/topology.md
+      - Eigenmodes: manifolds/eigenmodes.md
+      - Windows: manifolds/windows.md
+      - Operators: manifolds/operators.md
+
   - Concepts:
       - concepts/index.md
       - Overview: concepts/overview.md
       - Manifolds: concepts/manifolds.md
       - Laplace-Beltrami Operator: concepts/laplace-beltrami.md
+      - Discrete Exterior Calculus: concepts/discrete-exterior-calculus.md
       - Graph Structure: concepts/graph-structure.md
       - Joint Spectral Domain: concepts/joint-spectrum.md
       - Wave Packets: concepts/wave-packets.md
@@ -168,3 +177,4 @@ nav:
 
 plugins:
   - search
+  - awesome-pages

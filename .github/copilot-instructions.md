@@ -215,6 +215,58 @@ M = bct.data.load('Id', 'fsaverage_rh_pial');
 F = bct.field.load('Id', 'test_scalarField_vertex');
 ```
 
+📚 DOCUMENTATION STRUCTURE
+
+**IMPORTANT**: The documentation folder structure uses standard mkdocs conventions:
+
+```
+docs/                          # Documentation project root
+├── mkdocs.yml                 # MkDocs configuration
+├── docs/                      # Markdown content directory (docs_dir)
+│   ├── index.md              # Homepage
+│   ├── documentation.md      # Table of contents
+│   ├── getting-started/      # Getting started guides
+│   ├── concepts/             # Conceptual documentation
+│   ├── filters/              # Filter documentation
+│   ├── tutorials/            # Step-by-step tutorials
+│   ├── api/                  # API reference
+│   ├── examples/             # Example gallery
+│   ├── about/                # Project information
+│   ├── assets/               # Static assets for docs
+│   │   ├── models/          # 3D mesh exports (.obj + .json)
+│   │   ├── data/            # Field data exports (.json)
+│   │   └── images/          # Documentation images
+│   ├── javascripts/          # Custom JS (three.js viewer)
+│   ├── stylesheets/          # Custom CSS
+│   └── viewer/               # Three.js viewer embed
+├── site/                      # Generated HTML output (git ignored)
+└── overrides/                 # Theme customization (currently disabled)
+```
+
+**Documentation terminology**:
+- Refer to `docs/` as the "**documentation project**" or "**mkdocs root**"
+- Refer to `docs/docs/` as the "**content directory**" or "**markdown files**"
+- Refer to `docs/site/` as the "**build output**" or "**generated site**"
+
+**When writing documentation**:
+- All markdown files go in `docs/docs/` and subdirectories
+- Add pages to navigation in `docs/mkdocs.yml` under the `nav:` section
+- Export 3D assets to `docs/docs/assets/models/` using `bct.manifold.exportForDocs()`
+- Export field data to `docs/docs/assets/data/` using `bct.field.exportForDocs()`
+- The mkdocs server auto-reloads markdown changes, but requires restart for `mkdocs.yml` changes
+
+**Asset export functions**:
+```matlab
+% Export manifold for three.js viewer
+M = bct.data.load(Dataset="fsaverage6", Hemi="rh", Surface="pial");
+bct.manifold.exportForDocs(M, 'fsaverage_rh_pial', ...
+    'ExportNormals', true, 'ExportTangents', true);
+
+% Export field data for visualization
+F = bct.Field(M, values);
+bct.field.exportForDocs(F, 'field_name.json');
+```
+
 🧪 TESTING FRAMEWORK
 
 **Production Tests:**

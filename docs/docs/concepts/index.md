@@ -17,6 +17,9 @@ Understanding cortical surface meshes as Riemannian manifolds and their role in 
 ### [Laplace-Beltrami Operator](laplace-beltrami.md)
 The mathematical foundation for spectral decomposition on curved surfaces.
 
+### [Discrete Exterior Calculus](discrete-exterior-calculus.md)
+Differential geometry on discrete meshes: exterior derivatives, Hodge stars, and vector calculus operations.
+
 ### [Graph Structure](graph-structure.md)
 How mesh connectivity is represented as a graph for signal processing operations.
 

@@ -62,6 +62,76 @@ A comprehensive MATLAB toolbox for analyzing neural signals on brain surface mes
 
 ---
 
+??? abstract "📚 Complete Documentation Index"
+    
+    ### :material-play-circle: Getting Started
+    
+    - [**Overview**](getting-started/index.md) - Introduction and system requirements
+    - [**Installation**](getting-started/installation.md) - Installation instructions and dependencies
+    - [**Quickstart Guide**](getting-started/quickstart.md) - Your first Bioctree workflow
+    
+    ### :material-shape: Manifolds
+    
+    - [**Manifolds Overview**](manifolds/index.md) - Understanding bct.Manifold
+    - [**Geometry**](manifolds/geometry.md) - Normals, areas, curvature, and metric properties
+    - [**Topology**](manifolds/topology.md) - Mesh connectivity and structure
+    - [**Eigenmodes**](manifolds/eigenmodes.md) - Spectral decomposition
+    - [**Windows**](manifolds/windows.md) - Spatial localization and queries
+    - [**Operators**](manifolds/operators.md) - Low-level differential operators
+    
+    ### :material-lightbulb: Concepts
+    
+    - [**Concepts Overview**](concepts/index.md) - Conceptual framework summary
+    - [**Manifolds**](concepts/manifolds.md) - Triangulated surfaces and mesh geometry
+    - [**Laplace-Beltrami Operator**](concepts/laplace-beltrami.md) - Spectral decomposition on manifolds
+    - [**Discrete Exterior Calculus**](concepts/discrete-exterior-calculus.md) - DEC operators and vector calculus
+    - [**Graph Structure**](concepts/graph-structure.md) - Graph signal processing perspective
+    - [**Joint Spectral Domain**](concepts/joint-spectrum.md) - Tensor product domains (λ × ω)
+    - [**Wave Packets**](concepts/wave-packets.md) - Spatiotemporal-spectral localization
+    - [**Dispersion & Velocity Kernels**](concepts/dispersion.md) - Wave propagation analysis
+    
+    ### :material-filter: Filters
+    
+    - [**Overview**](filters/index.md) - Filter design principles
+    - [**Spatial Filters**](filters/spatial.md) - Localization on manifolds
+    - [**Temporal Filters**](filters/temporal.md) - Time-domain processing
+    - [**Joint Filters (λ–ω)**](filters/joint-filters.md) - Spatiotemporal filtering
+    - [**Wave Packet Filters**](filters/wavepacket-filters.md) - Traveling wave detection
+    
+    ### :material-school: Tutorials
+    
+    - [**Overview**](tutorials/index.md) - Tutorial collection
+    - [**Load a Mesh**](tutorials/load-mesh.md) - Import cortical surfaces
+    - [**Compute Eigenbasis**](tutorials/eigenbasis.md) - Spectral decomposition workflow
+    - [**Apply Spatial Filters**](tutorials/spatial-filters.md) - Filter design and application
+    - [**Build a Wave Packet**](tutorials/wavepacket.md) - Construct localized wavelets
+    - [**Detect Traveling Waves**](tutorials/detect-waves.md) - Wave detection pipeline
+    
+    ### :material-code-braces: API Reference
+    
+    - [**MATLAB API Overview**](api/matlab/overview.md) - API structure and conventions
+    - [**Bct Class**](api/matlab/bct.md) - Main orchestrator class
+    - [**Manifold Class**](api/matlab/manifold.md) - Surface geometry representation
+    - [**JointDomain Class**](api/matlab/joint-domain.md) - Tensor product domains
+    - [**Filter API**](api/matlab/filters.md) - Filter design functions
+    - [**HDF5 Specification**](api/hdf5/specification.md) - `.bct` file format specification
+    - [**HDF5 File I/O**](api/hdf5/io.md) - Reading and writing `.bct` files
+    
+    ### :material-folder-open: Examples
+    
+    - [**Example Gallery**](examples/index.md) - Browse all examples
+    - [**Wave Packet Examples**](examples/wavepackets.md) - Traveling wave analysis
+    - [**Time–Frequency Analysis**](examples/time-frequency.md) - Spectral evolution
+    - [**Spatiotemporal Filters**](examples/spatiotemporal.md) - Joint domain filtering
+    
+    ### :material-information: About
+    
+    - [**Changelog**](about/changelog.md) - Version history and updates
+    - [**Contributing**](about/contributing.md) - How to contribute to Bioctree
+    - [**License**](about/license.md) - MIT License information
+
+---
+
 ## :material-lightning-bolt: Quick Start
 
 Get up and running in minutes with Bioctree:
