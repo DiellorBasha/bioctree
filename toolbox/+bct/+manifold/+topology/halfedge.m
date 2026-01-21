@@ -19,6 +19,8 @@ function he = halfedge(V, F)
 %   he.isBoundary : #H x 1 logical boundary flag (twin==0)
 %   he.E        : #E x 2 list of undirected edges (sorted vertex ids)
 %   he.fh       : #F x 3 halfedge ids per face in order [h12 h23 h31]
+%   he.faceNeighbors : #F x 3 neighbor face ids (1-based, -1 for boundary)
+%   he.neighborEdge  : #F x 3 local edge index in neighbor face (1..3)
 %
 % Convention:
 %   For each face f = [v1 v2 v3], we create three halfedges:
@@ -26,6 +28,10 @@ function he = halfedge(V, F)
 %     h23: v2 -> v3
 %     h31: v3 -> v1
 %   and next pointers: h12->h23->h31->h12.
+%
+%   Face neighbors: faceNeighbors(f, i) is the adjacent face across edge i,
+%   where i = 1,2,3 corresponds to edges [v1-v2, v2-v3, v3-v1].
+%   Value is -1 for boundary edges (no neighbor).
 
   %#ok<*NASGU>
 
@@ -96,5 +102,34 @@ function he = halfedge(V, F)
 
   % Halfedge ids per face [h12 h23 h31]
   he.fh = [h12, h23, h31];
+  
+  % Face neighbors and corresponding edge indices
+  % faceNeighbors(f, i) = adjacent face across edge i (1-based, -1 for boundary)
+  % neighborEdge(f, i) = local edge index (1..3) in the neighbor face
+  faceNeighbors = -ones(nF, 3, 'int32'); % 1-based neighbor face ids, -1 for boundary
+  neighborEdge  = zeros(nF, 3, 'uint8'); % 1..3 edge index in neighbor face
+  
+  for f = 1:nF
+    for i = 1:3
+      h = he.fh(f, i);
+      if he.isBoundary(h)
+        continue;
+      end
+      ht = he.twin(h);              % Twin halfedge
+      g = he.face(ht);              % Neighbor face (1-based)
+      faceNeighbors(f, i) = g;
+      
+      % Find which local edge in face g corresponds to halfedge ht
+      idx = find(he.fh(g, :) == ht, 1, 'first');
+      if isempty(idx)
+        error('bct:topology:halfedge:TwinInconsistency', ...
+          'Halfedge twin not found in neighbor face.');
+      end
+      neighborEdge(f, i) = uint8(idx); % 1..3
+    end
+  end
+  
+  he.faceNeighbors = faceNeighbors;
+  he.neighborEdge = neighborEdge;
 end
 

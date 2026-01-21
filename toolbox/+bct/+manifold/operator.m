@@ -24,15 +24,13 @@ function ops = operator(meshInput, varargin)
 %     .stiffness       - [N×N] FEM stiffness matrix (cotangent Laplacian)
 %     .laplacebeltrami - [N×N] Laplace-Beltrami operator (M^(-1) * K)
 %     .graphlaplacian  - [N×N] Graph Laplacian (topological, D - A)
-%     .dec             - Structure with 15 DEC operators:
-%       .d0, .d1       - Exterior derivatives
-%       .dd0, .dd1     - Codifferentials
-%       .hd0-2         - Hodge stars
-%       .hdd0-2        - Inverse Hodge stars
-%       .flatPP, etc.  - Flat operators
-%       .sharpPD, etc. - Sharp operators
-%     % Top-level DEC shortcuts
-%     .d0, .d1, .dd0, .dd1  - Exterior derivatives
+%     % DEC operators (flattened, all 15 at top level)
+%     .d0, .d1         - Exterior derivatives
+%     .dd0, .dd1       - Codifferentials
+%     .hd0, .hd1, .hd2 - Hodge stars
+%     .hdd0, .hdd1, .hdd2 - Inverse Hodge stars
+%     .flatPP, .flatDP, .flatDD  - Flat operators
+%     .sharpPD, .sharpDD - Sharp operators
 %     % Derived DEC composition operators
 %     .gradient        - Gradient operator (vertex → face tangent vectors)
 %     .divergence      - Divergence operator (edge → vertex, primal route)
@@ -61,7 +59,8 @@ function ops = operator(meshInput, varargin)
 %   
 %   % Access individual operators
 %   L = ops.laplacebeltrami;
-%   d0 = ops.dec.d0;
+%   d0 = ops.d0;
+%   hd1 = ops.hd1;
 %   
 %   % Vector calculus operators
 %   grad = ops.gradient;           % [3*nF × nV]
@@ -161,15 +160,25 @@ end
 % DEC Operators
 % ===============================================================
 
-% Compute all DEC operators
+% Compute all DEC operators and flatten to top level
 [~, dec_ops] = bct.manifold.operator.dec(M);
-ops.dec = dec_ops;
 
-% Also expose key DEC operators at top level for convenience
+% Flatten all 15 DEC operators to top level
 ops.d0 = dec_ops.d0;
 ops.d1 = dec_ops.d1;
 ops.dd0 = dec_ops.dd0;
 ops.dd1 = dec_ops.dd1;
+ops.hd0 = dec_ops.hd0;
+ops.hd1 = dec_ops.hd1;
+ops.hd2 = dec_ops.hd2;
+ops.hdd0 = dec_ops.hdd0;
+ops.hdd1 = dec_ops.hdd1;
+ops.hdd2 = dec_ops.hdd2;
+ops.flatPP = dec_ops.flatPP;
+ops.flatDP = dec_ops.flatDP;
+ops.flatDD = dec_ops.flatDD;
+ops.sharpPD = dec_ops.sharpPD;
+ops.sharpDD = dec_ops.sharpDD;
 
 % ===============================================================
 % Derived DEC Composition Operators
