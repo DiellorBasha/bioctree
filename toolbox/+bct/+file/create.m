@@ -65,13 +65,15 @@ if isfile(file)
     end
 end
 
-%% Create HDF5 file
-% Note: h5create with empty dataset creates file
-% We'll use a placeholder approach and delete it after root attrs are set
+%% Create HDF5 file using low-level API
 try
-    % Create file by creating a minimal dataset, then delete it
-    h5create(file, '/.__placeholder__', 1);
-    h5write(file, '/.__placeholder__', 0);
+    % Create file directly using low-level API
+    fcpl = H5P.create('H5P_FILE_CREATE');
+    fapl = H5P.create('H5P_FILE_ACCESS');
+    fid = H5F.create(char(file), 'H5F_ACC_TRUNC', fcpl, fapl);
+    H5P.close(fcpl);
+    H5P.close(fapl);
+    H5F.close(fid);
     
     %% Write root attributes
     bct.file.h5.writeAttribute(file, '/', 'schema', options.Schema);
@@ -96,12 +98,6 @@ try
     
     if ~ismissing(options.CoordSystem)
         bct.file.h5.writeAttribute(file, '/manifold', 'coordinate_system', options.CoordSystem);
-    end
-    
-    % Clean up placeholder
-    if bct.file.exists(file, '/.__placeholder__')
-        % HDF5 doesn't have simple delete, so we leave it or use h5delete if available
-        % For now, leave the tiny placeholder (negligible space)
     end
     
 catch ME

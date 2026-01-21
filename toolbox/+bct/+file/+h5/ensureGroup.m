@@ -38,13 +38,12 @@ for i = 1:length(parts)
     
     if ~bct.file.exists(file, currentPath)
         try
-            % Create group using h5create with a dummy dataset approach
-            % MATLAB doesn't have direct h5creategroup, so we use low-level API
+            % Create group using low-level HDF5 API
             fid = H5F.open(char(file), 'H5F_ACC_RDWR', 'H5P_DEFAULT');
-            plist = H5P.create('H5P_GROUP_CREATE');
-            gid = H5G.create(fid, char(currentPath), plist, 'H5P_DEFAULT', 'H5P_DEFAULT');
+            gcpl = H5P.create('H5P_GROUP_CREATE');
+            gid = H5G.create(fid, char(currentPath), 'H5P_DEFAULT', gcpl, 'H5P_DEFAULT');
             H5G.close(gid);
-            H5P.close(plist);
+            H5P.close(gcpl);
             H5F.close(fid);
         catch ME
             error('bct:file:h5:ensureGroup:CreateFailed', ...
