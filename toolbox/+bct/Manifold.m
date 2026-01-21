@@ -333,18 +333,30 @@ classdef Manifold < handle
             % Get or compute edge weights
             if obj.hasCached('geometry')
                 geom = obj.Cache.geometry.data;
-                if isfield(geom, 'edge') && isfield(geom.edge, 'weights')
-                    % Use cached edge weights
-                    w = geom.edge.weights.(options.Metric);
+                if isfield(geom, 'edge')
+                    % Use new schema structure (weights_cotangent, weights_euclidean)
+                    if options.Metric == "cotangent"
+                        w = geom.edge.weights_cotangent;
+                    else
+                        w = geom.edge.weights_euclidean;
+                    end
                 else
                     % Compute edge weights directly
                     edgeGeom = bct.manifold.geometry.edge(obj);
-                    w = edgeGeom.weights.(options.Metric);
+                    if options.Metric == "cotangent"
+                        w = edgeGeom.weights_cotangent;
+                    else
+                        w = edgeGeom.weights_euclidean;
+                    end
                 end
             else
                 % No cache, compute edge weights directly
                 edgeGeom = bct.manifold.geometry.edge(obj);
-                w = edgeGeom.weights.(options.Metric);
+                if options.Metric == "cotangent"
+                    w = edgeGeom.weights_cotangent;
+                else
+                    w = edgeGeom.weights_euclidean;
+                end
             end
             
             % Convert sparse weights to full for graph construction
@@ -385,7 +397,13 @@ classdef Manifold < handle
             E = obj.Edges;
             N = size(obj.Vertices, 1);
             geom = obj.geometry();
-            w = geom.edgeWeights.(options.Metric);
+            
+            % Use new schema structure
+            if options.Metric == "cotangent"
+                w = geom.edge.weights_cotangent;
+            else
+                w = geom.edge.weights_euclidean;
+            end
             
             D = bct.manifold.query.distances(E, w, N);
         end
@@ -1045,12 +1063,12 @@ classdef Manifold < handle
             %   'Force'              - false (default) or true to force recomputation
             %
             % Outputs:
-            %   geom - Structure with fields:
-            %     .face   - Face geometry (areas, centroids, normals, frame, cotan)
-            %     .vertex - Vertex geometry (normals, frame)
-            %     .edge   - Edge geometry (lengths, weights)
-            %     .dual   - Dual mesh geometry (edgeLengths, vertexAreas)
-            %     .header - Metadata about computation options
+            %   geom - Structure matching bct.manifold.geometry.schema:
+            %     .attributes - Group-level metadata (computation options)
+            %     .face       - Face geometry (areas, centroids, normals, frame, cotan)
+            %     .vertex     - Vertex geometry (normals, frame)
+            %     .edge       - Edge geometry (lengths, weights_cotangent, weights_euclidean)
+            %     .dual       - Dual mesh geometry (edgeLengths, vertexAreas)
             %
             % Description:
             %   Computes all geometric properties of the manifold and caches

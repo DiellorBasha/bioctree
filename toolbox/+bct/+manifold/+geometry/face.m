@@ -17,7 +17,8 @@ function out = face(meshInput, varargin)
 %   'circumcenterMethod' - 'native' (default) or 'triangulation'
 %
 % Outputs:
-%   out - Structure with fields:
+%   out - Structure matching bct.manifold.geometry.face.schema:
+%     .attributes     - Group-level metadata (computation options)
 %     .areas          - [Nf×1] Area of each triangular face
 %     .circumcenters  - [Nf×3] Circumcenter of each face
 %     .centroids      - [Nf×3] Centroid (barycenter) of each face
@@ -25,11 +26,11 @@ function out = face(meshInput, varargin)
 %     .normals        - [Nf×3] Face normal vectors (unit)
 %     .tangent1       - [Nf×3] First tangent vectors (unit)
 %     .tangent2       - [Nf×3] Second tangent vectors (unit)
-%     .header         - Metadata about computation options
 %
 % Description:
-%   Aggregator function that computes all face-based geometric properties
-%   by calling the individual functions in bct.manifold.geometry.face.*
+%   Aggregator function that computes all face-based geometric properties.
+%   Output structure conforms to bct.manifold.geometry.face.schema for
+%   seamless serialization to HDF5/Zarr formats.
 %   The normals, tangent1, and tangent2 form right-handed orthonormal frames.
 %
 % Examples:
@@ -84,34 +85,35 @@ else
 end
 mesh = surfaceMesh(V, F);
 
-% Initialize output structure
+% Compute all face properties
+[areaHeader, areas] = bct.manifold.geometry.face.areas(mesh, 'precision', precision);
+[circumHeader, circumcenters] = bct.manifold.geometry.face.circumcenters(mesh, ...
+    'method', circumcenterMethod, 'precision', precision);
+[centroidHeader, centroids] = bct.manifold.geometry.face.centroids(mesh);
+[cotanHeader, cotan] = bct.manifold.geometry.face.cotan(mesh);
+[frameHeader, normals, tangent1, tangent2] = bct.manifold.geometry.face.frame(mesh);
+
+% Initialize output structure matching schema
 out = struct();
-out.header = struct(...
-    'precision', precision, ...
-    'circumcenterMethod', circumcenterMethod ...
-);
 
-% Compute face areas (pass surfaceMesh)
-[areaHeader, out.areas] = bct.manifold.geometry.face.areas(mesh, ...
-    'precision', precision);
-out.header.areas = areaHeader;
+% Group-level attributes (matches s.group.attributes in schema)
+out.attributes = struct();
+out.attributes.schema = 'bct.manifold.geometry.face@1.0.0';
+out.attributes.package = 'bct.manifold.geometry.face';
+out.attributes.frame_handedness = 'right-handed';
+out.attributes.frame_convention = 'tangent2 = normal × tangent1';
+out.attributes.precision = char(precision);
+out.attributes.circumcenterMethod = char(circumcenterMethod);
+out.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
 
-% Compute face circumcenters (pass surfaceMesh)
-[circumHeader, out.circumcenters] = bct.manifold.geometry.face.circumcenters(mesh, ...
-    'method', circumcenterMethod, ...
-    'precision', precision);
-out.header.circumcenters = circumHeader;
-
-% Compute face centroids (pass surfaceMesh)
-[centroidHeader, out.centroids] = bct.manifold.geometry.face.centroids(mesh);
-out.header.centroids = centroidHeader;
-
-% Compute cotangent weights (pass surfaceMesh)
-[cotanHeader, out.cotan] = bct.manifold.geometry.face.cotan(mesh);
-out.header.cotan = cotanHeader;
-
-% Compute face frame (normals and tangents together for efficiency, pass surfaceMesh)
-[frameHeader, out.normals, out.tangent1, out.tangent2] = bct.manifold.geometry.face.frame(mesh);
-out.header.frame = frameHeader;
+% Dataset fields (matches s.datasets in schema, order preserved)
+out.areas = areas;                  % Dataset 1
+out.circumcenters = circumcenters;  % Dataset 2
+out.centroids = centroids;          % Dataset 3
+out.cotan = cotan;                  % Dataset 4
+out.normals = normals;              % Dataset 5
+out.tangent1 = tangent1;            % Dataset 6
+out.tangent2 = tangent2;            % Dataset 7
 
 end

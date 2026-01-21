@@ -19,10 +19,10 @@ function out = dual(meshInput, varargin)
 %   'dualCellType'       - 'circumcentric' (default) - type of dual cell
 %
 % Outputs:
-%   out - Structure with fields:
+%   out - Structure matching bct.manifold.geometry.dual.schema:
+%     .attributes   - Group-level metadata (computation options)
 %     .edgeLengths  - [Ne×1] Dual edge lengths (connects face circumcenters)
 %     .vertexAreas  - [Nv×1] Dual vertex areas (circumcentric dual cell areas)
-%     .header       - Metadata about computation options
 %
 % Description:
 %   Aggregator function that computes all dual mesh geometric properties
@@ -81,28 +81,34 @@ circumcenterMethod = string(p.Results.circumcenterMethod);
 boundaryPolicy = string(p.Results.boundaryPolicy);
 dualCellType = string(p.Results.dualCellType);
 
-% Initialize output structure
-out = struct();
-out.header = struct(...
-    'precision', precision, ...
-    'circumcenterMethod', circumcenterMethod, ...
-    'boundaryPolicy', boundaryPolicy, ...
-    'dualCellType', dualCellType ...
-);
-
-% Compute dual edge lengths
-[edgeHeader, out.edgeLengths] = bct.manifold.geometry.dual.edgeLengths(meshInput, ...
+% Compute dual properties
+[edgeHeader, edgeLengths] = bct.manifold.geometry.dual.edgeLengths(meshInput, ...
     'boundaryPolicy', boundaryPolicy, ...
     'circumcenterMethod', circumcenterMethod, ...
     'precision', precision);
-out.header.edgeLengths = edgeHeader;
-
-% Compute dual vertex areas
-[vertexHeader, out.vertexAreas] = bct.manifold.geometry.dual.vertexAreas(meshInput, ...
+[vertexHeader, vertexAreas] = bct.manifold.geometry.dual.vertexAreas(meshInput, ...
     'dualCellType', dualCellType, ...
     'boundaryPolicy', boundaryPolicy, ...
     'circumcenterMethod', circumcenterMethod, ...
     'precision', precision);
-out.header.vertexAreas = vertexHeader;
+
+% Initialize output structure matching schema
+out = struct();
+
+% Group-level attributes (matches s.group.attributes in schema)
+out.attributes = struct();
+out.attributes.schema = 'bct.manifold.geometry.dual@1.0.0';
+out.attributes.package = 'bct.manifold.geometry.dual';
+out.attributes.dual_construction = 'circumcentric';
+out.attributes.precision = char(precision);
+out.attributes.circumcenterMethod = char(circumcenterMethod);
+out.attributes.boundaryPolicy = char(boundaryPolicy);
+out.attributes.dualCellType = char(dualCellType);
+out.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
+
+% Dataset fields (matches s.datasets in schema)
+out.edgeLengths = edgeLengths;  % Dataset 1
+out.vertexAreas = vertexAreas;  % Dataset 2
 
 end

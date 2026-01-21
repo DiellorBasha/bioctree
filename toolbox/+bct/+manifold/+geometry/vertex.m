@@ -12,29 +12,38 @@ function out = vertex(meshInput, varargin)
 %   F    - [Nf×3] face connectivity (1-indexed)
 %
 % Outputs:
-%   out - Structure with fields:
-%     .normals   - [Nv×3] Vertex normal vectors (unit, area-weighted)
-%     .tangent1  - [Nv×3] First tangent vectors (unit, orthogonal to normals)
-%     .tangent2  - [Nv×3] Second tangent vectors (unit, orthogonal to normals and tangent1)
-%     .header    - Metadata about computation
+%   out - Structure matching bct.manifold.geometry.vertex.schema:
+%     .attributes - Group-level metadata (computation method, frame convention)
+%     .normals    - [Nv×3] Vertex normal vectors (unit, area-weighted)
+%     .tangent1   - [Nv×3] First tangent vectors (unit, orthogonal to normals)
+%     .tangent2   - [Nv×3] Second tangent vectors (unit, orthogonal to normals and tangent1)
 %
 % Description:
 %   Aggregator function that computes all vertex-based geometric properties
-%   by calling the individual functions in bct.manifold.geometry.vertex.*
-%   Returns normals and tangents directly without duplication in a frame structure.
+%   by calling bct.manifold.geometry.vertex.frame().
+%
+%   Output structure conforms to bct.manifold.geometry.vertex.schema for
+%   seamless serialization to HDF5/Zarr formats.
 %
 % Examples:
 %   % Compute all vertex geometry
 %   M = bct.Manifold(V, F);
-%   vertexGeom = bct.manifold.geometry.vertex(M);
+%   vg = bct.manifold.geometry.vertex(M);
 %   
-%   % Access individual properties
-%   normals = vertexGeom.normals;
-%   tangent1 = vertexGeom.tangent1;
-%   tangent2 = vertexGeom.tangent2;
+%   % Access datasets
+%   normals = vg.normals;
+%   tangent1 = vg.tangent1;
+%   tangent2 = vg.tangent2;
+%   
+%   % Access group attributes
+%   frameConvention = vg.attributes.frame_convention;
+%   
+%   % Validate against schema
+%   s = bct.manifold.geometry.vertex.schema();
+%   [isValid, report] = bct.manifold.geometry.vertex.validateSchema(vg, s);
 %
-% See also: bct.manifold.geometry.face, bct.manifold.geometry.edge,
-%           bct.manifold.geometry
+% See also: bct.manifold.geometry.vertex.schema, bct.manifold.geometry.face,
+%           bct.manifold.geometry.edge, bct.manifold.geometry
 
 % Parse inputs
 if nargin == 0
@@ -59,14 +68,29 @@ end
 % Create surfaceMesh once to avoid redundant creation in subfunctions
 mesh = surfaceMesh(V, F);
 
-% Initialize output structure
-out = struct();
-out.header = struct();
-
-% Compute vertex frame (normals + tangents) in one call to avoid redundancy
-% Pass surfaceMesh to avoid redundant creation
-[frameHeader, out.normals, out.tangent1, out.tangent2] = ...
+% Compute vertex frame (normals + tangents) in one call
+[frameHeader, normals, tangent1, tangent2] = ...
     bct.manifold.geometry.vertex.frame(mesh);
-out.header.frame = frameHeader;
+
+% Initialize output structure matching schema
+out = struct();
+
+% Group-level attributes (matches s.group.attributes in schema)
+out.attributes = struct();
+out.attributes.schema = 'bct.manifold.geometry.vertex@1.0.0';
+out.attributes.package = 'bct.manifold.geometry.vertex';
+out.attributes.frame_handedness = 'right-handed';
+out.attributes.frame_convention = 'tangent2 = normal × tangent1';
+out.attributes.normal_weighting = 'area-weighted';
+out.attributes.tangent_method = 'reference_axis_projection';
+out.attributes.computation_method = frameHeader.method;  % From frame computation
+out.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
+
+% Dataset fields (matches s.datasets in schema)
+% Order matches schema dataset order for consistent serialization
+out.normals = normals;      % Dataset 1
+out.tangent1 = tangent1;    % Dataset 2
+out.tangent2 = tangent2;    % Dataset 3
 
 end

@@ -17,40 +17,22 @@ function geom = geometry(M, varargin)
 %   'includeDual'        - false (default) or true to compute dual geometry (can be slow)
 %
 % Outputs:
-%   geom - Structure with fields:
-%     .face   - Structure with face-based geometry:
-%               .areas          - [nF×1] Area of each face
-%               .circumcenters  - [nF×3] Circumcenter of each face
-%               .centroids      - [nF×3] Face centroids (barycenters)
-%               .cotan          - [nF×3] Cotangent weights per face vertex
-%               .normals        - [nF×3] Face normal vectors
-%               .tangent1       - [nF×3] First tangent vectors
-%               .tangent2       - [nF×3] Second tangent vectors
-%               .header         - Metadata
-%     .vertex - Structure with vertex-based geometry:
-%               .normals        - [nV×3] Vertex normal vectors
-%               .tangent1       - [nV×3] First tangent vectors
-%               .tangent2       - [nV×3] Second tangent vectors
-%               .header         - Metadata
-%     .edge   - Structure with edge-based geometry:
-%               .lengths        - [nE×1] Edge lengths
-%               .weights        - Structure with .cotangent and .euclidean
-%               .header         - Metadata
-%     .dual   - Structure with dual mesh geometry (requires closed mesh):
-%               .edgeLengths    - [nE×1] Dual edge lengths
-%               .vertexAreas    - [nV×1] Dual vertex areas
-%               .header         - Metadata
-%     .header - Global metadata about computation options
+%   geom - Structure matching bct.manifold.geometry.schema:
+%     .attributes - Group-level metadata (computation options)
+%     .face       - Structure with face-based geometry (from bct.manifold.geometry.face)
+%     .vertex     - Structure with vertex-based geometry (from bct.manifold.geometry.vertex)
+%     .edge       - Structure with edge-based geometry (from bct.manifold.geometry.edge)
+%     .dual       - Structure with dual mesh geometry (optional, from bct.manifold.geometry.dual)
 %
 % Description:
-%   Convenience function that computes all geometric properties of a
-%   manifold in a single call. Results are organized into face, vertex,
-%   edge, and dual structures. Each aggregator calls the individual
-%   functions from bct.manifold.geometry submodules.
-%
-%   By default, dual geometry is NOT computed because it requires expensive
-%   halfedge data structures. Set 'includeDual' to true to compute dual
-%   edge lengths and vertex areas.
+%   Top-level aggregator that computes all geometric properties of a
+%   manifold in a single call. Output structure conforms to 
+%   bct.manifold.geometry.schema for hierarchical HDF5/Zarr serialization.
+%   
+%   Each subgroup (face, vertex, edge, dual) has its own schema and can be
+%   serialized independently. By default, dual geometry is NOT computed 
+%   because it requires expensive halfedge data structures. Set 'includeDual' 
+%   to true to compute dual edge lengths and vertex areas.
 %
 % Examples:
 %   % Compute all geometry
@@ -96,26 +78,31 @@ dualCellType = string(p.Results.dualCellType);
 annotate = p.Results.annotate;
 includeDual = p.Results.includeDual;
 
-% Compute all geometry properties using aggregators
+% Initialize output structure matching schema
 geom = struct();
 
-% Store options in header
-geom.header = struct( ...
-    'precision', precision, ...
-    'circumcenterMethod', circumcenterMethod, ...
-    'boundaryPolicy', boundaryPolicy, ...
-    'dualCellType', dualCellType ...
-);
+% Group-level attributes (matches s.group.attributes in schema)
+geom.attributes = struct();
+geom.attributes.schema = 'bct.manifold.geometry@1.0.0';
+geom.attributes.package = 'bct.manifold.geometry';
+geom.attributes.precision = char(precision);
+geom.attributes.circumcenterMethod = char(circumcenterMethod);
+geom.attributes.boundaryPolicy = char(boundaryPolicy);
+geom.attributes.dualCellType = char(dualCellType);
+geom.attributes.includeDual = includeDual;
+geom.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
 
-% Face-based geometry (using aggregator)
+% Subgroups (each with their own schema-compliant structure)
+% Face-based geometry
 geom.face = bct.manifold.geometry.face(M, ...
     'precision', precision, ...
     'circumcenterMethod', circumcenterMethod);
 
-% Vertex-based geometry (using aggregator)
+% Vertex-based geometry
 geom.vertex = bct.manifold.geometry.vertex(M);
 
-% Edge-based geometry (using aggregator)
+% Edge-based geometry
 geom.edge = bct.manifold.geometry.edge(M, 'precision', precision);
 
 % Dual-based geometry (optional, can be slow due to halfedge computation)
@@ -129,16 +116,16 @@ if includeDual
     catch ME
         % Store error info if dual computation fails (e.g., boundary present)
         geom.dual = struct();
+        geom.dual.attributes = struct('error', ME.identifier, 'message', ME.message);
         geom.dual.edgeLengths = [];
         geom.dual.vertexAreas = [];
-        geom.dual.header = struct('error', ME.identifier, 'message', ME.message);
     end
 else
     % Skip dual computation (default for performance)
     geom.dual = struct();
+    geom.dual.attributes = struct('skipped', true, 'reason', 'includeDual=false');
     geom.dual.edgeLengths = [];
     geom.dual.vertexAreas = [];
-    geom.dual.header = struct('skipped', true, 'reason', 'includeDual=false');
 end
 
 % Apply unit annotation if requested

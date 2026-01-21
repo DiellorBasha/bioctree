@@ -16,10 +16,11 @@ function out = edge(meshInput, varargin)
 %   'precision' - 'double' (default) or 'single'
 %
 % Outputs:
-%   out - Structure with fields:
-%     .lengths  - [Ne×1] Length of each undirected edge
-%     .weights  - Structure with .cotangent and .euclidean weights
-%     .header   - Metadata about computation options
+%   out - Structure matching bct.manifold.geometry.edge.schema:
+%     .attributes        - Group-level metadata (computation options)
+%     .lengths           - [Ne×1] Length of each undirected edge
+%     .weights_cotangent - [Ne×1] Cotangent-based edge weights
+%     .weights_euclidean - [Ne×1] Euclidean distance-based weights
 %
 % Description:
 %   Aggregator function that computes all edge-based geometric properties
@@ -65,17 +66,25 @@ parse(p, meshInput, varargin{:});
 
 precision = string(p.Results.precision);
 
-% Initialize output structure
-out = struct();
-out.header = struct('precision', precision);
-
-% Compute edge lengths
-[lengthHeader, out.lengths] = bct.manifold.geometry.edge.lengths(meshInput, ...
+% Compute edge properties
+[lengthHeader, lengths] = bct.manifold.geometry.edge.lengths(meshInput, ...
     'precision', precision);
-out.header.lengths = lengthHeader;
+[weightsHeader, weights] = bct.manifold.geometry.edge.weights(meshInput);
 
-% Compute edge weights
-[weightsHeader, out.weights] = bct.manifold.geometry.edge.weights(meshInput);
-out.header.weights = weightsHeader;
+% Initialize output structure matching schema
+out = struct();
+
+% Group-level attributes (matches s.group.attributes in schema)
+out.attributes = struct();
+out.attributes.schema = 'bct.manifold.geometry.edge@1.0.0';
+out.attributes.package = 'bct.manifold.geometry.edge';
+out.attributes.precision = char(precision);
+out.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
+
+% Dataset fields (matches s.datasets in schema)
+out.lengths = lengths;                      % Dataset 1
+out.weights_cotangent = weights.cotangent;  % Dataset 2
+out.weights_euclidean = weights.euclidean;  % Dataset 3
 
 end
