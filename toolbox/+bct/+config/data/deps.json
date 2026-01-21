@@ -37,5 +37,18 @@
       "repo": "gptoolbox",
       "defaultBranch": "master"
     }
+  },
+  "zarr": {
+    "name": "MATLAB-support-for-Zarr-files",
+    "repo": "https://github.com/mathworks/MATLAB-support-for-Zarr-files.git",
+    "folder": "MATLAB-support-for-Zarr-files",
+    "ref": "main",
+    "requiredSymbols": ["zarrread", "zarrwrite", "zarrcreate"],
+    "zip": {
+      "type": "github",
+      "owner": "mathworks",
+      "repo": "MATLAB-support-for-Zarr-files",
+      "defaultBranch": "main"
+    }
   }
 }

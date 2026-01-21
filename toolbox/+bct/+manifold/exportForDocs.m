@@ -111,7 +111,7 @@ data = struct();
 
 % Metadata
 data.metadata = struct();
-data.metadata.manifoldId = char(M.ID);
+data.metadata.manifoldId = char(M.Header.ID);
 data.metadata.numVertices = M.numVertices();
 data.metadata.numFaces = M.numFaces();
 data.metadata.numEdges = M.numEdges();
@@ -121,12 +121,12 @@ data.metadata.exportDate = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 % Metric information
 if options.ExportMetric
     data.metric = struct();
-    data.metric.unit = char(M.Metric.unit);
-    data.metric.rescaled = M.Metric.rescale.applied;
+    data.metric.unit = char(M.Header.Metric.unit);
+    data.metric.rescaled = M.Header.Metric.rescale.applied;
     if data.metric.rescaled
-        data.metric.fromUnit = char(M.Metric.rescale.fromUnit);
-        data.metric.factor = M.Metric.rescale.factor;
-        data.metric.timestamp = char(M.Metric.rescale.timestamp);
+        data.metric.fromUnit = char(M.Header.Metric.rescale.fromUnit);
+        data.metric.factor = M.Header.Metric.rescale.factor;
+        data.metric.timestamp = char(M.Header.Metric.rescale.timestamp);
     end
 end
 

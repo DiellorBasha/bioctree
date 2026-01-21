@@ -86,6 +86,9 @@ for i = 1:numel(depNames)
             if exist(meshPath, 'dir')
                 addpath(genpath(meshPath));
             end
+        elseif strcmp(depMeta.folder, 'MATLAB-support-for-Zarr-files')
+            % Zarr: add root directory only (no subdirectories needed)
+            addpath(depPath);
         else
             % DECLab and GSPBox: add everything
             addpath(genpath(depPath));

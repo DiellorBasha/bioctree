@@ -39,10 +39,10 @@ arguments
 end
 
 info = struct();
-info.unit = M.Metric.unit;
-info.rescaleApplied = M.Metric.rescale.applied;
-info.rescaleFromUnit = M.Metric.rescale.fromUnit;
-info.rescaleFactor = M.Metric.rescale.factor;
-info.rescaleTimestamp = M.Metric.rescale.timestamp;
+info.unit = M.Header.Metric.unit;
+info.rescaleApplied = M.Header.Metric.rescale.applied;
+info.rescaleFromUnit = M.Header.Metric.rescale.fromUnit;
+info.rescaleFactor = M.Header.Metric.rescale.factor;
+info.rescaleTimestamp = M.Header.Metric.rescale.timestamp;
 
 end

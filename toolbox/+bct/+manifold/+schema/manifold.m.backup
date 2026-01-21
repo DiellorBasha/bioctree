@@ -1,0 +1,186 @@
+function spec = manifold()
+%MANIFOLD Return declarative schema for bct.Manifold core triangulation
+%
+% Returns a specification structure that defines:
+%   - Expected fields (Vertices, Faces, Edges)
+%   - Data types and dimensions for each field
+%   - Normalization rules (e.g., Faces → uint32)
+%   - Cross-field validation constraints
+%
+% This schema ensures that all Manifold objects maintain consistent
+% data types and valid topology, preventing silent type drift.
+%
+% Syntax:
+%   spec = bct.manifold.schema.manifold()
+%
+% Outputs:
+%   spec - Schema specification structure with fields:
+%     .name           - Schema identifier
+%     .version        - Schema version
+%     .fields         - Field-level specifications
+%     .crossValidate  - Cross-field validation function
+%
+% Field Specifications:
+%   Each field spec contains:
+%     required        - Boolean, whether field is mandatory
+%     kind            - Data kind: 'float', 'index', 'metadata'
+%     allowedClasses  - Array of valid MATLAB classes
+%     ndims           - Expected number of dimensions
+%     ncols           - Expected number of columns (for matrices)
+%     indexBase       - For indices: 0-based or 1-based
+%     normalize       - Function handle for type normalization
+%
+% Examples:
+%   % Get schema
+%   spec = bct.manifold.schema.manifold();
+%   
+%   % Validate and normalize data
+%   data = struct('Vertices', V, 'Faces', F);
+%   [valid, errors] = bct.manifold.schema.validate(spec, data);
+%   data = bct.manifold.schema.normalize(spec, data);
+%
+% See also: bct.manifold.schema.validate, bct.manifold.schema.normalize
+
+% Schema metadata
+spec.name = "bct.Manifold(core)";
+spec.version = "1.0";
+spec.description = "Core triangulated mesh: vertices, faces, edges";
+
+% Vertices: N×3, floating point, double/single allowed
+% Keep as double by default for precision in geometry/operators
+spec.fields.Vertices = struct( ...
+    "required", true, ...
+    "kind", "float", ...
+    "allowedClasses", ["double", "single"], ...
+    "ndims", 2, ...
+    "ncols", 3, ...
+    "description", "3D vertex positions [N×3]", ...
+    "normalize", @(V) double(V) ...  % Always convert to double for consistency
+);
+
+% Faces: F×3, integer indices, MATLAB convention: 1-based
+% Normalize to uint32 for memory efficiency and semantic correctness
+spec.fields.Faces = struct( ...
+    "required", true, ...
+    "kind", "index", ...
+    "allowedClasses", ["uint32", "uint16", "int32", "int64", "double", "single"], ...
+    "ndims", 2, ...
+    "ncols", 3, ...
+    "indexBase", 1, ...
+    "description", "Triangle face indices [F×3], 1-based", ...
+    "normalize", @(F) bct.manifold.schema.rules.normalizeIndexArray(F, "Faces") ...
+);
+
+% Edges: E×2, integer indices, 1-based
+% Normalize to uint32 (will match Faces type after normalization)
+spec.fields.Edges = struct( ...
+    "required", true, ...
+    "kind", "index", ...
+    "allowedClasses", ["uint32", "uint16", "int32", "int64", "double", "single"], ...
+    "ndims", 2, ...
+    "ncols", 2, ...
+    "indexBase", 1, ...
+    "description", "Unique edge indices [E×2], 1-based", ...
+    "normalize", @(E) bct.manifold.schema.rules.normalizeIndexArray(E, "Edges") ...
+);
+
+% Cross-field validation function
+% Validates relationships between fields that cannot be checked in isolation
+spec.crossValidate = @crossValidateMesh;
+
+end
+
+%% Local Functions
+
+function crossValidateMesh(S)
+%CROSSVALIDATEMESH Validate constraints across multiple fields
+%
+% Checks:
+%   - Face/edge indices are within valid range [1..N]
+%   - Vertices contain no NaN/Inf values
+%   - Face indices reference existing vertices
+%   - Edge indices reference existing vertices
+%
+% Throws:
+%   Error if any cross-field constraint is violated
+
+V = S.Vertices;
+F = S.Faces;
+E = S.Edges;
+
+nV = size(V, 1);
+nF = size(F, 1);
+nE = size(E, 1);
+
+% Validate vertices are finite
+if ~all(isfinite(V(:)))
+    error('bct:schema:InvalidVertices', ...
+        'Vertices contains non-finite values (NaN or Inf).');
+end
+
+% Validate vertices are not empty
+if nV == 0
+    error('bct:schema:EmptyVertices', ...
+        'Vertices array is empty.');
+end
+
+% Validate faces are not empty
+if nF == 0
+    error('bct:schema:EmptyFaces', ...
+        'Faces array is empty.');
+end
+
+% Validate face indices are in range [1..nV]
+if any(F(:) < 1) || any(F(:) > nV)
+    minIdx = min(F(:));
+    maxIdx = max(F(:));
+    error('bct:schema:FacesOutOfRange', ...
+        'Face indices must be in range [1..%d]. Got range [%d..%d].', ...
+        nV, minIdx, maxIdx);
+end
+
+% Validate edge indices are in range [1..nV]
+if nE > 0 && (any(E(:) < 1) || any(E(:) > nV))
+    minIdx = min(E(:));
+    maxIdx = max(E(:));
+    error('bct:schema:EdgesOutOfRange', ...
+        'Edge indices must be in range [1..%d]. Got range [%d..%d].', ...
+        nV, minIdx, maxIdx);
+end
+
+% Validate no degenerate faces (repeated vertex indices)
+degenerateFaces = any(F(:,1) == F(:,2) | F(:,2) == F(:,3) | F(:,3) == F(:,1), 2);
+if any(degenerateFaces)
+    degIdx = find(degenerateFaces, 5);  % Show first 5
+    error('bct:schema:DegenerateFaces', ...
+        'Found %d degenerate faces (repeated vertex indices). Sample indices: %s', ...
+        sum(degenerateFaces), mat2str(degIdx'));
+end
+
+% Validate edge endpoints are distinct
+if nE > 0
+    degenerateEdges = E(:,1) == E(:,2);
+    if any(degenerateEdges)
+        degIdx = find(degenerateEdges, 5);
+        error('bct:schema:DegenerateEdges', ...
+            'Found %d degenerate edges (identical endpoints). Sample indices: %s', ...
+            sum(degenerateEdges), mat2str(degIdx'));
+    end
+end
+
+% Check for reasonable mesh size (warn, don't error)
+if nV > 1e8
+    warning('bct:schema:LargeMesh', ...
+        'Mesh has %d vertices. Consider chunking or compression for efficiency.', nV);
+end
+
+% Validate topology: for closed triangulated surface, expect E ≈ 1.5*F
+expectedEdges = round(1.5 * nF);
+edgeRatio = nE / nF;
+if edgeRatio < 1.4 || edgeRatio > 1.6
+    warning('bct:schema:UnusualTopology', ...
+        'Edge-to-face ratio is %.2f (expected ~1.5 for closed triangulated surface). Mesh may have boundaries or non-manifold vertices.', ...
+        edgeRatio);
+end
+
+end

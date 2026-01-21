@@ -26,8 +26,7 @@ classdef Manifold < handle
         Vertices         % [N×3] vertex coordinates (immutable)
         Faces            % [M×3] face connectivity (immutable)
         Edges            % [E×2] edge connectivity (derived from faces)
-        ID               % Unique identifier for compatibility tracking
-        Metric           % Metric provenance (unit, rescale status)
+        Header           % Metadata and rendering descriptors (schema-driven)
     end
 
     properties (Access = private)
@@ -109,20 +108,17 @@ classdef Manifold < handle
                     'Usage: Manifold(meshStruct) or Manifold(V, F)');
             end
             
+            % Normalize types to canonical forms
+            % This ensures consistent types regardless of construction path
+            obj.Vertices = double(obj.Vertices);  % Always double for precision
+            obj.Faces = uint32(obj.Faces);        % Always uint32 for indices
+            
             % Extract or compute edges
             obj.Edges = bct.manifold.topology.edges(obj.Faces);
             
-            % Generate unique ID for this manifold
-            obj.ID = string(java.util.UUID.randomUUID());
-            
-            % Initialize metric provenance (all manifolds are in meters by default)
-            obj.Metric = struct( ...
-                'unit', "m", ...
-                'rescale', struct( ...
-                    'applied', false, ...
-                    'fromUnit', "", ...
-                    'factor', 1.0, ...
-                    'timestamp', "") );
+            % Initialize Header with defaults from schema
+            % (This creates ID and Metric internally)
+            obj.Header = bct.Manifold.buildDefaultHeaderStatic();
             
             % Initialize unified cache structure with namespaces
             obj.Cache = struct(...
@@ -158,7 +154,12 @@ classdef Manifold < handle
             %     .laplacebeltrami - [N×N] Laplace-Beltrami operator
             %     .d0, .d1         - Exterior derivatives
             %     .dd0, .dd1       - Codifferentials
-            %     .dec             - Structure with all 15 DEC operators
+            %     .hd0, .hd1, .hd2 - Hodge stars
+            %     .hdd0, .hdd1, .hdd2 - Inverse Hodge stars
+            %     .flatPP, .flatDP, .flatDD - Flat operators
+            %     .sharpPD, .sharpDD - Sharp operators
+            %     .gradient, .divergence, .curl - Vector calculus operators
+            %     .hodgelaplacian  - Hodge Laplacian struct (kform0, kform1, kform2)
             %
             % Description:
             %   Returns cached operator structure if available, or computes
@@ -180,9 +181,10 @@ classdef Manifold < handle
             %   % Force recomputation
             %   ops = M.operators('Force', true);
             %
-            %   % Access DEC operators
-            %   hd0 = ops.dec.hd0;
-            %   hd1 = ops.dec.hd1;
+            %   % Access DEC operators (all at top level)
+            %   hd0 = ops.hd0;
+            %   hd1 = ops.hd1;
+            %   sharpPD = ops.sharpPD;
             %
             % See also: bct.manifold.operator, massmatrix, cotmatrix
             
@@ -1898,6 +1900,152 @@ classdef Manifold < handle
             else
                 obj = bct.manifold.read(fileName);
             end
+            
+            % Get full absolute path for Source metadata
+            fileInfo = dir(fileName);
+            if ~isempty(fileInfo)
+                fullPath = fullfile(fileInfo.folder, fileInfo.name);
+            else
+                fullPath = fileName;  % Fallback to provided path
+            end
+            
+            % Extract filename without extension for Name
+            [~, baseName, ~] = fileparts(fileName);
+            
+            % Set Source and Name metadata
+            obj = obj.setHeader('Name', string(baseName), ...
+                               'Source', string(fullPath), ...
+                               'CreatedAt', datetime('now'), ...
+                               'CreatedBy', getenv('USERNAME'));
+        end
+    end
+    
+    % ===================================================================
+    % METADATA MANAGEMENT
+    % ===================================================================
+    methods
+        function obj = setHeader(obj, varargin)
+            %SETHEADER Set or update Header metadata fields
+            %
+            % Syntax:
+            %   M = M.setHeader('FieldName', value, ...)
+            %
+            % Description:
+            %   Updates Header metadata with name-value pairs. Values are
+            %   normalized according to the schema specification.
+            %
+            % Supported Fields:
+            %   Rendering/Interoperability:
+            %     IndexBase        - 0 (JavaScript/Python) or 1 (MATLAB)
+            %     FaceWinding      - "CCW" (counter-clockwise) or "CW"
+            %     NormalConvention - "right-hand-rule" or "left-hand-rule"
+            %     CoordinateSystem - "RAS", "LPS", or "unknown"
+            %     Units            - Physical units (e.g., 'mm', 'm')
+            %   
+            %   Provenance:
+            %     Name      - Semantic identifier (e.g., filename without extension)
+            %     Source    - Data source (file path, URL, description)
+            %     CreatedAt - Timestamp (datetime or string)
+            %     CreatedBy - User or process identifier
+            %     BctVersion - Toolbox version string
+            %     GitCommit  - Git commit hash
+            %
+            % Examples:
+            %   % Set provenance metadata
+            %   M = M.setHeader('Source', 'bunny.obj', ...
+            %                   'CreatedAt', datetime('now'), ...
+            %                   'CreatedBy', 'user123');
+            %
+            %   % Set rendering metadata
+            %   M = M.setHeader('FaceWinding', 'CCW', ...
+            %                   'CoordinateSystem', 'RAS', ...
+            %                   'Units', 'mm');
+            %
+            %   % Update single field
+            %   M = M.setHeader('Source', 'new_source.mat');
+            %
+            % See also: bct.manifold.schema.manifold, bct.manifold.schema.normalize
+            
+            % Parse name-value pairs
+            if mod(numel(varargin), 2) ~= 0
+                error('bct:Manifold:InvalidArguments', ...
+                    'setHeader requires name-value pairs.');
+            end
+            
+            % Get schema for metadata section
+            spec = bct.manifold.schema.manifold();
+            
+            % Update Header fields with normalization
+            for i = 1:2:numel(varargin)
+                fieldName = varargin{i};
+                value = varargin{i+1};
+                
+                % Validate field exists in schema
+                if ~isfield(spec.meta.fields, fieldName)
+                    warning('bct:Manifold:UnknownField', ...
+                        'Field "%s" is not defined in schema. Setting anyway.', fieldName);
+                    obj.Header.(fieldName) = value;
+                    continue;
+                end
+                
+                % Get field spec and normalize value
+                fieldSpec = spec.meta.fields.(fieldName);
+                if isfield(fieldSpec, 'normalize') && isa(fieldSpec.normalize, 'function_handle')
+                    try
+                        normalizedValue = fieldSpec.normalize(value);
+                        obj.Header.(fieldName) = normalizedValue;
+                    catch ME
+                        warning('bct:Manifold:NormalizeFailed', ...
+                            'Failed to normalize field "%s": %s. Using raw value.', ...
+                            fieldName, ME.message);
+                        obj.Header.(fieldName) = value;
+                    end
+                else
+                    obj.Header.(fieldName) = value;
+                end
+            end
+        end
+    end
+    
+    methods (Static, Access = private)
+        function header = buildDefaultHeaderStatic()
+            %BUILDDEFAULTHEADER Initialize Header with default values from schema
+            %
+            % Returns a struct with default values for all metadata fields.
+            % Provenance fields are left empty, rendering fields get defaults.
+            
+            % Get schema
+            spec = bct.manifold.schema.manifold();
+            
+            % Initialize empty header
+            header = struct();
+            
+            % Apply defaults from schema
+            fieldNames = fieldnames(spec.meta.fields);
+            for i = 1:numel(fieldNames)
+                fieldName = fieldNames{i};
+                fieldSpec = spec.meta.fields.(fieldName);
+                
+                % Only set defaults for rendering/interoperability fields
+                % Leave provenance fields empty
+                provenanceFields = ["Name", "Source", "CreatedAt", "CreatedBy", "BctVersion", "GitCommit"];
+                
+                if isfield(fieldSpec, 'default') && ~ismember(fieldName, provenanceFields)
+                    header.(fieldName) = fieldSpec.default;
+                end
+            end
+            
+            % Generate unique ID for this manifold
+            header.ID = string(java.util.UUID.randomUUID());
+            
+            % Initialize metric provenance (all manifolds are in meters by default)
+            header.Metric = struct( ...
+                'unit', "m", ...
+                'rescale', struct( ...
+                    'applied', false, ...
+                    'fromUnit', "", ...
+                    'factor', 1.0, ...
+                    'timestamp', "") );
         end
     end
     
@@ -2030,34 +2178,39 @@ classdef Manifold < handle
             %   [header, grad] = obj.gradient()
             %
             % Description:
-            %   Computes and caches the gradient operator.
+            %   Computes and caches the gradient operator and its metadata.
+            %   Both the operator matrix and header information are cached
+            %   for consistent output on subsequent calls.
             %
             % See also: bct.manifold.operator.gradient, operators
             
             % Check if gradient is already cached
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
                isfield(obj.Cache.operators.data, 'gradient')
-                op = obj.Cache.operators.data.gradient;
+                cached = obj.Cache.operators.data.gradient;
+                op = cached.op;
                 if nargout > 1
-                    header = struct('source', 'cache');
+                    header = cached.header;
                 end
                 return;
             end
             
             % Compute gradient operator
-            % First ensure DEC operators exist
+            % First ensure DEC operators exist (must compute all together)
             if isempty(fieldnames(obj.Cache.operators.data)) || ...
-               ~isfield(obj.Cache.operators.data, 'dec')
-                % Compute DEC operators (including d0 and sharpPD)
+               ~isfield(obj.Cache.operators.data, 'd0') || ...
+               ~isfield(obj.Cache.operators.data, 'sharpPD')
+                % Compute all DEC operators (cannot compute individually)
                 obj.dec();
             end
             
             [header, op] = bct.manifold.operator.gradient(obj, varargin{:});
             
+            % Cache both operator and header
             if isempty(fieldnames(obj.Cache.operators.data))
                 obj.Cache.operators.data = struct();
             end
-            obj.Cache.operators.data.gradient = op;
+            obj.Cache.operators.data.gradient = struct('op', op, 'header', header);
         end
         
         function [header, op] = divergence(obj, varargin)
@@ -2080,9 +2233,12 @@ classdef Manifold < handle
                 return;
             end
             
-            % Ensure DEC operators exist
+            % Ensure DEC operators exist (must compute all together)
             if isempty(fieldnames(obj.Cache.operators.data)) || ...
-               ~isfield(obj.Cache.operators.data, 'dec')
+               ~isfield(obj.Cache.operators.data, 'dd1') || ...
+               ~isfield(obj.Cache.operators.data, 'hd1') || ...
+               ~isfield(obj.Cache.operators.data, 'hdd2')
+                % Compute all DEC operators (cannot compute individually)
                 obj.dec();
             end
             
@@ -2114,9 +2270,11 @@ classdef Manifold < handle
                 return;
             end
             
-            % Ensure DEC operators exist
+            % Ensure DEC operators exist (must compute all together)
             if isempty(fieldnames(obj.Cache.operators.data)) || ...
-               ~isfield(obj.Cache.operators.data, 'dec')
+               ~isfield(obj.Cache.operators.data, 'd1') || ...
+               ~isfield(obj.Cache.operators.data, 'hd2')
+                % Compute all DEC operators (cannot compute individually)
                 obj.dec();
             end
             
@@ -2149,9 +2307,13 @@ classdef Manifold < handle
                 return;
             end
             
-            % Ensure DEC operators exist
+            % Ensure DEC operators exist (must compute all together)
             if isempty(fieldnames(obj.Cache.operators.data)) || ...
-               ~isfield(obj.Cache.operators.data, 'dec')
+               ~isfield(obj.Cache.operators.data, 'd0') || ...
+               ~isfield(obj.Cache.operators.data, 'd1') || ...
+               ~isfield(obj.Cache.operators.data, 'dd0') || ...
+               ~isfield(obj.Cache.operators.data, 'dd1')
+                % Compute all DEC operators (cannot compute individually)
                 obj.dec();
             end
             
@@ -2170,38 +2332,64 @@ classdef Manifold < handle
             %   decOps = obj.dec()
             %
             % Description:
-            %   Computes and caches all DEC operators. Returns a structure
-            %   containing d0, d1, dd0, dd1, hd0-2, etc. This populates
-            %   the entire dec substructure in the cache.
+            %   Computes and caches all 15 DEC operators from DiscreteExteriorCalculus.
+            %   Returns a structure containing: d0, d1, dd0, dd1, hd0-2, hdd0-2,
+            %   flatPP, flatDP, flatDD, sharpPD, sharpDD.
+            %
+            %   All DEC operators are computed together (cannot compute individually)
+            %   because they come from the external DiscreteExteriorCalculus object.
+            %   This method populates the cache with all 15 DEC operators at the
+            %   top level of obj.Cache.operators.data.
             %
             % See also: bct.manifold.operator.dec, operators
             
+            % Check if all DEC operators are already cached
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
-               isfield(obj.Cache.operators.data, 'dec')
-                decOps = obj.Cache.operators.data.dec;
+               isfield(obj.Cache.operators.data, 'd0') && ...
+               isfield(obj.Cache.operators.data, 'sharpDD')
+                % All DEC operators present, collect and return
+                decOps = struct();
+                decOps.d0 = obj.Cache.operators.data.d0;
+                decOps.d1 = obj.Cache.operators.data.d1;
+                decOps.dd0 = obj.Cache.operators.data.dd0;
+                decOps.dd1 = obj.Cache.operators.data.dd1;
+                decOps.hd0 = obj.Cache.operators.data.hd0;
+                decOps.hd1 = obj.Cache.operators.data.hd1;
+                decOps.hd2 = obj.Cache.operators.data.hd2;
+                decOps.hdd0 = obj.Cache.operators.data.hdd0;
+                decOps.hdd1 = obj.Cache.operators.data.hdd1;
+                decOps.hdd2 = obj.Cache.operators.data.hdd2;
+                decOps.flatPP = obj.Cache.operators.data.flatPP;
+                decOps.flatDP = obj.Cache.operators.data.flatDP;
+                decOps.flatDD = obj.Cache.operators.data.flatDD;
+                decOps.sharpPD = obj.Cache.operators.data.sharpPD;
+                decOps.sharpDD = obj.Cache.operators.data.sharpDD;
                 return;
             end
             
+            % Compute all DEC operators from DiscreteExteriorCalculus
             [~, decOps] = bct.manifold.operator.dec(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
                 obj.Cache.operators.data = struct();
             end
-            obj.Cache.operators.data.dec = decOps;
             
-            % Also populate top-level shortcuts
-            if isfield(decOps, 'd0')
-                obj.Cache.operators.data.d0 = decOps.d0;
-            end
-            if isfield(decOps, 'd1')
-                obj.Cache.operators.data.d1 = decOps.d1;
-            end
-            if isfield(decOps, 'dd0')
-                obj.Cache.operators.data.dd0 = decOps.dd0;
-            end
-            if isfield(decOps, 'dd1')
-                obj.Cache.operators.data.dd1 = decOps.dd1;
-            end
+            % Populate cache with all 15 DEC operators at top level
+            obj.Cache.operators.data.d0 = decOps.d0;
+            obj.Cache.operators.data.d1 = decOps.d1;
+            obj.Cache.operators.data.dd0 = decOps.dd0;
+            obj.Cache.operators.data.dd1 = decOps.dd1;
+            obj.Cache.operators.data.hd0 = decOps.hd0;
+            obj.Cache.operators.data.hd1 = decOps.hd1;
+            obj.Cache.operators.data.hd2 = decOps.hd2;
+            obj.Cache.operators.data.hdd0 = decOps.hdd0;
+            obj.Cache.operators.data.hdd1 = decOps.hdd1;
+            obj.Cache.operators.data.hdd2 = decOps.hdd2;
+            obj.Cache.operators.data.flatPP = decOps.flatPP;
+            obj.Cache.operators.data.flatDP = decOps.flatDP;
+            obj.Cache.operators.data.flatDD = decOps.flatDD;
+            obj.Cache.operators.data.sharpPD = decOps.sharpPD;
+            obj.Cache.operators.data.sharpDD = decOps.sharpDD;
         end
         
         function [header, op] = mft(obj, varargin)

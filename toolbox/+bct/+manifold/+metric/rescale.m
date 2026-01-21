@@ -76,12 +76,12 @@ else
 end
 
 % Guardrail: prevent double-rescaling
-if M.Metric.rescale.applied && ~options.Force
+if M.Header.Metric.rescale.applied && ~options.Force
     error('bct:manifold:metric:DoubleRescale', ...
         ['Rescaling has already been applied (from "%s" with factor %.2e). ' ...
          'This likely indicates an attempt to rescale twice, which would corrupt the geometry. ' ...
          'If you are certain you want to rescale again, use ''Force'', true.'], ...
-        M.Metric.rescale.fromUnit, M.Metric.rescale.factor);
+        M.Header.Metric.rescale.fromUnit, M.Header.Metric.rescale.factor);
 end
 
 % Use surfaceMesh.scale() for actual scaling

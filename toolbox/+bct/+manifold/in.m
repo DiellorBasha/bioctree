@@ -64,9 +64,11 @@ if isempty(V) || isempty(F)
         'Object contains empty Vertices or Faces data.');
 end
 
-% Convert to double if necessary (Faces might be int32)
+% Normalize types according to schema
+% Vertices → double (for precision in geometry/operators)
+% Faces → uint32 (semantic correctness and memory efficiency)
 V = double(V);
-F = double(F);
+F = uint32(F);
 
 % Construct Manifold object
 M = bct.Manifold(V, F);

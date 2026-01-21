@@ -15,6 +15,7 @@ function start()
 %   - DECLab:    Discrete Exterior Calculus (required for bct.DEC)
 %   - GSPBox:    Graph Signal Processing (required for spectral ops)
 %   - GPToolbox: Geometry Processing (FEM mesh operations)
+%   - Zarr:      MATLAB support for Zarr files (required for zarr export)
 %
 % See also: bct.config.load, bct.install.deps
 
