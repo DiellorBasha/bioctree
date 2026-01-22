@@ -1,0 +1,135 @@
+function he = halfedge(V, F)
+%HALFEDGE Build a halfedge connectivity structure for a triangular mesh.
+%
+%   he = halfedge(V,F)
+%
+% Inputs
+%   V : #V x 3 (or #V x dim) vertex coordinates
+%   F : #F x 3 triangle vertex indices (1-based)
+%
+% Output (struct) fields
+%   he.nV, he.nF, he.nH
+%   he.v        : #H x 1 tail vertex of halfedge
+%   he.to       : #H x 1 head vertex of halfedge
+%   he.face     : #H x 1 incident face id (1..#F)
+%   he.next     : #H x 1 next halfedge around the face (CCW)
+%   he.prev     : #H x 1 prev halfedge around the face (CCW)
+%   he.twin     : #H x 1 opposite halfedge across undirected edge (0 if boundary)
+%   he.edge     : #H x 1 undirected edge id (1..#E)
+%   he.isBoundary : #H x 1 logical boundary flag (twin==0)
+%   he.E        : #E x 2 list of undirected edges (sorted vertex ids)
+%   he.fh       : #F x 3 halfedge ids per face in order [h12 h23 h31]
+%   he.faceNeighbors : #F x 3 neighbor face ids (1-based, -1 for boundary)
+%   he.neighborEdge  : #F x 3 local edge index in neighbor face (1..3)
+%
+% Convention:
+%   For each face f = [v1 v2 v3], we create three halfedges:
+%     h12: v1 -> v2
+%     h23: v2 -> v3
+%     h31: v3 -> v1
+%   and next pointers: h12->h23->h31->h12.
+%
+%   Face neighbors: faceNeighbors(f, i) is the adjacent face across edge i,
+%   where i = 1,2,3 corresponds to edges [v1-v2, v2-v3, v3-v1].
+%   Value is -1 for boundary edges (no neighbor).
+
+  %#ok<*NASGU>
+
+  if size(F,2) ~= 3
+    error('halfedge: only triangular faces (#F x 3) are supported.');
+  end
+  nV = size(V,1);
+  nF = size(F,1);
+  nH = 3*nF;
+
+  % Halfedges per face in fixed indexing blocks:
+  % h12 = (1:nF)', h23 = (1:nF)'+nF, h31 = (1:nF)'+2nF
+  h12 = (1:nF)';
+  h23 = h12 + nF;
+  h31 = h23 + nF;
+
+  % Tail/head vertices
+  v_tail = [F(:,1); F(:,2); F(:,3)];
+  v_head = [F(:,2); F(:,3); F(:,1)];
+
+  % Face ids
+  face_id = [ (1:nF)'; (1:nF)'; (1:nF)' ];
+
+  % Next/prev around face (CCW)
+  nxt = zeros(nH,1);
+  prv = zeros(nH,1);
+  nxt(h12) = h23;  nxt(h23) = h31;  nxt(h31) = h12;
+  prv(h12) = h31;  prv(h23) = h12;  prv(h31) = h23;
+
+  % Twin lookup via sparse directed-edge matrix D(tail, head) = halfedge_id.
+  % For a valid manifold triangle mesh, each directed edge appears at most once.
+  
+  % SAFETY: Detect duplicate directed edges before building sparse matrix
+  % If duplicates exist, sparse() will sum values, yielding incorrect topology
+  ij = [v_tail v_head];
+  [~, ~, ic] = unique(ij, 'rows');
+  counts = accumarray(ic, 1);
+  if any(counts > 1)
+    error('bct:topology:halfedge:DuplicateDirectedEdge', ...
+      'Duplicate directed edges detected. Mesh may be non-manifold or contain duplicated faces.');
+  end
+  
+  D = sparse(v_tail, v_head, (1:nH)', nV, nV);
+  twin = full(D(sub2ind([nV nV], v_head, v_tail))); % D(head,tail)
+  % twin is 0 for boundary halfedges (no opposite direction found)
+
+  % Undirected edges: use canonical edge indexing from topology.edges
+  % This ensures edge IDs are consistent across all topology functions
+  [E, edge_id] = bct.manifold.topology.edges(F);
+
+  he = struct();
+  he.nV = nV;
+  he.nF = nF;
+  he.nH = nH;
+
+  he.v = v_tail;
+  he.to = v_head;
+  he.face = face_id;
+
+  he.next = nxt;
+  he.prev = prv;
+  he.twin = twin;
+
+  he.edge = edge_id;
+  he.E = E;
+
+  he.isBoundary = (twin == 0);
+
+  % Halfedge ids per face [h12 h23 h31]
+  he.fh = [h12, h23, h31];
+  
+  % Face neighbors and corresponding edge indices
+  % faceNeighbors(f, i) = adjacent face across edge i (1-based, -1 for boundary)
+  % neighborEdge(f, i) = local edge index (1..3) in the neighbor face
+  faceNeighbors = -ones(nF, 3, 'int32'); % 1-based neighbor face ids, -1 for boundary
+  neighborEdge  = zeros(nF, 3, 'uint8'); % 1..3 edge index in neighbor face
+  
+  for f = 1:nF
+    for i = 1:3
+      h = he.fh(f, i);
+      if he.isBoundary(h)
+        continue;
+      end
+      ht = he.twin(h);              % Twin halfedge
+      g = he.face(ht);              % Neighbor face (1-based)
+      faceNeighbors(f, i) = g;
+      
+      % Find which local edge in face g corresponds to halfedge ht
+      idx = find(he.fh(g, :) == ht, 1, 'first');
+      if isempty(idx)
+        error('bct:topology:halfedge:TwinInconsistency', ...
+          'Halfedge twin not found in neighbor face.');
+      end
+      neighborEdge(f, i) = uint8(idx); % 1..3
+    end
+  end
+  
+  he.faceNeighbors = faceNeighbors;
+  he.neighborEdge = neighborEdge;
+end
+
