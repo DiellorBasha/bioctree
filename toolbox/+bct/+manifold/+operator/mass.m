@@ -1,10 +1,10 @@
-function [header, M] = mass(meshInput, varargin)
+function out = mass(meshInput, varargin)
 %MASS Assemble FEM mass matrix from Manifold or mesh data
 %
 % Syntax:
-%   [header, M] = bct.manifold.operator.mass(M)
-%   [header, M] = bct.manifold.operator.mass(V, F)
-%   [header, M] = bct.manifold.operator.mass(..., Name, Value)
+%   mass = bct.manifold.operator.mass(M)
+%   mass = bct.manifold.operator.mass(V, F)
+%   mass = bct.manifold.operator.mass(..., Name, Value)
 %
 % Inputs:
 %   M       - bct.Manifold object
@@ -23,11 +23,14 @@ function [header, M] = mass(meshInput, varargin)
 %                'single' - Single precision
 %
 % Outputs:
-%   header - Structure containing the parameters used:
-%            .variant    - Mass matrix variant used
-%            .symmetrize - Whether symmetrization was applied
-%            .precision  - Precision of output matrix
-%   M      - [N×N] sparse mass matrix defining FEM inner product
+%   out - Structure matching mass dataset schema:
+%     .attributes - Dataset-level metadata:
+%       .variant    - Mass matrix variant used
+%       .symmetrize - Whether symmetrization was applied
+%       .precision  - Precision of output matrix
+%       .path       - HDF5/Zarr path for this dataset
+%       .description - Dataset description
+%     .value - [N×N] sparse mass matrix defining FEM inner product
 %
 % Description:
 %   Assembles the FEM mass matrix using gptoolbox. The mass matrix defines
@@ -48,24 +51,26 @@ function [header, M] = mass(meshInput, varargin)
 %
 % Examples:
 %   % Using Manifold object (default voronoi, double precision, symmetrized)
-%   [header, M] = bct.manifold.operator.mass(manifold);
+%   mass = bct.manifold.operator.mass(manifold);
+%   M = mass.value;
 %
 %   % Using explicit V, F
-%   [header, M] = bct.manifold.operator.mass(V, F);
+%   mass = bct.manifold.operator.mass(V, F);
 %
 %   % Barycentric lumped mass
-%   [header, M] = bct.manifold.operator.mass(manifold, 'variant', 'barycentric');
+%   mass = bct.manifold.operator.mass(manifold, 'variant', 'barycentric');
 %
 %   % Full consistent mass without symmetrization
-%   [header, M] = bct.manifold.operator.mass(V, F, ...
+%   mass = bct.manifold.operator.mass(V, F, ...
 %       'variant', 'full', 'symmetrize', false);
 %
 %   % Single precision output
-%   [header, M] = bct.manifold.operator.mass(manifold, ...
+%   mass = bct.manifold.operator.mass(manifold, ...
 %       'variant', 'voronoi', 'precision', 'single');
 %
 %   % Use with FEM inner product
-%   [~, M] = bct.manifold.operator.mass(manifold);
+%   mass = bct.manifold.operator.mass(manifold);
+%   M = mass.value;
 %   norm_u = sqrt(u' * M * u);
 %
 % See also: bct.manifold.operator.stiffness, bct.manifold.operator.gradient, massmatrix
@@ -120,11 +125,10 @@ p.addParameter('symmetrize', true, @islogical);
 p.addParameter('precision', 'double', @(x) ismember(x, ["double","single"]));
 p.parse(varargin{nameValueStart:end});
 
-% Build header structure with input parameters
-header = struct();
-header.variant = char(p.Results.variant);
-header.symmetrize = p.Results.symmetrize;
-header.precision = char(p.Results.precision);
+% Extract parameters
+variant = char(p.Results.variant);
+symmetrize = p.Results.symmetrize;
+precision = char(p.Results.precision);
 
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
@@ -138,7 +142,7 @@ if needsPath
 end
 
 try
-    M = massmatrix(V, F, header.variant);
+    M = massmatrix(V, F, variant);
 catch ME
     error('bct:manifold:operator:mass:GPToolboxError', ...
         'Failed to call gptoolbox massmatrix: %s\nPath: %s', ...
@@ -146,15 +150,33 @@ catch ME
 end
 
 % Symmetrize if requested
-if header.symmetrize
+if symmetrize
     M = (M + M') / 2;
 end
 
 % Convert precision if requested
-if strcmp(header.precision, 'single')
+if strcmp(precision, 'single')
     M = single(M);
 end
 
+% Build output structure with dataset and attributes
+out = struct();
+
+% Dataset-level attributes (metadata for this specific dataset)
+out.attributes = struct();
+out.attributes.name = 'mass';
+out.attributes.path = 'operator/mass';
+out.attributes.description = 'FEM mass matrix (area-weighted inner product)';
+out.attributes.variant = variant;
+out.attributes.symmetrize = symmetrize;
+out.attributes.precision = precision;
+out.attributes.units = 'area_units';
+out.attributes.shape = [size(V, 1), size(V, 1)];
+out.attributes.nnz = nnz(M);
+out.attributes.storage = 'sparse';
+
+% The actual dataset (sparse matrix)
+out.value = M;
 end
 
 %% ========================================================================

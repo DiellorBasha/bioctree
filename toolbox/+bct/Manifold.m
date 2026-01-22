@@ -124,6 +124,7 @@ classdef Manifold < handle
             obj.Cache = struct(...
                 'geometry', struct('data', struct(), 'meta', struct()), ...
                 'topology', struct('data', struct(), 'meta', struct()), ...
+                'halfedge', struct('data', struct(), 'meta', struct()), ...
                 'operators', struct('data', struct(), 'meta', struct()), ...
                 'eigenmodes', struct('data', struct(), 'meta', struct()), ...
                 'health', struct('data', struct(), 'meta', struct()));
@@ -706,15 +707,19 @@ classdef Manifold < handle
             %   Force     - Force recomputation even if cached (default: false)
             %
             % Outputs:
-            %   Eigen - Structure with fields:
-            %           .values    - [k×1] eigenvalues (sorted ascending)
-            %           .vectors   - [N×k] eigenvectors (M-orthonormal)
-            %           .k         - Number of modes
-            %           .operator  - 'Laplace-Beltrami'
-            %           .basis     - 'P1-FEM'
-            %           .ordering  - 'ascending'
-            %           .massType  - Mass matrix type used
-            %           .removedDC - Whether DC mode was removed
+            %   Eigen - Structure matching bct.manifold.eigen.schema:
+            %           .attributes    - Group-level metadata
+            %             .schema      - "bct.manifold.eigen@1.0.0"
+            %             .package     - "bct.manifold.eigen"
+            %             .numModes    - Number of modes (k)
+            %             .numVertices - Number of vertices (N)
+            %             .operator    - "Laplace-Beltrami"
+            %             .basis       - "P1-FEM"
+            %             .ordering    - "ascending"
+            %             .massType    - Mass matrix type used
+            %             .removedDC   - Whether DC mode was removed
+            %           .values        - [k×1] eigenvalues (sorted ascending)
+            %           .vectors       - [N×k] eigenvectors (M-orthonormal)
             %
             % Description:
             %   Returns cached eigenmode structure if available, or computes
@@ -732,6 +737,7 @@ classdef Manifold < handle
             %   E = M.eigenmodes();
             %   lambda = E.values;
             %   U = E.vectors;
+            %   k = E.attributes.numModes;
             %
             %   % Compute with 100 modes (updates cache)
             %   E = M.eigenmodes(100);
@@ -744,13 +750,13 @@ classdef Manifold < handle
             %
             %   % Force recomputation
             %   E = M.eigenmodes('Force', true);
-%   
-%   % With unit annotations
-%   E = M.eigenmodes(100, 'annotate', true);
-%   E.values.unit   % '1/m^2' (Laplacian eigenvalues)
-%   E.vectors.unit  % '1' (normalized modes)
-%
-% See also: bct.manifold.eigenmodes, bct.manifold.metric.annotate
+            %   
+            %   % With unit annotations
+            %   E = M.eigenmodes(100, 'annotate', true);
+            %   E.values.unit   % '1/m^2' (Laplacian eigenvalues)
+            %   E.vectors.unit  % '1' (normalized modes)
+            %
+            % See also: bct.manifold.eigenmodes, bct.manifold.eigen.schema
             p = inputParser;
             p.addOptional('k', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
             p.addParameter('RemoveDC', true, @islogical);
@@ -772,8 +778,10 @@ classdef Manifold < handle
                 % Forced recomputation
                 if isempty(k_requested)
                     % Use cached k if available, otherwise default
-                    if isfield(obj.Cache.eigenmodes.data, 'k') && ~isempty(obj.Cache.eigenmodes.data.k)
-                        k_requested = obj.Cache.eigenmodes.data.k;
+                    if ~isempty(fieldnames(obj.Cache.eigenmodes.data)) && ...
+                       isfield(obj.Cache.eigenmodes.data, 'attributes') && ...
+                       isfield(obj.Cache.eigenmodes.data.attributes, 'numModes')
+                        k_requested = double(obj.Cache.eigenmodes.data.attributes.numModes);
                     else
                         k_requested = 50;  % Default
                     end
@@ -794,46 +802,31 @@ classdef Manifold < handle
             end
             
             % Compute eigenmodes using bct.manifold.eigenmodes
-            [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(...
+            Eigen = bct.manifold.eigenmodes(...
                 obj, k_requested, ...
                 'RemoveDC', removeDC, ...
                 'MassType', massType, ...
                 'EigsOpts', eigsOpts);
-            
-            % Build Eigen structure
-            Eigen = struct();
-            Eigen.values = eigenvalues;
-            Eigen.vectors = eigenvectors;
-            Eigen.k = length(eigenvalues);
-            Eigen.operator = "Laplace-Beltrami";
-            Eigen.basis = "P1-FEM";
-            Eigen.ordering = "ascending";
-            Eigen.massType = massType;
-            Eigen.removedDC = removeDC;
             
             % Apply annotation if requested (before caching to keep cache numeric)
             if annotate
                 Eigen = bct.manifold.metric.annotate(Eigen, 'eigen');
             end
             
-            % Cache for future use (always cache numeric version)
+            % Cache for future use (always cache schema-compliant version)
             if annotate
-                % Store un-annotated version in cache
-                EigenNumeric = struct();
-                EigenNumeric.values = eigenvalues;
-                EigenNumeric.vectors = eigenvectors;
-                EigenNumeric.k = length(eigenvalues);
-                EigenNumeric.operator = "Laplace-Beltrami";
-                EigenNumeric.basis = "P1-FEM";
-                EigenNumeric.ordering = "ascending";
-                EigenNumeric.massType = massType;
-                EigenNumeric.removedDC = removeDC;
+                % Store un-annotated version in cache (recompute to avoid annotated values)
+                EigenNumeric = bct.manifold.eigenmodes(...
+                    obj, k_requested, ...
+                    'RemoveDC', removeDC, ...
+                    'MassType', massType, ...
+                    'EigsOpts', eigsOpts);
                 obj.Cache.eigenmodes.data = EigenNumeric;
             else
                 obj.Cache.eigenmodes.data = Eigen;
             end
             obj.Cache.eigenmodes.meta.computed = datetime('now');
-            obj.Cache.eigenmodes.meta.k = length(eigenvalues);
+            obj.Cache.eigenmodes.meta.numModes = Eigen.attributes.numModes;
             obj.Cache.eigenmodes.meta.massType = massType;
             obj.Cache.eigenmodes.meta.removedDC = removeDC;
         end
@@ -1372,39 +1365,50 @@ classdef Manifold < handle
             %   'Force' - false (default) or true to force recomputation
             %
             % Outputs:
-            %   topo - Structure with fields:
-            %     .edges     - [nE×2] Unique undirected edges
-            %     .adjacency - [N×N] Sparse binary adjacency matrix
-            %     .halfedge  - Halfedge data structure with navigation
+            %   topo - Structure matching bct.manifold.topology.schema:
+            %     .attributes      - Group-level metadata (numVertices, numFaces, numHalfedges)
+            %     .tailVertex      - [nH×1 uint32] Tail vertex indices
+            %     .headVertex      - [nH×1 uint32] Head vertex indices
+            %     .face            - [nH×1 uint32] Incident face indices
+            %     .next            - [nH×1 uint32] Next halfedge (CCW)
+            %     .prev            - [nH×1 uint32] Previous halfedge (CCW)
+            %     .twin            - [nH×1 uint32] Twin halfedge (0 if boundary)
+            %     .edge            - [nH×1 uint32] Undirected edge indices
+            %     .isBoundary      - [nH×1 logical] Boundary flags
+            %     .edgeList        - [nE×2 uint32] Undirected edge list
+            %     .faceHalfedges   - [nF×3 uint32] Halfedge indices per face
+            %     .faceNeighbors   - [nF×3 int32] Adjacent face indices
+            %     .neighborEdge    - [nF×3 uint8] Local edge index in neighbors
+            %     .adjacency       - [nV×nV sparse logical] Adjacency matrix
             %
             % Description:
             %   Computes all topological properties of the manifold and caches
-            %   the result for future calls. This is a wrapper for
-            %   bct.manifold.topology() that handles caching.
+            %   the result for future calls. Output conforms to 
+            %   bct.manifold.topology.schema for HDF5/Zarr serialization.
             %
             %   Topology is coordinate-free and depends only on face
-            %   connectivity. On first call, computes all topology. Subsequent
-            %   calls return the cached result unless 'Force' is true.
+            %   connectivity. The structure IS a halfedge structure with all
+            %   navigation fields at the top level. On first call, computes all
+            %   topology. Subsequent calls return cached result unless 'Force' is true.
             %
             % Examples:
             %   % Compute and cache all topology
             %   M = bct.Manifold(V, F);
             %   topo = M.topology();
             %   
-            %   % Access individual properties
-            %   E = topo.edges;          % [nE×2] edge list
-            %   A = topo.adjacency;      % [N×N] adjacency matrix
-            %   he = topo.halfedge;      % Halfedge structure
+            %   % Access halfedge navigation (flattened structure)
+            %   h = topo.faceHalfedges(1, 1);  % First halfedge of face 1
+            %   h_next = topo.next(h);          % Next halfedge (CCW)
+            %   h_twin = topo.twin(h);          % Twin across edge
             %   
-            %   % Navigate mesh using halfedge
-            %   h = 1;  % First halfedge
-            %   next_h = topo.halfedge.next(h);
-            %   twin_h = topo.halfedge.twin(h);
+            %   % Access edges and adjacency
+            %   E = topo.edgeList;              % [nE×2] edge list
+            %   A = topo.adjacency;             % [nV×nV] adjacency matrix
             %   
             %   % Force recomputation
             %   topo = M.topology('Force', true);
             %
-            % See also: bct.manifold.topology, geometry
+            % See also: bct.manifold.topology, bct.manifold.topology.schema, geometry
             
             % Parse inputs
             p = inputParser;
@@ -1439,23 +1443,30 @@ classdef Manifold < handle
             %   'Force' - false (default) or true to force recomputation
             %
             % Outputs:
-            %   he - Halfedge data structure with fields:
-            %        .next       - [nH×1] Next halfedge in face
-            %        .twin       - [nH×1] Opposite halfedge
-            %        .vertex     - [nH×1] Vertex at halfedge origin
-            %        .face       - [nH×1] Face containing halfedge
-            %        .edge       - [nH×1] Edge index for halfedge
-            %        .isBoundary - [nH×1] Logical array for boundary halfedges
-            %        .E          - [nE×2] Unique edge list
+            %   he - Halfedge data structure (convenience, not schema-compliant):
+            %        .numVertices    - Number of vertices
+            %        .numFaces       - Number of faces
+            %        .numHalfedges   - Number of halfedges
+            %        .tailVertex     - [nH×1] Tail vertex indices
+            %        .headVertex     - [nH×1] Head vertex indices
+            %        .next           - [nH×1] Next halfedge in face
+            %        .prev           - [nH×1] Previous halfedge in face
+            %        .twin           - [nH×1] Opposite halfedge
+            %        .face           - [nH×1] Face containing halfedge
+            %        .edge           - [nH×1] Edge index for halfedge
+            %        .isBoundary     - [nH×1] Logical array for boundary halfedges
+            %        .edgeList       - [nE×2] Unique edge list
+            %        .faceHalfedges  - [nF×3] Halfedge indices per face
+            %        .faceNeighbors  - [nF×3] Adjacent face indices
+            %        .neighborEdge   - [nF×3] Local edge in neighbor
             %
             % Description:
-            %   Returns cached halfedge structure if available, or computes
-            %   using bct.manifold.topology.halfedge() with mesh connectivity.
-            %   Result is cached within topology namespace for future calls.
+            %   Returns a convenience halfedge structure (without adjacency).
+            %   This is cached separately from topology for algorithms that
+            %   only need halfedge navigation without adjacency matrix.
             %
-            %   The halfedge structure enables efficient mesh navigation and
-            %   is used internally by dual mesh computations and differential
-            %   operators.
+            %   For schema-compliant topology (includes adjacency), use
+            %   M.topology() instead.
             %
             % Examples:
             %   % Get halfedge structure
@@ -1463,12 +1474,12 @@ classdef Manifold < handle
             %   he = M.halfedge();
             %   
             %   % Navigate mesh
-            %   h = 1;  % First halfedge
+            %   h = he.faceHalfedges(1, 1);  % First halfedge of face 1
             %   next_h = he.next(h);
             %   twin_h = he.twin(h);
             %   
             %   % Get edge list
-            %   E = he.E;
+            %   E = he.edgeList;
             %   
             %   % Force recomputation
             %   he = M.halfedge('Force', true);
@@ -1483,22 +1494,18 @@ classdef Manifold < handle
             
             force = p.Results.Force;
             
-            % Check if topology is cached and has halfedge
-            if ~force && ~isempty(fieldnames(obj.Cache.topology.data)) && ...
-               isfield(obj.Cache.topology.data, 'halfedge')
-                he = obj.Cache.topology.data.halfedge;
+            % Check if halfedge is cached
+            if ~force && ~isempty(fieldnames(obj.Cache.halfedge.data))
+                he = obj.Cache.halfedge.data;
                 return;
             end
             
             % Compute halfedge using bct.manifold.topology.halfedge
             he = bct.manifold.topology.halfedge(obj.Vertices, obj.Faces);
             
-            % Cache the result in topology namespace
-            if isempty(fieldnames(obj.Cache.topology.data))
-                obj.Cache.topology.data = struct();
-            end
-            obj.Cache.topology.data.halfedge = he;
-            obj.Cache.topology.meta.halfedgeComputed = datetime('now');
+            % Cache the result
+            obj.Cache.halfedge.data = he;
+            obj.Cache.halfedge.meta.computed = datetime('now');
         end
         
         function h = health(obj, varargin)
@@ -2071,16 +2078,22 @@ classdef Manifold < handle
     % INDIVIDUAL OPERATOR WRAPPERS (Modular Caching)
     % ===================================================================
     methods
-        function [header, op] = mass(obj, varargin)
+        function op = mass(obj, varargin)
             %MASS Get or compute mass matrix (modular caching)
             %
             % Syntax:
-            %   [header, M] = obj.mass()
-            %   [header, M] = obj.mass('variant', 'voronoi')
+            %   M = obj.mass()
+            %   M = obj.mass('variant', 'voronoi')
+            %
+            % Outputs:
+            %   M - Mass matrix dataset structure with:
+            %       .value - [N×N sparse double] Mass matrix
+            %       .attributes - Dataset-level metadata
             %
             % Description:
-            %   Computes and caches the mass matrix operator. Updates only
-            %   the mass field in the operators cache, enabling modular access.
+            %   Computes and caches the mass matrix operator. Returns the
+            %   schema-compliant dataset structure. For backward compatibility,
+            %   access the matrix via M.value.
             %
             % See also: bct.manifold.operator.mass, operators
             
@@ -2088,14 +2101,11 @@ classdef Manifold < handle
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
                isfield(obj.Cache.operators.data, 'mass')
                 op = obj.Cache.operators.data.mass;
-                if nargout > 1
-                    header = struct('source', 'cache');
-                end
                 return;
             end
             
-            % Compute mass matrix
-            [header, op] = bct.manifold.operator.mass(obj, varargin{:});
+            % Compute mass matrix (returns structure with .value and .attributes)
+            op = bct.manifold.operator.mass(obj, varargin{:});
             
             % Cache the result
             if isempty(fieldnames(obj.Cache.operators.data))
@@ -2104,28 +2114,33 @@ classdef Manifold < handle
             obj.Cache.operators.data.mass = op;
         end
         
-        function [header, op] = stiffness(obj, varargin)
+        function op = stiffness(obj, varargin)
             %STIFFNESS Get or compute stiffness matrix (modular caching)
             %
             % Syntax:
-            %   [header, K] = obj.stiffness()
-            %   [header, K] = obj.stiffness('variant', 'cotan')
+            %   K = obj.stiffness()
+            %   K = obj.stiffness('variant', 'cotan')
+            %
+            % Outputs:
+            %   K - Stiffness matrix dataset structure with:
+            %       .value - [N×N sparse double] Stiffness matrix
+            %       .attributes - Dataset-level metadata
             %
             % Description:
-            %   Computes and caches the stiffness matrix operator.
+            %   Computes and caches the stiffness matrix operator. Returns the
+            %   schema-compliant dataset structure. For backward compatibility,
+            %   access the matrix via K.value.
             %
             % See also: bct.manifold.operator.stiffness, operators
             
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
                isfield(obj.Cache.operators.data, 'stiffness')
                 op = obj.Cache.operators.data.stiffness;
-                if nargout > 1
-                    header = struct('source', 'cache');
-                end
                 return;
             end
             
-            [header, op] = bct.manifold.operator.stiffness(obj, varargin{:});
+            % Compute stiffness matrix (returns structure with .value and .attributes)
+            op = bct.manifold.operator.stiffness(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
                 obj.Cache.operators.data = struct();
@@ -2350,64 +2365,32 @@ classdef Manifold < handle
             %   decOps = obj.dec()
             %
             % Description:
-            %   Computes and caches all 15 DEC operators from DiscreteExteriorCalculus.
-            %   Returns a structure containing: d0, d1, dd0, dd1, hd0-2, hdd0-2,
-            %   flatPP, flatDP, flatDD, sharpPD, sharpDD.
+            %   Computes and caches all 14 DEC operators from DiscreteExteriorCalculus.
+            %   Returns the complete DEC operator group structure with schema-compliant
+            %   datasets. Each operator has .value and .attributes fields.
             %
             %   All DEC operators are computed together (cannot compute individually)
             %   because they come from the external DiscreteExteriorCalculus object.
-            %   This method populates the cache with all 15 DEC operators at the
-            %   top level of obj.Cache.operators.data.
+            %   This method caches the entire DEC structure.
             %
             % See also: bct.manifold.operator.dec, operators
             
-            % Check if all DEC operators are already cached
+            % Check if DEC operators are already cached
             if ~isempty(fieldnames(obj.Cache.operators.data)) && ...
-               isfield(obj.Cache.operators.data, 'd0') && ...
-               isfield(obj.Cache.operators.data, 'sharpDD')
-                % All DEC operators present, collect and return
-                decOps = struct();
-                decOps.d0 = obj.Cache.operators.data.d0;
-                decOps.d1 = obj.Cache.operators.data.d1;
-                decOps.dd0 = obj.Cache.operators.data.dd0;
-                decOps.dd1 = obj.Cache.operators.data.dd1;
-                decOps.hd0 = obj.Cache.operators.data.hd0;
-                decOps.hd1 = obj.Cache.operators.data.hd1;
-                decOps.hd2 = obj.Cache.operators.data.hd2;
-                decOps.hdd0 = obj.Cache.operators.data.hdd0;
-                decOps.hdd1 = obj.Cache.operators.data.hdd1;
-                decOps.hdd2 = obj.Cache.operators.data.hdd2;
-                decOps.flatPP = obj.Cache.operators.data.flatPP;
-                decOps.flatDP = obj.Cache.operators.data.flatDP;
-                decOps.flatDD = obj.Cache.operators.data.flatDD;
-                decOps.sharpPD = obj.Cache.operators.data.sharpPD;
-                decOps.sharpDD = obj.Cache.operators.data.sharpDD;
+               isfield(obj.Cache.operators.data, 'dec')
+                decOps = obj.Cache.operators.data.dec;
                 return;
             end
             
-            % Compute all DEC operators from DiscreteExteriorCalculus
-            [~, decOps] = bct.manifold.operator.dec(obj, varargin{:});
+            % Compute all DEC operators (returns schema-compliant structure)
+            decOps = bct.manifold.operator.dec(obj, varargin{:});
             
             if isempty(fieldnames(obj.Cache.operators.data))
                 obj.Cache.operators.data = struct();
             end
             
-            % Populate cache with all 15 DEC operators at top level
-            obj.Cache.operators.data.d0 = decOps.d0;
-            obj.Cache.operators.data.d1 = decOps.d1;
-            obj.Cache.operators.data.dd0 = decOps.dd0;
-            obj.Cache.operators.data.dd1 = decOps.dd1;
-            obj.Cache.operators.data.hd0 = decOps.hd0;
-            obj.Cache.operators.data.hd1 = decOps.hd1;
-            obj.Cache.operators.data.hd2 = decOps.hd2;
-            obj.Cache.operators.data.hdd0 = decOps.hdd0;
-            obj.Cache.operators.data.hdd1 = decOps.hdd1;
-            obj.Cache.operators.data.hdd2 = decOps.hdd2;
-            obj.Cache.operators.data.flatPP = decOps.flatPP;
-            obj.Cache.operators.data.flatDP = decOps.flatDP;
-            obj.Cache.operators.data.flatDD = decOps.flatDD;
-            obj.Cache.operators.data.sharpPD = decOps.sharpPD;
-            obj.Cache.operators.data.sharpDD = decOps.sharpDD;
+            % Cache the entire DEC structure
+            obj.Cache.operators.data.dec = decOps;
         end
         
         function [header, op] = mft(obj, varargin)

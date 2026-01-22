@@ -19,75 +19,85 @@ function ops = operator(meshInput, varargin)
 %   annotate         - false (default) or true to wrap outputs as quantity structs
 %
 % Outputs:
-%   ops - Structure with fields:
-%     .mass            - [N×N] FEM mass matrix
-%     .stiffness       - [N×N] FEM stiffness matrix (cotangent Laplacian)
-%     .laplacebeltrami - [N×N] Laplace-Beltrami operator (M^(-1) * K)
-%     .graphlaplacian  - [N×N] Graph Laplacian (topological, D - A)
-%     % DEC operators (flattened, all 15 at top level)
-%     .d0, .d1         - Exterior derivatives
-%     .dd0, .dd1       - Codifferentials
-%     .hd0, .hd1, .hd2 - Hodge stars
-%     .hdd0, .hdd1, .hdd2 - Inverse Hodge stars
-%     .flatPP, .flatDP, .flatDD  - Flat operators
-%     .sharpPD, .sharpDD - Sharp operators
-%     % Derived DEC composition operators
-%     .gradient        - Gradient operator (vertex → face tangent vectors)
-%     .divergence      - Divergence operator (edge → vertex, primal route)
-%     .curl            - Curl operator (edge → face, primal route)
-%     .hodgelaplacian  - Hodge Laplacian struct (kform0, kform1, kform2)
+%   ops - Structure matching bct.manifold.operator.schema:
+%     .attributes        - Group-level metadata
+%       .schema          - "bct.manifold.operator@1.0.0"
+%       .package         - "bct.manifold.operator"
+%       .numVertices     - Number of vertices (uint32)
+%       .numFaces        - Number of faces (uint32)
+%       .numEdges        - Number of edges (uint32)
+%       .massVariant     - Mass matrix type
+%       .stiffnessVariant- Stiffness matrix type
+%       .stiffnessSign   - Sign convention
+%       .sparseFormat    - "coo" (export format for HDF5/Zarr)
+%     .mass              - Dataset structure with .value and .attributes
+%     .stiffness         - Dataset structure with .value and .attributes
+%     .d0, .d1           - DEC exterior derivatives (datasets)
+%     .dd0, .dd1         - DEC codifferentials (datasets)
+%     .hd0, .hd1, .hd2   - DEC Hodge stars (datasets)
+%     .hdd0, .hdd1, .hdd2 - DEC inverse Hodge stars (datasets)
+%     .flatPP, .flatDP, .flatDD - DEC flat operators (datasets)
+%     .sharpPD, .sharpDD - DEC sharp operators (datasets)
+%     .mft               - Forward MFT (optional, if eigenmodes cached)
+%     .imft              - Inverse MFT (optional, if eigenmodes cached)
 %
 % Description:
-%   Aggregates all operator computations from the bct.manifold.operator
-%   subpackage. Computes FEM matrices (mass, stiffness, Laplace-Beltrami)
-%   and all DEC operators (exterior derivatives, Hodge stars, etc.), plus
-%   derived composition operators (gradient, divergence, curl, Hodge Laplacian).
+%   Aggregates fundamental operator computations from the bct.manifold.operator
+%   subpackage. Computes FEM matrices (mass, stiffness) and optionally
+%   spectral transform operators (MFT, IMFT) if eigenmodes are cached.
 %
-%   This is an aggregator function similar to bct.manifold.geometry() and
-%   bct.manifold.topology(). It computes all operators in one call for
-%   convenience and completeness.
+%   Returns a schema-compliant structure matching bct.manifold.operator.schema
+%   for HDF5/Zarr serialization. Matrices are stored in native MATLAB sparse
+%   format. The .attributes.sparseFormat field indicates that export functions
+%   should convert to COO (coordinate) format for HDF5/Zarr output.
 %
-%   The Laplace-Beltrami operator is computed as the generalized eigenvalue
-%   form: L = M^(-1) * K, where M is the mass matrix and K is the stiffness
-%   matrix. This is the standard FEM discretization of the Laplace-Beltrami
-%   operator on manifolds.
+%   This is the main aggregator function for the operator package, similar to
+%   bct.manifold.geometry() and bct.manifold.topology(). Computes and aggregates
+%   all fundamental operators: FEM matrices (mass, stiffness), DEC operators
+%   (14 operators from DiscreteExteriorCalculus), and optionally spectral
+%   transforms (MFT, IMFT if eigenmodes are cached).
+%   
+%   DEC operators are always computed and placed at the top level of the
+%   output structure. Derived operators (Laplace-Beltrami, gradient, divergence)
+%   can be computed on-demand from the stored mass and stiffness matrices.
 %
 % Examples:
-%   % Compute all operators for a Manifold
+%   % Compute fundamental operators for a Manifold
 %   M = bct.Manifold(V, F);
 %   ops = bct.manifold.operator(M);
 %   
-%   % Access individual operators
-%   L = ops.laplacebeltrami;
-%   d0 = ops.d0;
-%   hd1 = ops.hd1;
+%   % Access sparse matrices via dataset structures
+%   Mass = ops.mass.value;          % [N×N sparse double]
+%   Stiffness = ops.stiffness.value;% [N×N sparse double]
 %   
-%   % Vector calculus operators
-%   grad = ops.gradient;           % [3*nF × nV]
-%   div = ops.divergence;          % [nV × nE]
-%   curl = ops.curl;               % [nF × nE]
-%   Lap0 = ops.hodgelaplacian.kform0;  % [nV × nV]
+%   % Access dataset metadata
+%   massVariant = ops.mass.attributes.variant;
 %   
-%   % Apply gradient to scalar field
+%   % Apply operators
 %   f = randn(M.numVertices(), 1);
-%   grad_f = ops.gradient * f;  % Tangent vectors at faces
+%   Kf = ops.stiffness.value * f;
+%   
+%   % Access DEC operators (at top level)
+%   d0 = ops.d0.value;      % Exterior derivative
+%   grad = ops.d0.value;    % Gradient (same as d0)
+%   laplacian = ops.dd0.value * ops.d0.value;  % Laplacian via DEC
+%   
+%   % Check if MFT/IMFT are available
+%   if isfield(ops, 'mft')
+%       spectrum = ops.mft * f;
+%       reconstructed = ops.imft * spectrum;
+%   end
 %   
 %   % Compute with custom parameters
 %   ops = bct.manifold.operator(M, 'MassVariant', 'barycentric');
 %   
 %   % Direct V, F input
 %   ops = bct.manifold.operator(V, F);
-%   
-%   % Compute with unit annotations
-%   ops = bct.manifold.operator(M, 'annotate', true);
-%   ops.gradient.unit         % '1/m'
-%   ops.laplacebeltrami.unit  % '1/m^2'
 %
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
-%           bct.manifold.operator.dec, bct.manifold.operator.gradient,
-%           bct.manifold.operator.divergence, bct.manifold.operator.curl,
-%           bct.manifold.operator.hodgelaplacian, bct.manifold.operator.graphlaplacian,
-%           bct.manifold.geometry, bct.manifold.topology, bct.manifold.metric.annotate
+%           bct.manifold.operator.mft, bct.manifold.operator.imft,
+%           bct.manifold.operator.schema, bct.manifold.geometry,
+%           bct.manifold.topology, bct.manifold.metric.annotate
 
 % Parse inputs
 p = inputParser;
@@ -123,96 +133,89 @@ stiffnessSign = string(p.Results.StiffnessSign);
 symmetrize = p.Results.Symmetrize;
 annotate = p.Results.annotate;
 
-% Initialize output structure
+% Initialize output structure (schema-compliant)
 ops = struct();
 
-% ===============================================================
-% FEM Operators
+% Group-level attributes (metadata)
+ops.attributes = struct();
+ops.attributes.schema = 'bct.manifold.operator@1.0.0';
+ops.attributes.package = 'bct.manifold.operator';
+ops.attributes.numVertices = uint32(M.numVertices());
+ops.attributes.numFaces = uint32(M.numFaces());
+ops.attributes.numEdges = uint32(size(M.topology().edgeList, 1));
+ops.attributes.massVariant = massVariant;
+ops.attributes.stiffnessVariant = stiffnessVariant;
+ops.attributes.stiffnessSign = stiffnessSign;
+ops.attributes.sparseFormatdataset structures)
 % ===============================================================
 
-% Compute mass matrix
-[~, Mass] = bct.manifold.operator.mass(M, 'variant', massVariant);
-ops.mass = Mass;
+% Compute mass matrix (returns structure with .value and .attributes)
+ops.mass = bct.manifold.operator.mass(M, 'variant', massVariant);
 
-% Compute stiffness matrix
-[~, Stiffness] = bct.manifold.operator.stiffness(M, ...
+% Compute stiffness matrix (returns structure with .value and .attributes)
+ops.stiffness = bct.manifold.operator.stiffness(M, ...
     'variant', stiffnessVariant, ...
     'sign', stiffnessSign, ...
     'symmetrize', symmetrize);
-ops.stiffness = Stiffness;
 
-% Compute Laplace-Beltrami operator: L = M^(-1) * K
-% This is the standard FEM discretization as a linear operator
-if issparse(Mass)
-    % Solve M * L = K for L (more numerically stable than inv(M) * K)
-    ops.laplacebeltrami = Mass \ Stiffness;
-else
-    % If mass is diagonal (voronoi, barycentric), can use direct division
-    if isdiag(Mass)
-        massInv = spdiags(1./diag(Mass), 0, size(Mass,1), size(Mass,2));
-        ops.laplacebeltrami = massInv * Stiffness;
-    else
-        ops.laplacebeltrami = Mass \ Stiffness;
-    end
+% ===============================================================
+% DEC Operators (flattened to top level)
+% ===============================================================
+
+% Compute DEC operators and flatten to top level
+try
+    decOps = bct.manifold.operator.dec(M);
+    
+    % Flatten all DEC operators to top level (remove .dec nesting)
+    ops.d0 = decOps.d0;
+    ops.d1 = decOps.d1;
+    ops.dd0 = decOps.dd0;
+    ops.dd1 = decOps.dd1;
+    ops.hd0 = decOps.hd0;
+    ops.hd1 = decOps.hd1;
+    ops.hd2 = decOps.hd2;
+    ops.hdd0 = decOps.hdd0;
+    ops.hdd1 = decOps.hdd1;
+    ops.hdd2 = decOps.hdd2;
+    ops.flatPP = decOps.flatPP;
+    ops.flatDP = decOps.flatDP;
+    ops.flatDD = decOps.flatDD;
+    ops.sharpPD = decOps.sharpPD;
+    ops.sharpDD = decOps.sharpDD;
+catch ME
+    % If DEC computation fails (e.g., DECLab not available), store error
+    warning('bct:manifold:operator:DECError', ...
+        'Failed to compute DEC operators: %s', ME.message);
 end
 
 % ===============================================================
-% DEC Operators
+% Spectral Transform Operators (optional)
 % ===============================================================
 
-% Compute all DEC operators and flatten to top level
-[~, dec_ops] = bct.manifold.operator.dec(M);
+% Compute MFT and IMFT if eigenmodes are cached
+% These are optional operators that require spectral decomposition
+if ~isempty(fieldnames(M.Cache.eigenmodes.data))
+    % Get cached eigenmodes
+    eigen = M.Cache.eigenmodes.data;
+    
+    % TODO: Update mft/imft functions to return dataset structures
+    % For now, compute directly
+    % Forward MFT: U' * Mass
+    ops.mft = eigen.vectors' * ops.mass.value;
+    
+    % Inverse MFT: U (eigenvectors)
+    ops.imft = eigen.vectors;
+end
 
-% Flatten all 15 DEC operators to top level
-ops.d0 = dec_ops.d0;
-ops.d1 = dec_ops.d1;
-ops.dd0 = dec_ops.dd0;
-ops.dd1 = dec_ops.dd1;
-ops.hd0 = dec_ops.hd0;
-ops.hd1 = dec_ops.hd1;
-ops.hd2 = dec_ops.hd2;
-ops.hdd0 = dec_ops.hdd0;
-ops.hdd1 = dec_ops.hdd1;
-ops.hdd2 = dec_ops.hdd2;
-ops.flatPP = dec_ops.flatPP;
-ops.flatDP = dec_ops.flatDP;
-ops.flatDD = dec_ops.flatDD;
-ops.sharpPD = dec_ops.sharpPD;
-ops.sharpDD = dec_ops.sharpDD;
-
-% ===============================================================
-% Derived DEC Composition Operators
-% ===============================================================
-
-% Gradient: scalar field (vertex) → tangent vector field (face)
-% Composition: sharpPD * d0
-[~, ops.gradient] = bct.manifold.operator.gradient(M);
-
-% Divergence: edge 1-form → vertex scalar (primal route)
-% Composition: hdd2 * dd1 * hd1
-[~, ops.divergence] = bct.manifold.operator.divergence(M, 'route', 'primal');
-
-% Curl: edge 1-form → face scalar (primal route)
-% Composition: hd2 * d1
-[~, ops.curl] = bct.manifold.operator.curl(M, 'route', 'primal');
-
-% Hodge Laplacian: All three k-forms
-ops.hodgelaplacian = struct();
-[~, ops.hodgelaplacian.kform0] = bct.manifold.operator.hodgelaplacian(M, 'kform', 0);
-[~, ops.hodgelaplacian.kform1] = bct.manifold.operator.hodgelaplacian(M, 'kform', 1);
-[~, ops.hodgelaplacian.kform2] = bct.manifold.operator.hodgelaplacian(M, 'kform', 2);
-
-% ===============================================================
-% Graph Laplacian (Topological)
-% ===============================================================
-
-% Graph Laplacian: combinatorial (D - A) based on topology only
-% Unlike Laplace-Beltrami which uses geometric weighting
-ops.graphlaplacian = bct.manifold.operator.graphlaplacian(M, 'Type', 'combinatorial');
+% NOTE: Derived operators (Laplace-Beltrami, gradient, divergence, curl)
+% are NOT included in the schema-compliant output structure.
+% They can be computed on-demand from DEC operators or mass/stiffness matrices.
+% For example: Laplacian = dd0 * d0, Gradient = d0, Divergence = dd0.
 
 % Apply unit annotation if requested
 if annotate
     ops = bct.manifold.metric.annotate(ops, 'operator');
 end
-
-end
+% Apply unit annotation if requested
+if annotate
+    ops = bct.manifold.metric.annotate(ops, 'operator');

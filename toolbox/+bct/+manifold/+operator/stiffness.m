@@ -1,10 +1,10 @@
-function [header, K] = stiffness(meshInput, varargin)
+function out = stiffness(meshInput, varargin)
 %STIFFNESS Assemble FEM stiffness matrix from Manifold or mesh data
 %
 % Syntax:
-%   [header, K] = bct.manifold.operator.stiffness(M)
-%   [header, K] = bct.manifold.operator.stiffness(V, F)
-%   [header, K] = bct.manifold.operator.stiffness(..., Name, Value, ...)
+%   stiff = bct.manifold.operator.stiffness(M)
+%   stiff = bct.manifold.operator.stiffness(V, F)
+%   stiff = bct.manifold.operator.stiffness(..., Name, Value, ...)
 %
 % Inputs:
 %   M  - bct.Manifold object
@@ -24,12 +24,15 @@ function [header, K] = stiffness(meshInput, varargin)
 %                'single' - Single precision
 %
 % Outputs:
-%   header - Struct containing parameters used:
-%            .variant    - Stiffness variant used
-%            .sign       - Sign convention applied
-%            .symmetrize - Whether matrix was symmetrized
-%            .precision  - Matrix precision
-%   K      - [N×N] sparse stiffness matrix (cotangent Laplacian)
+%   out - Structure matching stiffness dataset schema:
+%     .attributes - Dataset-level metadata:
+%       .variant    - Stiffness variant used
+%       .sign       - Sign convention applied
+%       .symmetrize - Whether matrix was symmetrized
+%       .precision  - Matrix precision
+%       .path       - HDF5/Zarr path for this dataset
+%       .description - Dataset description
+%     .value - [N×N] sparse stiffness matrix (cotangent Laplacian)
 %
 % Description:
 %   Assembles the FEM stiffness matrix using gptoolbox. The stiffness matrix
@@ -55,26 +58,28 @@ function [header, K] = stiffness(meshInput, varargin)
 %
 % Examples:
 %   % Using Manifold object (default: cotangent, positive semidefinite, symmetrized)
-%   [header, K] = bct.manifold.operator.stiffness(M);
+%   stiff = bct.manifold.operator.stiffness(M);
+%   K = stiff.value;
 %
 %   % Using explicit V, F
-%   [header, K] = bct.manifold.operator.stiffness(V, F);
+%   stiff = bct.manifold.operator.stiffness(V, F);
 %
 %   % Get negative form (as gptoolbox returns)
-%   [header, K] = bct.manifold.operator.stiffness(M, 'sign', 'negative');
+%   stiff = bct.manifold.operator.stiffness(M, 'sign', 'negative');
 %
 %   % Single precision with V, F
-%   [header, K] = bct.manifold.operator.stiffness(V, F, 'precision', 'single');
+%   stiff = bct.manifold.operator.stiffness(V, F, 'precision', 'single');
 %
 %   % Dirichlet energy
-%   [~, M0] = bct.manifold.operator.mass(M);
-%   energy = u' * K * u;
+%   mass = bct.manifold.operator.mass(M);
+%   stiff = bct.manifold.operator.stiffness(M);
+%   energy = u' * stiff.value * u;
 %
 %   % Laplace-Beltrami operator application
-%   Lu = M0 \ (K * u);
+%   Lu = mass.value \ (stiff.value * u);
 %
 %   % Eigenvalue problem
-%   [V, D] = eigs(K, M0, 100, 'sm');
+%   [V, D] = eigs(stiff.value, mass.value, 100, 'sm');
 %
 % See also: bct.manifold.operator.mass, bct.Manifold.cotmatrix
 
@@ -129,14 +134,11 @@ p.addParameter('symmetrize', true, @islogical);
 p.addParameter('precision', 'double', @(x) ismember(x, ["double","single"]));
 p.parse(varargin{nameValueStart:end});
 
-options = p.Results;
-
-% Build header with parameters used
-header = struct();
-header.variant = char(options.variant);
-header.sign = char(options.sign);
-header.symmetrize = options.symmetrize;
-header.precision = char(options.precision);
+% Extract parameters
+variant = char(p.Results.variant);
+sign = char(p.Results.sign);
+symmetrize = p.Results.symmetrize;
+precision = char(p.Results.precision);
 
 % Resolve gptoolbox path via bct.config
 gptoolboxPath = resolveGPToolboxPath();
@@ -162,21 +164,40 @@ end
 % Apply sign convention
 % gptoolbox returns negative semidefinite form
 % Default is to negate for positive semidefinite (λ ≥ 0)
-if strcmp(header.sign, 'positive')
+if strcmp(sign, 'positive')
     K = -K_gptoolbox;
 else
     K = K_gptoolbox;
 end
 
 % Symmetrize for numerical safety
-if header.symmetrize
+if symmetrize
     K = (K + K') / 2;
 end
 
 % Apply precision
-if strcmp(header.precision, 'single')
+if strcmp(precision, 'single')
     K = single(K);
 end
+
+% Build output structure with dataset and attributes
+out = struct();
+
+% Dataset-level attributes (metadata for this specific dataset)
+out.attributes = struct();
+out.attributes.name = 'stiffness';
+out.attributes.path = 'operator/stiffness';
+out.attributes.description = 'FEM stiffness matrix (cotangent Laplacian)';
+out.attributes.variant = variant;
+out.attributes.sign = sign;
+out.attributes.symmetrize = symmetrize;
+out.attributes.precision = precision;
+out.attributes.shape = [size(V, 1), size(V, 1)];
+out.attributes.nnz = nnz(K);
+out.attributes.storage = 'sparse';
+
+% The actual dataset (sparse matrix)
+out.value = K;
 
 end
 
