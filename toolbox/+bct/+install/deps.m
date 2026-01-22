@@ -139,9 +139,6 @@ for i = 1:numel(depNames)
                 warning('bct:install:MeshFolderNotFound', ...
                     'gptoolbox/mesh folder not found at %s', meshPath);
             end
-        elseif strcmp(depMeta.folder, 'MATLAB-support-for-Zarr-files')
-            % Zarr: add root directory only (no subdirectories needed)
-            addpath(targetPath);
         else
             % DECLab and GSPBox: add everything
             addpath(genpath(targetPath));
