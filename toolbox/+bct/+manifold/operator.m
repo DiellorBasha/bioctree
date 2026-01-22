@@ -19,37 +19,33 @@ function ops = operator(meshInput, varargin)
 %   annotate         - false (default) or true to wrap outputs as quantity structs
 %
 % Outputs:
-%   ops - Structure matching bct.manifold.operator.schema:
-%     .attributes        - Group-level metadata
+%   ops - Structure matching bct.schema.operators:
+%     .Attributes        - Group-level metadata
+%       .path            - "/operators"
 %       .schema          - "bct.manifold.operator@1.0.0"
-%       .package         - "bct.manifold.operator"
+%       .package         - "bct"
 %       .numVertices     - Number of vertices (uint32)
 %       .numFaces        - Number of faces (uint32)
 %       .numEdges        - Number of edges (uint32)
 %       .massVariant     - Mass matrix type
 %       .stiffnessVariant- Stiffness matrix type
 %       .stiffnessSign   - Sign convention
-%       .sparseFormat    - "coo" (export format for HDF5/Zarr)
-%       .decMethod       - "DECLab" (DEC computation method)
-%       .decBackend      - "DiscreteExteriorCalculus" (DEC implementation)
-%       .hasDEC          - true if DEC operators computed successfully
-%     .mass              - Dataset structure with .value and .attributes
-%     .stiffness         - Dataset structure with .value and .attributes
+%       .symmetrize      - Whether to symmetrize operators
+%     .mass              - Dataset with .value and .attributes
+%     .stiffness         - Dataset with .value and .attributes
+%     .laplacebeltrami   - Dataset with .value and .attributes
 %     .d0, .d1           - DEC exterior derivatives (datasets)
 %     .dd0, .dd1         - DEC codifferentials (datasets)
 %     .hd0, .hd1, .hd2   - DEC Hodge stars (datasets)
-%     .hdd0, .hdd1, .hdd2 - DEC inverse Hodge stars (datasets)
-%     .flatPP, .flatDP, .flatDD - DEC flat operators (datasets)
-%     .sharpPD, .sharpDD - DEC sharp operators (datasets)
+%     ... (additional optional operators)
 %
 % Description:
 %   Aggregates fundamental operator computations from the bct.manifold.operator
 %   subpackage. Computes FEM matrices (mass, stiffness) and all DEC operators.
 %
-%   Returns a schema-compliant structure matching bct.manifold.operator.schema
-%   for HDF5/Zarr serialization. Matrices are stored in native MATLAB sparse
-%   format. The .attributes.sparseFormat field indicates that export functions
-%   should convert to COO (coordinate) format for HDF5/Zarr output.
+%   Returns a schema-compliant structure matching bct.schema.operators
+%   for consistent validation and future serialization. Matrices are stored 
+%   in native MATLAB sparse format.
 %
 %   This is the main aggregator function for the operator package, similar to
 %   bct.manifold.geometry() and bct.manifold.topology(). Computes and aggregates
@@ -94,10 +90,9 @@ function ops = operator(meshInput, varargin)
 %   % Direct V, F input
 %   ops = bct.manifold.operator(V, F);
 %
-% See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
-%           bct.manifold.operator.mft, bct.manifold.operator.imft,
-%           bct.manifold.operator.schema, bct.manifold.geometry,
-%           bct.manifold.topology, bct.manifold.metric.annotate
+% See also: bct.schema.operators, bct.manifold.operator.mass, 
+%           bct.manifold.operator.stiffness, bct.manifold.operator.dec,
+%           bct.manifold.geometry, bct.manifold.topology
 
 % Parse inputs
 p = inputParser;

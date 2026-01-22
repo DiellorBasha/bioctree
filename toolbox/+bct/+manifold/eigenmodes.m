@@ -26,19 +26,20 @@ function eigen = eigenmodes(varargin)
 %   EigsOpts  - Additional options passed to eigs (struct)
 %
 % Outputs:
-%   eigen - Structure matching bct.manifold.eigen.schema:
-%           .attributes    - Group-level metadata
-%             .schema      - "bct.manifold.eigen@1.0.0"
-%             .package     - "bct.manifold.eigen"
-%             .numModes    - Number of modes (k)
-%             .numVertices - Number of vertices (N)
-%             .operator    - "Laplace-Beltrami"
-%             .basis       - "P1-FEM"
-%             .ordering    - "ascending"
-%             .massType    - Mass matrix type used
-%             .removedDC   - Whether DC mode was removed
-%           .values        - [k×1] eigenvalues (sorted ascending)
-%           .vectors       - [N×k] eigenvectors (M-orthonormal)
+%   eigen - Structure matching bct.schema.eigenmodes:
+%           .Attributes     - Group-level metadata
+%             .path         - "/eigenmodes"
+%             .schema       - "bct.manifold.eigenmodes@1.0.0"
+%             .package      - "bct"
+%             .numModes     - Number of modes (k)
+%             .numVertices  - Number of vertices (N)
+%             .operator     - "Laplace-Beltrami"
+%             .basis        - "P1-FEM"
+%             .ordering     - "ascending"
+%             .massType     - Mass matrix type used
+%             .removedDC    - Whether DC mode was removed
+%           .eigenvalues    - Dataset with .value [k×1] and .attributes
+%           .eigenvectors   - Dataset with .value [N×k] and .attributes
 %
 % Description:
 %   Solves the generalized eigenvalue problem:
@@ -65,15 +66,15 @@ function eigen = eigenmodes(varargin)
 %   - Enforces M-orthonormality via whitening
 %   - Same normalization and DC removal strategy
 %
-%   Returns schema-compliant structure matching bct.manifold.eigen.schema
-%   for HDF5/Zarr serialization compatibility.
+%   Returns schema-compliant structure matching bct.schema.eigenmodes
+%   for consistent validation and future serialization.
 %
 % Examples:
 %   % Manifold-based usage
 %   eigen = bct.manifold.eigenmodes(M, 100);
 %   lambda = eigen.eigenvalues.value;
 %   U = eigen.eigenvectors.value;
-%   k = eigen.attributes.numModes;
+%   k = eigen.Attributes.numModes;
 %
 %   % Matrix-based usage (standalone)
 %   [~, K] = bct.manifold.operator.stiffness(M);
@@ -97,8 +98,8 @@ function eigen = eigenmodes(varargin)
 %   heat_kernel = exp(-eigen.eigenvalues.value * tau);
 %   filtered = eigen.eigenvectors.value * (heat_kernel .* coeffs);
 %
-% See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
-%           bct.manifold.eigen.solve, bct.manifold.eigen.schema
+% See also: bct.schema.eigenmodes, bct.manifold.operator.mass, 
+%           bct.manifold.operator.stiffness, bct.manifold.eigen.solve
 
 % Parse input arguments to determine mode
 if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')

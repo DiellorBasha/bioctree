@@ -66,7 +66,7 @@ function topo = topology(M, varargin)
 %   % From V, F directly
 %   topo = bct.manifold.topology(V, F);
 %
-% See also: bct.manifold.topology.edges, bct.manifold.topology.adjacency,
+% See also: bct.schema.topology, bct.manifold.topology.edges, bct.manifold.topology.adjacency,
 %           bct.manifold.topology.schema, bct.manifold.topology.edges,
 %           bct.manifold.topology.adjacency
 % Parse inputs

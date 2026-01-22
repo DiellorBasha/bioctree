@@ -17,17 +17,20 @@ function geom = geometry(M, varargin)
 %   'includeDual'        - false (default) or true to compute dual geometry (can be slow)
 %
 % Outputs:
-%   geom - Structure matching bct.manifold.geometry.schema:
-%     .attributes - Group-level metadata (computation options)
-%     .face       - Structure with face-based geometry (from bct.manifold.geometry.face)
-%     .vertex     - Structure with vertex-based geometry (from bct.manifold.geometry.vertex)
-%     .edge       - Structure with edge-based geometry (from bct.manifold.geometry.edge)
-%     .dual       - Structure with dual mesh geometry (optional, from bct.manifold.geometry.dual)
+%   geom - Structure matching bct.schema.geometry:
+%     .Attributes - Group-level metadata (path, schema, package, computation options)
+%     .face       - Subgroup with face-based geometry datasets
+%     .vertex     - Subgroup with vertex-based geometry datasets
+%     .edge       - Subgroup with edge-based geometry datasets
+%     .dual       - Subgroup with dual mesh geometry datasets (optional)
+%
+%   Each subgroup contains datasets with .value and .attributes following
+%   the canonical bct.schema.geometry specification.
 %
 % Description:
 %   Top-level aggregator that computes all geometric properties of a
-%   manifold in a single call. Output structure conforms to 
-%   bct.manifold.geometry.schema for hierarchical HDF5/Zarr serialization.
+%   manifold in a single call. Output structure conforms to the canonical
+%   bct.schema.geometry for consistent validation and future serialization.
 %   
 %   Each subgroup (face, vertex, edge, dual) has its own schema and can be
 %   serialized independently. By default, dual geometry is NOT computed 
@@ -56,8 +59,9 @@ function geom = geometry(M, varargin)
 %   geom.face.areas.unit       % 'm^2'
 %   geom.edge.lengths.unit     % 'm'
 %
-% See also: bct.manifold.geometry.face, bct.manifold.geometry.vertex,
-%           bct.manifold.geometry.edge, bct.manifold.metric.annotate
+% See also: bct.schema.geometry, bct.manifold.geometry.face, 
+%           bct.manifold.geometry.vertex, bct.manifold.geometry.edge, 
+%           bct.manifold.metric.annotate
 
 % Parse inputs
 p = inputParser;
