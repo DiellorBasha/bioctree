@@ -51,7 +51,7 @@ function eigen = eigenmodes(varargin)
 %   - λ are eigenvalues of the Laplace-Beltrami operator
 %   - u are eigenmodes (eigenvectors)
 %
-%   The eigenvectors are M-orthonormal: U' * M * U = I
+%   The eigenvectors are M-orthonormal: eigenvectors' * M * eigenvectors = I
 %   Eigenvalues are returned in ascending order: λ₀ ≤ λ₁ ≤ ... ≤ λₖ
 %
 %   By default, all modes including the DC (constant) mode are kept.
@@ -72,8 +72,8 @@ function eigen = eigenmodes(varargin)
 % Examples:
 %   % Manifold-based usage
 %   eigen = bct.manifold.eigenmodes(M, 100);
-%   lambda = eigen.eigenvalues.value;
-%   U = eigen.eigenvectors.value;
+%   eigenvalues = eigen.eigenvalues.value;
+%   eigenvectors = eigen.eigenvectors.value;
 %   k = eigen.Attributes.numModes;
 %
 %   % Matrix-based usage (standalone)

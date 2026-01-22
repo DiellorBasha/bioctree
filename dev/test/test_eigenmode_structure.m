@@ -44,19 +44,19 @@ fprintf('Test 2: Dimension consistency...\n');
 k = 50;
 nV = M.numVertices();
 
-lambda = eigen.eigenvalues.value;
-U = eigen.eigenvectors.value;
+eigenvalues = eigen.eigenvalues.value;
+eigenvectors = eigen.eigenvectors.value;
 
-assert(length(lambda) == k, 'Should have k=%d eigenvalues', k);
-assert(size(U, 1) == nV, 'Eigenvectors should have nV=%d rows', nV);
-assert(size(U, 2) == k, 'Eigenvectors should have k=%d columns', k);
+assert(length(eigenvalues) == k, 'Should have k=%d eigenvalues', k);
+assert(size(eigenvectors, 1) == nV, 'Eigenvectors should have nV=%d rows', nV);
+assert(size(eigenvectors, 2) == k, 'Eigenvectors should have k=%d columns', k);
 
 % Check group attributes consistency
 assert(eigen.attributes.numModes == k, 'attributes.numModes should equal k');
 assert(eigen.attributes.numVertices == nV, 'attributes.numVertices should equal nV');
 
 fprintf('  ✓ Dimensions [%d×%d] eigenvalues, [%d×%d] eigenvectors\n', ...
-    size(lambda, 1), size(lambda, 2), size(U, 1), size(U, 2));
+    size(eigenvalues, 1), size(eigenvalues, 2), size(eigenvectors, 1), size(eigenvectors, 2));
 
 %% Test 3: Dataset attributes metadata
 fprintf('Test 3: Dataset attributes metadata...\n');

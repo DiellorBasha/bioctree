@@ -213,7 +213,7 @@ function validateEigenvectors(data)
     colNorms = sqrt(sum(data.^2, 1));
     if any(abs(colNorms - 1) > 1e-6)
         % Note: This is L2 norm, actual check should be with mass matrix
-        % U' * M * U = I, but we don't have M here
+        % eigenvectors' * M * eigenvectors = I, but we don't have M here
         warning('bct:schema:eigenmodes:NonUnitNorm', ...
             'Eigenvector columns do not have unit L2 norm (expected for M-orthonormality)');
     end

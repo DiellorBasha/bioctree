@@ -793,8 +793,8 @@ classdef Manifold < handle
             % Examples:
             %   % Get cached or compute with default k=50
             %   E = M.eigenmodes();
-            %   lambda = E.eigenvalues.value;
-            %   U = E.eigenvectors.value;
+            %   eigenvalues = E.eigenvalues.value;
+            %   eigenvectors = E.eigenvectors.value;
             %   k = E.attributes.numModes;
             %
             %   % Compute with 100 modes (updates cache)
