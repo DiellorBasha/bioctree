@@ -61,7 +61,7 @@ function Xhat = synthesis(mft, imft, Y, filterOrWeights, options)
 %   % Design filterbank and apply (RECOMMENDED: default uses inverse)
 %   M = bct.manifold.load();
 %   E = M.eigenmodes(100);
-%   F = bct.filter.design(E.values, "Heat", "tau", [1 10 25 50]);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", [1 10 25 50]);
 %   
 %   mft_op = bct.manifold.operator.mft(M);
 %   imft_op = bct.manifold.operator.imft(M);

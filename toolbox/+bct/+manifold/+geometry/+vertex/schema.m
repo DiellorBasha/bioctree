@@ -116,6 +116,7 @@ s.datasets(1).attributes.valueType = 'normal';  % Perpendicular to surface
 s.datasets(1).attributes.semantic = 'vector3';
 s.datasets(1).attributes.normalization = 'unit';
 s.datasets(1).attributes.orthogonal_to = [];  % Not orthogonal to other datasets
+s.datasets(1).attributes.computedBy = 'bct.manifold.geometry.vertex.frame';
 
 % Dataset 2: tangent1
 s.datasets(2).name = 'tangent1';
@@ -136,6 +137,7 @@ s.datasets(2).attributes.valueType = 'tangent';  % Lies in tangent plane
 s.datasets(2).attributes.semantic = 'vector3';
 s.datasets(2).attributes.normalization = 'unit';
 s.datasets(2).attributes.orthogonal_to = "normals";  % Orthogonal to normals
+s.datasets(2).attributes.computedBy = 'bct.manifold.geometry.vertex.frame';
 
 % Dataset 3: tangent2
 s.datasets(3).name = 'tangent2';
@@ -156,6 +158,7 @@ s.datasets(3).attributes.valueType = 'tangent';  % Lies in tangent plane
 s.datasets(3).attributes.semantic = 'vector3';
 s.datasets(3).attributes.normalization = 'unit';
 s.datasets(3).attributes.orthogonal_to = ["normals", "tangent1"];  % Orthogonal to both
+s.datasets(3).attributes.computedBy = 'bct.manifold.geometry.vertex.frame';
 
 %% VALUE TYPE TAXONOMY (reference for all BCT schemas)
 s.valueTypes = struct();

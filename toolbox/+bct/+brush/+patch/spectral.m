@@ -89,7 +89,7 @@ function w = spectral(manifold, params)
     
     % Get eigenpairs (uses caching internally)
     E = manifold.eigenmodes(numModes);
-    eigenvalues = E.Values;
+    eigenvalues = E.eigenvalues.value;
     
     % Step 2: Create mass-weighted Dirac delta at seed vertex
     ei = zeros(Nv, 1);

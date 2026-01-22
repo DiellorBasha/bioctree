@@ -98,7 +98,7 @@ end
     'precision', 'double');  % Keep double for intermediate computation
 
 % Compute dual edge lengths
-nE = size(he.E, 1);
+nE = size(he.edgeList, 1);
 dualEdgeLengths = zeros(nE, 1);
 
 % For each edge, get the two incident faces via halfedge structure

@@ -82,7 +82,7 @@ if isa(meshInput, 'bct.Manifold')
     
     % Get eigenmodes (cached or compute with default k=50)
     Eigen = M.eigenmodes();
-    eigenvectors = Eigen.vectors;
+    eigenvectors = Eigen.eigenvectors.value;
     
 elseif isnumeric(meshInput)
     % Case: imft(eigenvectors, Name=Value...)

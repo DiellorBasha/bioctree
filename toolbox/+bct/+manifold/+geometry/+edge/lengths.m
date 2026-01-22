@@ -62,8 +62,8 @@ end
 % Prefer halfedge if available (Manifold object)
 if isa(meshInput, 'bct.Manifold')
     topo = meshInput.topology();
-    E = topo.edges;
-    edgeSource = "topology.edges";
+    E = topo.edgeList.value;
+    edgeSource = "topology.edgeList";
 else
     % Use topology.edges as fallback
     E = bct.manifold.topology.edges(F);

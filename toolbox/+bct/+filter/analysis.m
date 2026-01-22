@@ -47,7 +47,7 @@ function Y = analysis(mft, imft, X, filterOrWeights, options)
 %   % Single filter (J=1)
 %   M = bct.manifold.load();
 %   E = M.eigenmodes(100);
-%   F = bct.filter.design(E.values, "Heat", "tau", 10);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", 10);
 %   
 %   mft_op = bct.manifold.operator.mft(M);
 %   imft_op = bct.manifold.operator.imft(M);
@@ -57,7 +57,7 @@ function Y = analysis(mft, imft, X, filterOrWeights, options)
 %
 %   % Filterbank (J=4)
 %   taus = [1 10 25 50];
-%   F = bct.filter.design(E.values, "Heat", "tau", taus);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", taus);
 %   subbands = bct.filter.analysis(mft_op, imft_op, signal, F);  % [N×T×4]
 %
 %   % Cell output format

@@ -63,6 +63,7 @@ s.datasets(1).attributes.valueType = 'scalar';
 s.datasets(1).attributes.semantic = 'scalar';
 s.datasets(1).attributes.normalization = [];
 s.datasets(1).attributes.orthogonal_to = [];
+s.datasets(1).attributes.computedBy = 'bct.manifold.geometry.dual.edgeLengths';
 
 % Dataset 2: vertexAreas
 s.datasets(2).name = 'vertexAreas';
@@ -83,6 +84,7 @@ s.datasets(2).attributes.valueType = 'scalar';
 s.datasets(2).attributes.semantic = 'scalar';
 s.datasets(2).attributes.normalization = [];
 s.datasets(2).attributes.orthogonal_to = [];
+s.datasets(2).attributes.computedBy = 'bct.manifold.geometry.dual.vertexAreas';
 
 %% VALUE TYPE TAXONOMY
 s.valueTypes = struct();

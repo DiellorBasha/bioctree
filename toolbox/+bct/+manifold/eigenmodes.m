@@ -1,14 +1,14 @@
-function [eigenvalues, eigenvectors] = eigenmodes(varargin)
-%EIGENMODES Compute eigenmodes of Laplace-Beltrami operator
+function eigen = eigenmodes(varargin)
+%EIGENMODES Compute eigenmodes of Laplace-Beltrami operator (schema-compliant)
 %
 % Syntax (Manifold-based):
-%   [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(M, k)
-%   [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(M, k, 'RemoveDC', true)
-%   [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(M, k, 'MassType', 'voronoi')
+%   eigen = bct.manifold.eigenmodes(M, k)
+%   eigen = bct.manifold.eigenmodes(M, k, 'RemoveDC', true)
+%   eigen = bct.manifold.eigenmodes(M, k, 'MassType', 'voronoi')
 %
 % Syntax (Matrix-based):
-%   [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(K, Mass, k)
-%   [eigenvalues, eigenvectors] = bct.manifold.eigenmodes(K, Mass, k, 'RemoveDC', true)
+%   eigen = bct.manifold.eigenmodes(K, Mass, k)
+%   eigen = bct.manifold.eigenmodes(K, Mass, k, 'RemoveDC', true)
 %
 % Inputs (Manifold-based):
 %   M        - bct.Manifold object
@@ -20,14 +20,25 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   k        - Number of eigenmodes to compute
 %
 % Optional Parameters:
-%   RemoveDC  - Remove DC (constant) mode (default: true)
+%   RemoveDC  - Remove DC (constant) mode (default: false)
 %   MassType  - Mass matrix type: 'voronoi' (default), 'barycentric', 'full'
 %               (only used with Manifold-based syntax)
 %   EigsOpts  - Additional options passed to eigs (struct)
 %
 % Outputs:
-%   eigenvalues  - [k×1] eigenvalues (sorted ascending, smallest first)
-%   eigenvectors - [N×k] eigenvectors (M-orthonormal columns)
+%   eigen - Structure matching bct.manifold.eigen.schema:
+%           .attributes    - Group-level metadata
+%             .schema      - "bct.manifold.eigen@1.0.0"
+%             .package     - "bct.manifold.eigen"
+%             .numModes    - Number of modes (k)
+%             .numVertices - Number of vertices (N)
+%             .operator    - "Laplace-Beltrami"
+%             .basis       - "P1-FEM"
+%             .ordering    - "ascending"
+%             .massType    - Mass matrix type used
+%             .removedDC   - Whether DC mode was removed
+%           .values        - [k×1] eigenvalues (sorted ascending)
+%           .vectors       - [N×k] eigenvectors (M-orthonormal)
 %
 % Description:
 %   Solves the generalized eigenvalue problem:
@@ -42,8 +53,8 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   The eigenvectors are M-orthonormal: U' * M * U = I
 %   Eigenvalues are returned in ascending order: λ₀ ≤ λ₁ ≤ ... ≤ λₖ
 %
-%   By default, the DC (constant) mode (smallest eigenvalue, typically ~0)
-%   is removed. Set 'RemoveDC' to false to keep all modes.
+%   By default, all modes including the DC (constant) mode are kept.
+%   Set 'RemoveDC' to true to exclude the smallest eigenvalue mode.
 %
 %   Two input modes:
 %   1. Manifold-based: Extracts K and M from bct.Manifold object
@@ -54,34 +65,40 @@ function [eigenvalues, eigenvectors] = eigenmodes(varargin)
 %   - Enforces M-orthonormality via whitening
 %   - Same normalization and DC removal strategy
 %
+%   Returns schema-compliant structure matching bct.manifold.eigen.schema
+%   for HDF5/Zarr serialization compatibility.
+%
 % Examples:
 %   % Manifold-based usage
-%   [lambda, U] = bct.manifold.eigenmodes(M, 100);
+%   eigen = bct.manifold.eigenmodes(M, 100);
+%   lambda = eigen.eigenvalues.value;
+%   U = eigen.eigenvectors.value;
+%   k = eigen.attributes.numModes;
 %
 %   % Matrix-based usage (standalone)
 %   [~, K] = bct.manifold.operator.stiffness(M);
 %   Mass = bct.manifold.operator.mass(M);
-%   [lambda, U] = bct.manifold.eigenmodes(K, Mass, 100);
+%   eigen = bct.manifold.eigenmodes(K, Mass, 100);
 %
-%   % Keep DC mode
-%   [lambda, U] = bct.manifold.eigenmodes(M, 100, 'RemoveDC', false);
+%   % Remove DC mode
+%   eigen = bct.manifold.eigenmodes(M, 100, 'RemoveDC', true);
 %
 %   % Use barycentric mass matrix (Manifold-based only)
-%   [lambda, U] = bct.manifold.eigenmodes(M, 100, 'MassType', 'barycentric');
+%   eigen = bct.manifold.eigenmodes(M, 100, 'MassType', 'barycentric');
 %
 %   % Project signal onto eigenmodes
-%   [lambda, U] = bct.manifold.eigenmodes(M, 100);
+%   eigen = bct.manifold.eigenmodes(M, 100);
 %   Mass = M.massmatrix();
-%   coeffs = U' * Mass * signal;  % Spectral coefficients
-%   reconstructed = U * coeffs;    % Reconstruct signal
+%   coeffs = eigen.eigenvectors.value' * Mass * signal;  % Spectral coefficients
+%   reconstructed = eigen.eigenvectors.value * coeffs;    % Reconstruct signal
 %
 %   % Spectral filtering (heat kernel)
 %   tau = 10;
-%   heat_kernel = exp(-lambda * tau);
-%   filtered = U * (heat_kernel .* coeffs);
+%   heat_kernel = exp(-eigen.eigenvalues.value * tau);
+%   filtered = eigen.eigenvectors.value * (heat_kernel .* coeffs);
 %
 % See also: bct.manifold.operator.mass, bct.manifold.operator.stiffness,
-%           bct.manifold.eigen.solve, bct.manifold.eigen
+%           bct.manifold.eigen.solve, bct.manifold.eigen.schema
 
 % Parse input arguments to determine mode
 if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')
@@ -89,7 +106,7 @@ if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')
     p = inputParser;
     p.addRequired('Manifold', @(x) isa(x, 'bct.Manifold'));
     p.addRequired('numModes', @(x) isnumeric(x) && isscalar(x) && x > 0);
-    p.addParameter('RemoveDC', true, @islogical);
+    p.addParameter('RemoveDC', false, @islogical);
     p.addParameter('MassType', "voronoi", @(x) isstring(x) || ischar(x));
     p.addParameter('EigsOpts', struct(), @isstruct);
     p.parse(varargin{:});
@@ -101,8 +118,14 @@ if nargin >= 1 && isa(varargin{1}, 'bct.Manifold')
     eigsOpts = p.Results.EigsOpts;
     
     % Get FEM matrices from manifold (uses caching)
-    [~, K] = Manifold.stiffness('variant', 'cotan', 'sign', 'positive', 'symmetrize', true);
-    [~, M] = Manifold.mass('variant', massType);
+    stiffnessData = Manifold.stiffness('variant', 'cotan', 'sign', 'positive', 'symmetrize', true);
+    K = stiffnessData.value;
+    
+    massData = Manifold.mass('variant', massType);
+    M = massData.value;
+    
+    % Get number of vertices for schema
+    numVertices = Manifold.numVertices();
     
 elseif nargin >= 3 && (issparse(varargin{1}) || ismatrix(varargin{1})) && ...
                       (issparse(varargin{2}) || ismatrix(varargin{2}))
@@ -111,7 +134,7 @@ elseif nargin >= 3 && (issparse(varargin{1}) || ismatrix(varargin{1})) && ...
     p.addRequired('K', @(x) (issparse(x) || ismatrix(x)) && ismatrix(x));
     p.addRequired('M', @(x) (issparse(x) || ismatrix(x)) && ismatrix(x));
     p.addRequired('numModes', @(x) isnumeric(x) && isscalar(x) && x > 0);
-    p.addParameter('RemoveDC', true, @islogical);
+    p.addParameter('RemoveDC', false, @islogical);
     p.addParameter('EigsOpts', struct(), @isstruct);
     p.parse(varargin{:});
     
@@ -120,18 +143,22 @@ elseif nargin >= 3 && (issparse(varargin{1}) || ismatrix(varargin{1})) && ...
     numModes = p.Results.numModes;
     removeDC = p.Results.RemoveDC;
     eigsOpts = p.Results.EigsOpts;
+    massType = "unknown";  % Matrix-based mode doesn't track mass type
     
     % Validate matrix dimensions
     assert(size(K, 1) == size(K, 2), 'Stiffness matrix K must be square');
     assert(size(M, 1) == size(M, 2), 'Mass matrix M must be square');
     assert(size(K, 1) == size(M, 1), 'K and M must have same dimensions');
     
+    % Infer number of vertices from matrix size
+    numVertices = size(M, 1);
+    
 else
     error('bct:manifold:eigenmodes:InvalidInput', ...
         ['Invalid input arguments.\n' ...
          'Usage:\n' ...
-         '  [lambda, U] = bct.manifold.eigenmodes(Manifold, k, ...)\n' ...
-         '  [lambda, U] = bct.manifold.eigenmodes(K, Mass, k, ...)']);
+         '  eigen = bct.manifold.eigenmodes(Manifold, k, ...)\n' ...
+         '  eigen = bct.manifold.eigenmodes(K, Mass, k, ...)']);
 end
 
 % Solve generalized eigenproblem using bct.manifold.eigen package
@@ -146,10 +173,46 @@ end
 % Normalize eigenvectors (enforce M-orthonormality)
 eigenvectors = bct.manifold.eigen.normalize(eigenvectors, M);
 
+% Build schema-compliant structure
+eigen = struct();
+
+% Group-level attributes (metadata)
+eigen.attributes = struct();
+eigen.attributes.schema = 'bct.manifold.eigen@1.0.0';
+eigen.attributes.package = 'bct.manifold.eigen';
+eigen.attributes.numModes = uint32(length(eigenvalues));
+eigen.attributes.numVertices = uint32(numVertices);
+eigen.attributes.operator = "Laplace-Beltrami";
+eigen.attributes.basis = "P1-FEM";
+eigen.attributes.ordering = "ascending";
+eigen.attributes.massType = massType;
+eigen.attributes.removedDC = removeDC;
+
+% Datasets (each with .value and .attributes)
+eigen.eigenvalues = struct();
+eigen.eigenvalues.value = eigenvalues;
+eigen.eigenvalues.attributes = struct();
+eigen.eigenvalues.attributes.name = 'eigenvalues';
+eigen.eigenvalues.attributes.path = 'eigen/eigenvalues';
+eigen.eigenvalues.attributes.description = 'Eigenvalues of Laplace-Beltrami operator';
+eigen.eigenvalues.attributes.shape = [length(eigenvalues), 1];
+eigen.eigenvalues.attributes.dtype = 'float64';
+eigen.eigenvalues.attributes.units = '1/area';
+
+eigen.eigenvectors = struct();
+eigen.eigenvectors.value = eigenvectors;
+eigen.eigenvectors.attributes = struct();
+eigen.eigenvectors.attributes.name = 'eigenvectors';
+eigen.eigenvectors.attributes.path = 'eigen/eigenvectors';
+eigen.eigenvectors.attributes.description = 'Eigenvectors (modes) of Laplace-Beltrami operator (M-orthonormal)';
+eigen.eigenvectors.attributes.shape = [numVertices, length(eigenvalues)];
+eigen.eigenvectors.attributes.dtype = 'float64';
+eigen.eigenvectors.attributes.orthonormality = 'mass-weighted';
+
 % Report
 fprintf('bct.manifold.eigenmodes: Eigendecomposition complete\n');
 fprintf('  Requested modes: %d\n', numModes);
-fprintf('  Retained modes:  %d\n', size(eigenvectors, 2));
+fprintf('  Retained modes:  %d\n', eigen.attributes.numModes);
 fprintf('  Eigenvalue range: [%.6f, %.6f]\n', min(eigenvalues), max(eigenvalues));
 
 end

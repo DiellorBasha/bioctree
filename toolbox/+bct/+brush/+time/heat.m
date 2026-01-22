@@ -104,7 +104,7 @@ function w = heat(manifold, time, params)
     
     % Get eigenpairs (uses caching internally)
     E = manifold.eigenmodes(numModes);
-    eigenvalues = E.Values;
+    eigenvalues = E.eigenvalues.value;
     lambda_max = max(eigenvalues);
     
     if lambda_max == 0

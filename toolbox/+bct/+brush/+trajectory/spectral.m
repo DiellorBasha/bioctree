@@ -71,7 +71,7 @@ function w = spectral(manifold, params)
     
     % Get eigenpairs (uses caching internally)
     E = manifold.eigenmodes(numModes);
-    eigenvalues = E.Values;
+    eigenvalues = E.eigenvalues.value;
 
     % --- Compute shortest path ---
     % Suppress warning about sparse-to-full conversion in graph operations

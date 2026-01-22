@@ -83,7 +83,7 @@ if isa(meshInput, 'bct.Manifold')
     
     % Get eigenmodes (cached or compute with default k=50)
     Eigen = M.eigenmodes();
-    eigenvectors = Eigen.vectors;
+    eigenvectors = Eigen.eigenvectors.value;
     
     % Get mass matrix (cached or compute)
     if M.hasCached('operators')

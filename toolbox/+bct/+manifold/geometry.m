@@ -39,11 +39,11 @@ function geom = geometry(M, varargin)
 %   M = bct.Manifold(V, F);
 %   geom = bct.manifold.geometry(M);
 %   
-%   % Access individual properties
-%   C = geom.face.centroids;
-%   A = geom.face.areas;
-%   L = geom.edge.lengths;
-%   VN = geom.vertex.normals;
+%   % Access individual properties (use .value to extract data)
+%   C = geom.face.centroids.value;
+%   A = geom.face.areas.value;
+%   L = geom.edge.lengths.value;
+%   VN = geom.vertex.normals.value;
 %   
 %   % Compute with single precision
 %   geom = bct.manifold.geometry(M, 'precision', 'single');
@@ -117,15 +117,15 @@ if includeDual
         % Store error info if dual computation fails (e.g., boundary present)
         geom.dual = struct();
         geom.dual.attributes = struct('error', ME.identifier, 'message', ME.message);
-        geom.dual.edgeLengths = [];
-        geom.dual.vertexAreas = [];
+        geom.dual.edgeLengths = struct('value', [], 'attributes', struct('error', true));
+        geom.dual.vertexAreas = struct('value', [], 'attributes', struct('error', true));
     end
 else
     % Skip dual computation (default for performance)
     geom.dual = struct();
     geom.dual.attributes = struct('skipped', true, 'reason', 'includeDual=false');
-    geom.dual.edgeLengths = [];
-    geom.dual.vertexAreas = [];
+    geom.dual.edgeLengths = struct('value', [], 'attributes', struct('skipped', true));
+    geom.dual.vertexAreas = struct('value', [], 'attributes', struct('skipped', true));
 end
 
 % Apply unit annotation if requested

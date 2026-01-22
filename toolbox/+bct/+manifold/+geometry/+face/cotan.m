@@ -91,9 +91,9 @@ he = bct.manifold.topology.halfedge(V, F);
   % For each halfedge h = i->j in face, the vertex opposite this edge is:
   %   k = head(next(h))
   % (Given ordering h12->h23->h31->h12)
-  i = he.v;                  % tail vertex
-  j = he.to;                 % head vertex
-  k = he.to(he.next);        % opposite vertex in triangle
+  i = he.tailVertex;         % tail vertex
+  j = he.headVertex;         % head vertex
+  k = he.headVertex(he.next);% opposite vertex in triangle
 
   % Vectors from k to i and k to j
   ui = V(i,:) - V(k,:);
@@ -113,12 +113,12 @@ he = bct.manifold.topology.halfedge(V, F);
   cot_half = 0.5 * cot_full;       % match gptoolbox convention
 
   % Place into face-local columns matching gptoolbox:
-  %   Column 1 corresponds to edge 23 -> halfedge h23 (v2->v3) = he.fh(:,2)
-  %   Column 2 corresponds to edge 31 -> halfedge h31 (v3->v1) = he.fh(:,3)
-  %   Column 3 corresponds to edge 12 -> halfedge h12 (v1->v2) = he.fh(:,1)
-  h12 = he.fh(:,1);
-  h23 = he.fh(:,2);
-  h31 = he.fh(:,3);
+  %   Column 1 corresponds to edge 23 -> halfedge h23 (v2->v3) = he.faceHalfedges(:,2)
+  %   Column 2 corresponds to edge 31 -> halfedge h31 (v3->v1) = he.faceHalfedges(:,3)
+  %   Column 3 corresponds to edge 12 -> halfedge h12 (v1->v2) = he.faceHalfedges(:,1)
+  h12 = he.faceHalfedges(:,1);
+  h23 = he.faceHalfedges(:,2);
+  h31 = he.faceHalfedges(:,3);
 
   C = [ cot_half(h23), cot_half(h31), cot_half(h12) ];
   

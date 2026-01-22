@@ -56,20 +56,20 @@ function localizedField = localize(meshInput, vertexIdx, filterSpec, varargin)
 %   % Localize a heat diffusion kernel to vertex 100
 %   M = bct.manifold.load();
 %   E = M.eigenmodes(100);
-%   F = bct.filter.design(E.values, "Heat", "tau", 10);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", 10);
 %   localField = bct.manifold.operator.localize(M, 100, F);
 %   % localField is [N×1], shows heat diffusion from vertex 100
 %
 %   % Localize a filterbank (multiple scales)
 %   taus = [1, 5, 10, 20];
-%   F = bct.filter.design(E.values, "Heat", "tau", taus);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", taus);
 %   localFields = bct.manifold.operator.localize(M, 100, F);
 %   % localFields is [N×4], each column is a different scale
 %
 %   % Visualize localization
 %   M = bct.manifold.load();
 %   E = M.eigenmodes(100);
-%   F = bct.filter.design(E.values, "Heat", "tau", 15);
+%   F = bct.filter.design(E.eigenvalues.value, "Heat", "tau", 15);
 %   localField = bct.manifold.operator.localize(M, 500, F);
 %   V = bct.ui.manifold.Viewer(M);
 %   V.show(localField);
@@ -77,7 +77,7 @@ function localizedField = localize(meshInput, vertexIdx, filterSpec, varargin)
 %   % Using V, F input
 %   [V, F] = bct.manifold.load('fsaverage_lh_white');
 %   E = bct.graph.eigensolve(V, F, 100);
-%   filter = bct.filter.design(E.values, "Gaussian", "mu", 0.1, "sigma", 0.05);
+%   filter = bct.filter.design(E.eigenvalues.value, "Gaussian", "mu", 0.1, "sigma", 0.05);
 %   localField = bct.manifold.operator.localize(V, F, 250, filter);
 %
 % See also: bct.manifold.query.delta, bct.filter.analysis, bct.filter.design,
@@ -186,8 +186,8 @@ else
     [~, Mass] = bct.manifold.operator.mass(V, F_faces);
     
     % Construct transform operators
-    [~, mftOp] = bct.manifold.operator.mft(E.vectors, Mass);
-    [~, imftOp] = bct.manifold.operator.imft(E.vectors, Mass);
+    [~, mftOp] = bct.manifold.operator.mft(E.eigenvectors.value, Mass);
+    [~, imftOp] = bct.manifold.operator.imft(E.eigenvectors.value, Mass);
 end
 
 % ----------------------------

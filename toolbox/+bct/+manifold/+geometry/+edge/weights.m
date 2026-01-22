@@ -79,14 +79,16 @@ weightsOut.euclidean = edgeLengths;
 
 % Compute cotangent weights from stiffness matrix
 if isa(meshInput, 'bct.Manifold')
-    % Use Manifold method which caches (returns [header, K])
-    [~, K] = M.stiffness('variant', 'cotan', 'sign', 'positive', 'symmetrize', true);
+    % Use Manifold method which caches (returns dataset structure)
+    stiffnessData = M.stiffness('variant', 'cotan', 'sign', 'positive', 'symmetrize', true);
+    K = stiffnessData.value;
 else
     % Compute directly for V,F input
-    [~, K] = bct.manifold.operator.stiffness(M, ...
+    stiffnessData = bct.manifold.operator.stiffness(M, ...
         'variant', 'cotan', ...
         'sign', 'positive', ...
         'symmetrize', true);
+    K = stiffnessData.value;
 end
 
 % Extract cotangent weights for each edge

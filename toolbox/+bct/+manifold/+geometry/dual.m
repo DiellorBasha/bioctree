@@ -20,9 +20,11 @@ function out = dual(meshInput, varargin)
 %
 % Outputs:
 %   out - Structure matching bct.manifold.geometry.dual.schema:
-%     .attributes   - Group-level metadata (computation options)
-%     .edgeLengths  - [Ne×1] Dual edge lengths (connects face circumcenters)
-%     .vertexAreas  - [Nv×1] Dual vertex areas (circumcentric dual cell areas)
+%     .attributes              - Group-level metadata (computation options)
+%     .edgeLengths.value       - [Ne×1] Dual edge lengths (connects face circumcenters)
+%     .edgeLengths.attributes  - Dataset metadata
+%     .vertexAreas.value       - [Nv×1] Dual vertex areas (circumcentric dual cell areas)
+%     .vertexAreas.attributes  - Dataset metadata
 %
 % Description:
 %   Aggregator function that computes all dual mesh geometric properties
@@ -42,8 +44,8 @@ function out = dual(meshInput, varargin)
 %   dualGeom = bct.manifold.geometry.dual(M);
 %   
 %   % Access individual properties
-%   dualEdges = dualGeom.edgeLengths;
-%   dualAreas = dualGeom.vertexAreas;
+%   dualEdges = dualGeom.edgeLengths.value;
+%   dualAreas = dualGeom.vertexAreas.value;
 %   
 %   % Compute with single precision
 %   dualGeom = bct.manifold.geometry.dual(M, 'precision', 'single');
@@ -107,8 +109,31 @@ out.attributes.dualCellType = char(dualCellType);
 out.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
     'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
 
-% Dataset fields (matches s.datasets in schema)
-out.edgeLengths = edgeLengths;  % Dataset 1
-out.vertexAreas = vertexAreas;  % Dataset 2
+nE = size(edgeLengths, 1);
+nV = size(vertexAreas, 1);
+
+% Dataset 1: edgeLengths
+out.edgeLengths.value = edgeLengths;
+out.edgeLengths.attributes = struct(...
+    'name', 'edgeLengths', ...
+    'path', 'geometry/dual/edgeLengths', ...
+    'description', 'Length of dual edges (distance between adjacent face circumcenters)', ...
+    'shape', [nE, 1], ...
+    'dtype', 'double', ...
+    'units', 'm', ...
+    'support', 'edge', ...
+    'computedBy', 'bct.manifold.geometry.dual.edgeLengths');
+
+% Dataset 2: vertexAreas
+out.vertexAreas.value = vertexAreas;
+out.vertexAreas.attributes = struct(...
+    'name', 'vertexAreas', ...
+    'path', 'geometry/dual/vertexAreas', ...
+    'description', 'Area of dual cells (Voronoi regions) around each primal vertex', ...
+    'shape', [nV, 1], ...
+    'dtype', 'double', ...
+    'units', 'm^2', ...
+    'support', 'vertex', ...
+    'computedBy', 'bct.manifold.geometry.dual.vertexAreas');
 
 end

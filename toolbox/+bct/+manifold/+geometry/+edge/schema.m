@@ -62,6 +62,7 @@ s.datasets(1).attributes.valueType = 'scalar';
 s.datasets(1).attributes.semantic = 'scalar';
 s.datasets(1).attributes.normalization = [];
 s.datasets(1).attributes.orthogonal_to = [];
+s.datasets(1).attributes.computedBy = 'bct.manifold.geometry.edge.lengths';
 
 % Dataset 2: weights_cotangent
 s.datasets(2).name = 'weights_cotangent';
@@ -82,6 +83,7 @@ s.datasets(2).attributes.valueType = 'scalar';
 s.datasets(2).attributes.semantic = 'weights';
 s.datasets(2).attributes.normalization = [];
 s.datasets(2).attributes.orthogonal_to = [];
+s.datasets(2).attributes.computedBy = 'bct.manifold.geometry.edge.weights';
 
 % Dataset 3: weights_euclidean
 s.datasets(3).name = 'weights_euclidean';
@@ -102,6 +104,7 @@ s.datasets(3).attributes.valueType = 'scalar';
 s.datasets(3).attributes.semantic = 'weights';
 s.datasets(3).attributes.normalization = [];
 s.datasets(3).attributes.orthogonal_to = [];
+s.datasets(3).attributes.computedBy = 'bct.manifold.geometry.edge.weights';
 
 %% VALUE TYPE TAXONOMY
 s.valueTypes = struct();

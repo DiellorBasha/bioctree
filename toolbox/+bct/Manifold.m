@@ -26,7 +26,7 @@ classdef Manifold < handle
         Vertices         % [N×3] vertex coordinates (immutable)
         Faces            % [M×3] face connectivity (immutable)
         Edges            % [E×2] edge connectivity (derived from faces)
-        Header           % Metadata and rendering descriptors (schema-driven)
+        Attributes       % Group-level and dataset-level metadata (schema-driven)
     end
 
     properties (Access = private)
@@ -116,9 +116,9 @@ classdef Manifold < handle
             % Extract or compute edges
             obj.Edges = bct.manifold.topology.edges(obj.Faces);
             
-            % Initialize Header with defaults from schema
-            % (This creates ID and Metric internally)
-            obj.Header = bct.Manifold.buildDefaultHeaderStatic();
+            % Initialize Attributes with defaults from schema
+            % Group-level manifold attributes + dataset-level attributes for V, F, E
+            obj.Attributes = bct.Manifold.buildDefaultAttributesStatic(obj);
             
             % Initialize unified cache structure with namespaces
             obj.Cache = struct(...
@@ -202,8 +202,14 @@ classdef Manifold < handle
             
             % Check if we have cached operators and not forcing recomputation
             if ~force && ~isempty(fieldnames(obj.Cache.operators.data))
-                ops = obj.Cache.operators.data;
-                return;
+                cachedOps = obj.Cache.operators.data;
+                % Simple validation: check if cache has minimum required fields
+                % (mass, stiffness, d0 indicate complete operator set)
+                if isfield(cachedOps, 'mass') && isfield(cachedOps, 'stiffness') && isfield(cachedOps, 'd0')
+                    ops = cachedOps;
+                    return;
+                end
+                % If validation fails, fall through to recompute
             end
             
             % Compute all operators using bct.manifold.operator
@@ -337,26 +343,26 @@ classdef Manifold < handle
                 if isfield(geom, 'edge')
                     % Use new schema structure (weights_cotangent, weights_euclidean)
                     if options.Metric == "cotangent"
-                        w = geom.edge.weights_cotangent;
+                        w = geom.edge.weights_cotangent.value;
                     else
-                        w = geom.edge.weights_euclidean;
+                        w = geom.edge.weights_euclidean.value;
                     end
                 else
                     % Compute edge weights directly
                     edgeGeom = bct.manifold.geometry.edge(obj);
                     if options.Metric == "cotangent"
-                        w = edgeGeom.weights_cotangent;
+                        w = edgeGeom.weights_cotangent.value;
                     else
-                        w = edgeGeom.weights_euclidean;
+                        w = edgeGeom.weights_euclidean.value;
                     end
                 end
             else
                 % No cache, compute edge weights directly
                 edgeGeom = bct.manifold.geometry.edge(obj);
                 if options.Metric == "cotangent"
-                    w = edgeGeom.weights_cotangent;
+                    w = edgeGeom.weights_cotangent.value;
                 else
-                    w = edgeGeom.weights_euclidean;
+                    w = edgeGeom.weights_euclidean.value;
                 end
             end
             
@@ -401,9 +407,9 @@ classdef Manifold < handle
             
             % Use new schema structure
             if options.Metric == "cotangent"
-                w = geom.edge.weights_cotangent;
+                w = geom.edge.weights_cotangent.value;
             else
-                w = geom.edge.weights_euclidean;
+                w = geom.edge.weights_euclidean.value;
             end
             
             D = bct.manifold.query.distances(E, w, N);
@@ -701,7 +707,7 @@ classdef Manifold < handle
             %
             % Optional Parameters:
             %   k         - Number of modes (can be positional or named)
-            %   RemoveDC  - Remove DC mode (default: true)
+            %   RemoveDC  - Remove DC mode (default: false)
             %   MassType  - Mass matrix type: 'voronoi' (default), 'barycentric', 'full'
             %   EigsOpts  - Additional eigs options (struct)
             %   Force     - Force recomputation even if cached (default: false)
@@ -735,8 +741,8 @@ classdef Manifold < handle
             % Examples:
             %   % Get cached or compute with default k=50
             %   E = M.eigenmodes();
-            %   lambda = E.values;
-            %   U = E.vectors;
+            %   lambda = E.eigenvalues.value;
+            %   U = E.eigenvectors.value;
             %   k = E.attributes.numModes;
             %
             %   % Compute with 100 modes (updates cache)
@@ -753,13 +759,13 @@ classdef Manifold < handle
             %   
             %   % With unit annotations
             %   E = M.eigenmodes(100, 'annotate', true);
-            %   E.values.unit   % '1/m^2' (Laplacian eigenvalues)
-            %   E.vectors.unit  % '1' (normalized modes)
+            %   E.eigenvalues.attributes.units   % '1/m^2' (Laplacian eigenvalues)
+            %   E.eigenvectors.attributes.units  % '1' (normalized modes)
             %
             % See also: bct.manifold.eigenmodes, bct.manifold.eigen.schema
             p = inputParser;
             p.addOptional('k', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
-            p.addParameter('RemoveDC', true, @islogical);
+            p.addParameter('RemoveDC', false, @islogical);
             p.addParameter('MassType', "voronoi", @(x) isstring(x) || ischar(x));
             p.addParameter('EigsOpts', struct(), @isstruct);
             p.addParameter('Force', false, @islogical);
@@ -853,7 +859,7 @@ classdef Manifold < handle
             if isempty(fieldnames(obj.Cache.eigenmodes.data))
                 e = [];
             else
-                e = obj.Cache.eigenmodes.data.values;
+                e = obj.Cache.eigenmodes.data.eigenvalues.value;
             end
         end
         
@@ -926,7 +932,11 @@ classdef Manifold < handle
             %
             % See also: bct.manifold.geometry.centroids
             
-            C = bct.manifold.geometry.centroids(obj);
+            % Get or compute cached geometry
+            geom = obj.geometry();
+            
+            % Extract centroids from cached structure
+            C = geom.face.centroids.value;
         end
         
 
@@ -989,7 +999,19 @@ classdef Manifold < handle
                 options.Domain {mustBeMember(options.Domain, ["face", "vertex", "Face", "Vertex"])} = "face"
             end
             
-            [N, e1, e2] = bct.manifold.geometry.tangents(obj, 'Domain', options.Domain);
+            % Get or compute cached geometry
+            geom = obj.geometry();
+            
+            % Extract tangent frames from cached structure
+            if options.Domain == "face" || options.Domain == "Face"
+                N = geom.face.normals.value;
+                e1 = geom.face.tangent1.value;
+                e2 = geom.face.tangent2.value;
+            else  % vertex
+                N = geom.vertex.normals.value;
+                e1 = geom.vertex.tangent1.value;
+                e2 = geom.vertex.tangent2.value;
+            end
         end
         
         function Mflipped = flip(obj)
@@ -1058,10 +1080,14 @@ classdef Manifold < handle
             % Outputs:
             %   geom - Structure matching bct.manifold.geometry.schema:
             %     .attributes - Group-level metadata (computation options)
-            %     .face       - Face geometry (areas, centroids, normals, frame, cotan)
-            %     .vertex     - Vertex geometry (normals, frame)
-            %     .edge       - Edge geometry (lengths, weights_cotangent, weights_euclidean)
-            %     .dual       - Dual mesh geometry (edgeLengths, vertexAreas)
+            %     .face       - Face geometry (7 datasets: areas, centroids, circumcenters, 
+            %                   normals, cotan, tangent1, tangent2; each with .value and .attributes)
+            %     .vertex     - Vertex geometry (3 datasets: normals, tangent1, tangent2;
+            %                   each with .value and .attributes)
+            %     .edge       - Edge geometry (3 datasets: lengths, weights_cotangent, 
+            %                   weights_euclidean; each with .value and .attributes)
+            %     .dual       - Dual mesh geometry (2 datasets: edgeLengths, vertexAreas;
+            %                   each with .value and .attributes)
             %
             % Description:
             %   Computes all geometric properties of the manifold and caches
@@ -1076,11 +1102,11 @@ classdef Manifold < handle
             %   M = bct.Manifold(V, F);
             %   geom = M.geometry();
             %   
-            %   % Access individual properties
-            %   C = geom.face.centroids;    % [nF×3] Face centroids
-            %   A = geom.face.areas;        % [nF×1] Face areas
-            %   VN = geom.vertex.normals;   % [nV×3] Vertex normals
-            %   L = geom.edge.lengths;      % [nE×1] Edge lengths
+            %   % Access individual properties (use .value to extract data)
+            %   C = geom.face.centroids.value;    % [nF×3] Face centroids
+            %   A = geom.face.areas.value;        % [nF×1] Face areas
+            %   VN = geom.vertex.normals.value;   % [nV×3] Vertex normals
+            %   L = geom.edge.lengths.value;      % [nE×1] Edge lengths
             %   
             %   % Force recomputation
             %   geom = M.geometry('Force', true);
@@ -1137,14 +1163,14 @@ classdef Manifold < handle
             %   'precision' - 'double' (default) or 'single'
             %
             % Outputs:
-            %   faceGeom - Structure with fields:
-            %     .areas          - [nF×1] Face areas
-            %     .centroids      - [nF×3] Face centroids (barycenters)
-            %     .circumcenters  - [nF×3] Face circumcenters
-            %     .normals        - [nF×3] Face normal vectors
-            %     .cotan          - [nF×3] Cotangent weights per face vertex
-            %     .tangent1       - [nF×3] First tangent vectors
-            %     .tangent2       - [nF×3] Second tangent vectors
+            %   faceGeom - Structure with dataset fields:
+            %     .areas          - Dataset: .value [nF×1], .attributes (metadata)
+            %     .centroids      - Dataset: .value [nF×3], .attributes (metadata)
+            %     .circumcenters  - Dataset: .value [nF×3], .attributes (metadata)
+            %     .normals        - Dataset: .value [nF×3], .attributes (metadata)
+            %     .cotan          - Dataset: .value [nF×3], .attributes (metadata)
+            %     .tangent1       - Dataset: .value [nF×3], .attributes (metadata)
+            %     .tangent2       - Dataset: .value [nF×3], .attributes (metadata)
             %
             % Description:
             %   Returns cached face geometry if available, or computes using
@@ -1154,8 +1180,8 @@ classdef Manifold < handle
             % Examples:
             %   M = bct.Manifold(V, F);
             %   faceGeom = M.faceGeometry();
-            %   areas = faceGeom.areas;
-            %   normals = faceGeom.normals;
+            %   areas = faceGeom.areas.value;       % [nF×1] face areas
+            %   normals = faceGeom.normals.value;   % [nF×3] face normals
             %
             % See also: bct.manifold.geometry.face, vertexGeometry, edgeGeometry
             
@@ -1196,10 +1222,10 @@ classdef Manifold < handle
             %   'precision' - 'double' (default) or 'single'
             %
             % Outputs:
-            %   vertexGeom - Structure with fields:
-            %     .normals  - [nV×3] Vertex normal vectors
-            %     .tangent1 - [nV×3] First tangent vectors
-            %     .tangent2 - [nV×3] Second tangent vectors
+            %   vertexGeom - Structure with dataset fields:
+            %     .normals  - Dataset: .value [nV×3], .attributes (metadata)
+            %     .tangent1 - Dataset: .value [nV×3], .attributes (metadata)
+            %     .tangent2 - Dataset: .value [nV×3], .attributes (metadata)
             %
             % Description:
             %   Returns cached vertex geometry if available, or computes using
@@ -1209,7 +1235,7 @@ classdef Manifold < handle
             % Examples:
             %   M = bct.Manifold(V, F);
             %   vertexGeom = M.vertexGeometry();
-            %   normals = vertexGeom.normals;
+            %   normals = vertexGeom.normals.value;
             %
             % See also: bct.manifold.geometry.vertex, faceGeometry, edgeGeometry
             
@@ -1250,9 +1276,10 @@ classdef Manifold < handle
             %   'precision' - 'double' (default) or 'single'
             %
             % Outputs:
-            %   edgeGeom - Structure with fields:
-            %     .lengths - [nE×1] Edge lengths
-            %     .weights - Structure with .cotangent and .euclidean
+            %   edgeGeom - Structure with dataset fields:
+            %     .lengths           - Dataset: .value [nE×1], .attributes (metadata)
+            %     .weights_cotangent - Dataset: .value [nE×1], .attributes (metadata)
+            %     .weights_euclidean - Dataset: .value [nE×1], .attributes (metadata)
             %
             % Description:
             %   Returns cached edge geometry if available, or computes using
@@ -1262,7 +1289,7 @@ classdef Manifold < handle
             % Examples:
             %   M = bct.Manifold(V, F);
             %   edgeGeom = M.edgeGeometry();
-            %   lengths = edgeGeom.lengths;
+            %   lengths = edgeGeom.lengths.value;
             %
             % See also: bct.manifold.geometry.edge, faceGeometry, vertexGeometry
             
@@ -1305,9 +1332,9 @@ classdef Manifold < handle
             %   'dualCellType'   - 'circumcentric' (default) for dual vertex areas
             %
             % Outputs:
-            %   dualGeom - Structure with fields:
-            %     .edgeLengths - [nE×1] Dual edge lengths
-            %     .vertexAreas - [nV×1] Dual vertex areas (Voronoi cells)
+            %   dualGeom - Structure with dataset fields:
+            %     .edgeLengths - Dataset: .value [nE×1], .attributes (metadata)
+            %     .vertexAreas - Dataset: .value [nV×1], .attributes (metadata)
             %
             % Description:
             %   Returns cached dual geometry if available, or computes using
@@ -1319,8 +1346,8 @@ classdef Manifold < handle
             % Examples:
             %   M = bct.Manifold(V, F);
             %   dualGeom = M.dualGeometry();
-            %   dualEdges = dualGeom.edgeLengths;
-            %   voronoiAreas = dualGeom.vertexAreas;
+            %   dualEdges = dualGeom.edgeLengths.value;    % [nE×1] dual edge lengths
+            %   voronoiAreas = dualGeom.vertexAreas.value; % [nV×1] Voronoi areas
             %
             % See also: bct.manifold.geometry.dual, faceGeometry, edgeGeometry
             
@@ -1396,14 +1423,14 @@ classdef Manifold < handle
             %   M = bct.Manifold(V, F);
             %   topo = M.topology();
             %   
-            %   % Access halfedge navigation (flattened structure)
-            %   h = topo.faceHalfedges(1, 1);  % First halfedge of face 1
-            %   h_next = topo.next(h);          % Next halfedge (CCW)
-            %   h_twin = topo.twin(h);          % Twin across edge
+            %   % Access halfedge navigation (dataset structure)
+            %   h = topo.faceHalfedges.value(1, 1);  % First halfedge of face 1
+            %   h_next = topo.next.value(h);          % Next halfedge (CCW)
+            %   h_twin = topo.twin.value(h);          % Twin across edge
             %   
             %   % Access edges and adjacency
-            %   E = topo.edgeList;              % [nE×2] edge list
-            %   A = topo.adjacency;             % [nV×nV] adjacency matrix
+            %   E = topo.edgeList.value;              % [nE×2] edge list
+            %   A = topo.adjacency.value;             % [nV×nV] adjacency matrix
             %   
             %   % Force recomputation
             %   topo = M.topology('Force', true);
@@ -1938,7 +1965,7 @@ classdef Manifold < handle
             [~, baseName, ~] = fileparts(fileName);
             
             % Set Source and Name metadata
-            obj = obj.setHeader('Name', string(baseName), ...
+            obj = obj.setAttributes('Name', string(baseName), ...
                                'Source', string(fullPath), ...
                                'CreatedAt', datetime('now'), ...
                                'CreatedBy', getenv('USERNAME'));
@@ -1949,14 +1976,14 @@ classdef Manifold < handle
     % METADATA MANAGEMENT
     % ===================================================================
     methods
-        function obj = setHeader(obj, varargin)
-            %SETHEADER Set or update Header metadata fields
+        function obj = setAttributes(obj, varargin)
+            %SETATTRIBUTES Set or update Attributes metadata fields
             %
             % Syntax:
-            %   M = M.setHeader('FieldName', value, ...)
+            %   M = M.setAttributes('FieldName', value, ...)
             %
             % Description:
-            %   Updates Header metadata with name-value pairs. Values are
+            %   Updates Attributes metadata with name-value pairs. Values are
             %   normalized according to the schema specification.
             %
             % Supported Fields:
@@ -1977,30 +2004,30 @@ classdef Manifold < handle
             %
             % Examples:
             %   % Set provenance metadata
-            %   M = M.setHeader('Source', 'bunny.obj', ...
+            %   M = M.setAttributes('Source', 'bunny.obj', ...
             %                   'CreatedAt', datetime('now'), ...
             %                   'CreatedBy', 'user123');
             %
             %   % Set rendering metadata
-            %   M = M.setHeader('FaceWinding', 'CCW', ...
+            %   M = M.setAttributes('FaceWinding', 'CCW', ...
             %                   'CoordinateSystem', 'RAS', ...
             %                   'Units', 'mm');
             %
             %   % Update single field
-            %   M = M.setHeader('Source', 'new_source.mat');
+            %   M = M.setAttributes('Source', 'new_source.mat');
             %
             % See also: bct.manifold.schema.manifold, bct.manifold.schema.normalize
             
             % Parse name-value pairs
             if mod(numel(varargin), 2) ~= 0
                 error('bct:Manifold:InvalidArguments', ...
-                    'setHeader requires name-value pairs.');
+                    'setAttributes requires name-value pairs.');
             end
             
             % Get schema for metadata section
             spec = bct.manifold.schema.manifold();
             
-            % Update Header fields with normalization
+            % Update Attributes fields with normalization
             for i = 1:2:numel(varargin)
                 fieldName = varargin{i};
                 value = varargin{i+1};
@@ -2009,7 +2036,7 @@ classdef Manifold < handle
                 if ~isfield(spec.meta.fields, fieldName)
                     warning('bct:Manifold:UnknownField', ...
                         'Field "%s" is not defined in schema. Setting anyway.', fieldName);
-                    obj.Header.(fieldName) = value;
+                    obj.Attributes.(fieldName) = value;
                     continue;
                 end
                 
@@ -2018,34 +2045,42 @@ classdef Manifold < handle
                 if isfield(fieldSpec, 'normalize') && isa(fieldSpec.normalize, 'function_handle')
                     try
                         normalizedValue = fieldSpec.normalize(value);
-                        obj.Header.(fieldName) = normalizedValue;
+                        obj.Attributes.(fieldName) = normalizedValue;
                     catch ME
                         warning('bct:Manifold:NormalizeFailed', ...
                             'Failed to normalize field "%s": %s. Using raw value.', ...
                             fieldName, ME.message);
-                        obj.Header.(fieldName) = value;
+                        obj.Attributes.(fieldName) = value;
                     end
                 else
-                    obj.Header.(fieldName) = value;
+                    obj.Attributes.(fieldName) = value;
                 end
             end
         end
     end
     
     methods (Static, Access = private)
-        function header = buildDefaultHeaderStatic()
-            %BUILDDEFAULTHEADER Initialize Header with default values from schema
+        function attrs = buildDefaultAttributesStatic(obj)
+            %BUILDDEFAULTATTRIBUTESSTATIC Initialize Attributes with group and dataset metadata
             %
-            % Returns a struct with default values for all metadata fields.
+            % Returns a struct with:
+            %   - Group-level manifold attributes (path, schema, ID, Metric, etc.)
+            %   - Dataset-level attributes for vertices, faces, edges
+            %
             % Provenance fields are left empty, rendering fields get defaults.
             
             % Get schema
             spec = bct.manifold.schema.manifold();
             
-            % Initialize empty header
-            header = struct();
+            % Initialize attributes structure
+            attrs = struct();
             
-            % Apply defaults from schema
+            %% Group-level manifold attributes
+            attrs.path = '/manifold';
+            attrs.schema = 'bct.Manifold@1.1';
+            attrs.package = 'bct.Manifold';
+            
+            % Apply defaults from schema meta fields
             fieldNames = fieldnames(spec.meta.fields);
             for i = 1:numel(fieldNames)
                 fieldName = fieldNames{i};
@@ -2056,21 +2091,58 @@ classdef Manifold < handle
                 provenanceFields = ["Name", "Source", "CreatedAt", "CreatedBy", "BctVersion", "GitCommit"];
                 
                 if isfield(fieldSpec, 'default') && ~ismember(fieldName, provenanceFields)
-                    header.(fieldName) = fieldSpec.default;
+                    attrs.(fieldName) = fieldSpec.default;
                 end
             end
             
             % Generate unique ID for this manifold
-            header.ID = string(java.util.UUID.randomUUID());
+            attrs.ID = string(java.util.UUID.randomUUID());
             
             % Initialize metric provenance (all manifolds are in meters by default)
-            header.Metric = struct( ...
+            attrs.Metric = struct( ...
                 'unit', "m", ...
                 'rescale', struct( ...
                     'applied', false, ...
                     'fromUnit', "", ...
                     'factor', 1.0, ...
                     'timestamp', "") );
+            
+            %% Dataset-level attributes for vertices, faces, edges
+            % Vertices dataset attributes
+            attrs.vertices = struct();
+            attrs.vertices.attributes = struct( ...
+                'name', 'vertices', ...
+                'path', '/manifold/vertices', ...
+                'description', '3D vertex coordinates', ...
+                'shape', [size(obj.Vertices, 1), 3], ...
+                'dtype', 'double', ...
+                'units', attrs.Metric.unit, ...
+                'support', 'vertex' ...
+            );
+            
+            % Faces dataset attributes
+            attrs.faces = struct();
+            attrs.faces.attributes = struct( ...
+                'name', 'faces', ...
+                'path', '/manifold/faces', ...
+                'description', 'Triangle face connectivity (1-indexed)', ...
+                'shape', [size(obj.Faces, 1), 3], ...
+                'dtype', 'uint32', ...
+                'indexBase', 1, ...
+                'support', 'face' ...
+            );
+            
+            % Edges dataset attributes
+            attrs.edges = struct();
+            attrs.edges.attributes = struct( ...
+                'name', 'edges', ...
+                'path', '/manifold/edges', ...
+                'description', 'Unique edge connectivity (1-indexed)', ...
+                'shape', [size(obj.Edges, 1), 2], ...
+                'dtype', 'uint32', ...
+                'indexBase', 1, ...
+                'support', 'edge' ...
+            );
         end
     end
     

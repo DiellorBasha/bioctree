@@ -72,6 +72,7 @@ s.datasets(1).attributes.valueType = 'scalar';
 s.datasets(1).attributes.semantic = 'scalar';
 s.datasets(1).attributes.normalization = [];
 s.datasets(1).attributes.orthogonal_to = [];
+s.datasets(1).attributes.computedBy = 'bct.manifold.geometry.face.areas';
 
 % Dataset 2: circumcenters
 s.datasets(2).name = 'circumcenters';
@@ -92,6 +93,7 @@ s.datasets(2).attributes.valueType = 'ambient';
 s.datasets(2).attributes.semantic = 'vector3';
 s.datasets(2).attributes.normalization = [];
 s.datasets(2).attributes.orthogonal_to = [];
+s.datasets(2).attributes.computedBy = 'bct.manifold.geometry.face.circumcenters';
 
 % Dataset 3: centroids
 s.datasets(3).name = 'centroids';
@@ -112,6 +114,7 @@ s.datasets(3).attributes.valueType = 'ambient';
 s.datasets(3).attributes.semantic = 'vector3';
 s.datasets(3).attributes.normalization = [];
 s.datasets(3).attributes.orthogonal_to = [];
+s.datasets(3).attributes.computedBy = 'bct.manifold.geometry.face.centroids';
 
 % Dataset 4: cotan
 s.datasets(4).name = 'cotan';
@@ -132,6 +135,7 @@ s.datasets(4).attributes.valueType = 'scalar';
 s.datasets(4).attributes.semantic = 'weights';
 s.datasets(4).attributes.normalization = [];
 s.datasets(4).attributes.orthogonal_to = [];
+s.datasets(4).attributes.computedBy = 'bct.manifold.geometry.face.cotan';
 
 % Dataset 5: normals
 s.datasets(5).name = 'normals';
@@ -152,6 +156,7 @@ s.datasets(5).attributes.valueType = 'normal';
 s.datasets(5).attributes.semantic = 'vector3';
 s.datasets(5).attributes.normalization = 'unit';
 s.datasets(5).attributes.orthogonal_to = [];
+s.datasets(5).attributes.computedBy = 'bct.manifold.geometry.face.frame';
 
 % Dataset 6: tangent1
 s.datasets(6).name = 'tangent1';
@@ -172,6 +177,7 @@ s.datasets(6).attributes.valueType = 'tangent';
 s.datasets(6).attributes.semantic = 'vector3';
 s.datasets(6).attributes.normalization = 'unit';
 s.datasets(6).attributes.orthogonal_to = "normals";
+s.datasets(6).attributes.computedBy = 'bct.manifold.geometry.face.frame';
 
 % Dataset 7: tangent2
 s.datasets(7).name = 'tangent2';
@@ -192,6 +198,7 @@ s.datasets(7).attributes.valueType = 'tangent';
 s.datasets(7).attributes.semantic = 'vector3';
 s.datasets(7).attributes.normalization = 'unit';
 s.datasets(7).attributes.orthogonal_to = ["normals", "tangent1"];
+s.datasets(7).attributes.computedBy = 'bct.manifold.geometry.face.frame';
 
 %% VALUE TYPE TAXONOMY
 s.valueTypes = struct();

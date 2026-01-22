@@ -3,13 +3,13 @@ function out = dec(meshInput, varargin)
 %
 % Syntax:
 %   dec = bct.manifold.operator.dec(M)
-%   dec = bct.manifold.operator.dec(V, F)
+%   dec = bct.manifold.operator.dec(Vertices, Faces)
 %
 % Inputs:
 %   M - bct.Manifold object
 %   OR
-%   V - [N×3] vertex coordinates
-%   F - [M×3] face connectivity
+%   Vertices - [N×3] vertex coordinates
+%   Faces - [M×3] face connectivity
 %
 % Outputs:
 %   out - Structure matching DEC operator group schema:
@@ -44,7 +44,7 @@ function out = dec(meshInput, varargin)
 %
 % Examples:
 %   % From Manifold
-%   M = bct.Manifold(V, F);
+%   M = bct.Manifold(Vertices, Faces);
 %   dec = bct.manifold.operator.dec(M);
 %   
 %   % Apply exterior derivative d0: C⁰ → C¹
@@ -58,23 +58,23 @@ function out = dec(meshInput, varargin)
 %   method = dec.attributes.method;  % 'DECLab'
 %   d0_desc = dec.d0.attributes.description;
 %   
-%   % From V, F directly
-%   dec = bct.manifold.operator.dec(V, F);
+%   % From Vertices, Faces directly
+%   dec = bct.manifold.operator.dec(Vertices, Faces);
 %
 % See also: DiscreteExteriorCalculus, bct.Manifold.DEC
 
 % Parse inputs
 if nargin == 1 && isa(meshInput, 'bct.Manifold')
     % Input is Manifold object
-    V = meshInput.Vertices;
-    F = meshInput.Faces;
+    Vertices = meshInput.Vertices;
+    Faces = meshInput.Faces;
 elseif nargin == 2
-    % Inputs are V, F
-    V = meshInput;
-    F = varargin{1};
+    % Inputs are Vertices, Faces
+    Vertices = meshInput;
+    Faces = varargin{1};
 else
     error('bct:manifold:operator:dec:InvalidInput', ...
-        'Usage: dec(Manifold) or dec(V, F)');
+        'Usage: dec(Manifold) or dec(Vertices, Faces)');
 end
 
 % Check for DECLab availability
@@ -83,7 +83,13 @@ if exist("DiscreteExteriorCalculus", "class") ~= 8
         ['DECLab not found on MATLAB path (DiscreteExteriorCalculus missing). ' ...
          'Add external/DECLab to your path.']);
 end
-Obj = DiscreteExteriorCalculus(F_double, V_double);
+
+% Convert to double for DiscreteExteriorCalculus constructor
+Faces_double = double(Faces);
+Vertices_double = double(Vertices);
+
+% Construct DEC object
+Obj = DiscreteExteriorCalculus(Faces_double, Vertices_double);
 
 % Initialize output structure
 out = struct();
@@ -92,9 +98,9 @@ out = struct();
 out.attributes = struct();
 out.attributes.method = 'DECLab';
 out.attributes.backend = 'DiscreteExteriorCalculus';
-out.attributes.numVertices = uint32(size(V, 1));
-out.attributes.numFaces = uint32(size(F, 1));
-out.attributes.numEdges = uint32(size(decObj.E, 1));
+out.attributes.numVertices = uint32(size(Vertices, 1));
+out.attributes.numFaces = uint32(size(Faces, 1));
+out.attributes.numEdges = uint32(size(Obj.E, 1));
 out.attributes.path = 'operator/dec';
 out.attributes.description = 'Discrete Exterior Calculus operators';
 out.attributes.schema = 'bct.manifold.operator.dec@1.0.0';
@@ -111,34 +117,30 @@ createDataset = @(name, matrix, desc) struct(...
         'storage', 'sparse'));
 
 % Exterior derivatives
-out.d0 = createDataset('d0', decObj.d0, 'Exterior derivative d0: 0-forms → 1-forms (vertex → edge)');
-out.d1 = createDataset('d1', decObj.d1, 'Exterior derivative d1: 1-forms → 2-forms (edge → face)');
+out.d0 = createDataset('d0', Obj.d0, 'Exterior derivative d0: 0-forms → 1-forms (vertex → edge)');
+out.d1 = createDataset('d1', Obj.d1, 'Exterior derivative d1: 1-forms → 2-forms (edge → face)');
 
 % Codifferentials (δ = ⋆d⋆)
-out.dd0 = createDataset('dd0', decObj.dd0, 'Codifferential δ0: 1-forms → 0-forms (edge → vertex)');
-out.dd1 = createDataset('dd1', decObj.dd1, 'Codifferential δ1: 2-forms → 1-forms (face → edge)');
+out.dd0 = createDataset('dd0', Obj.dd0, 'Codifferential δ0: 1-forms → 0-forms (edge → vertex)');
+out.dd1 = createDataset('dd1', Obj.dd1, 'Codifferential δ1: 2-forms → 1-forms (face → edge)');
 
 % Hodge star operators (⋆)
-out.hd0 = createDataset('hd0', decObj.hd0, 'Hodge star ⋆0: primal 0-forms → dual 2-forms');
-out.hd1 = createDataset('hd1', decObj.hd1, 'Hodge star ⋆1: primal 1-forms → dual 1-forms');
-out.hd2 = createDataset('hd2', decObj.hd2, 'Hodge star ⋆2: primal 2-forms → dual 0-forms');
+out.hd0 = createDataset('hd0', Obj.hd0, 'Hodge star ⋆0: primal 0-forms → dual 2-forms');
+out.hd1 = createDataset('hd1', Obj.hd1, 'Hodge star ⋆1: primal 1-forms → dual 1-forms');
+out.hd2 = createDataset('hd2', Obj.hd2, 'Hodge star ⋆2: primal 2-forms → dual 0-forms');
 
 % Inverse Hodge star operators (⋆⁻¹)
-out.hdd0 = createDataset('hdd0', decObj.hdd0, 'Inverse Hodge star ⋆0⁻¹: dual 2-forms → primal 0-forms');
-out.hdd1 = createDataset('hdd1', decObj.hdd1, 'Inverse Hodge star ⋆1⁻¹: dual 1-forms → primal 1-forms');
-out.hdd2 = createDataset('hdd2', decObj.hdd2, 'Inverse Hodge star ⋆2⁻¹: dual 0-forms → primal 2-forms');
+out.hdd0 = createDataset('hdd0', Obj.hdd0, 'Inverse Hodge star ⋆0⁻¹: dual 2-forms → primal 0-forms');
+out.hdd1 = createDataset('hdd1', Obj.hdd1, 'Inverse Hodge star ⋆1⁻¹: dual 1-forms → primal 1-forms');
+out.hdd2 = createDataset('hdd2', Obj.hdd2, 'Inverse Hodge star ⋆2⁻¹: dual 0-forms → primal 2-forms');
 
 % Flat operators (♭: vector fields → differential forms)
-out.flatPP = createDataset('flatPP', decObj.flatPP, 'Flat ♭: primal vectors → primal 1-forms');
-out.flatDP = createDataset('flatDP', decObj.flatDP, 'Flat ♭: dual vectors → primal 1-forms');
-out.flatDD = createDataset('flatDD', decObj.flatDD, 'Flat ♭: dual vectors → dual 1-forms');
+out.flatPP = createDataset('flatPP', Obj.flatPP, 'Flat ♭: primal vectors → primal 1-forms');
+out.flatDP = createDataset('flatDP', Obj.flatDP, 'Flat ♭: dual vectors → primal 1-forms');
+out.flatDD = createDataset('flatDD', Obj.flatDD, 'Flat ♭: dual vectors → dual 1-forms');
 
 % Sharp operators (♯: differential forms → vector fields)
-out.sharpPD = createDataset('sharpPD', decObj.sharpPD, 'Sharp ♯: primal 1-forms → dual vectors');
-out.sharpDD = createDataset('sharpDD', decObj.sharpDD, 'Sharp ♯: dual 1-forms → dual vectors')
-operators.flatDP = dec.flatDP;
-operators.flatDD = dec.flatDD;
-operators.sharpPD = dec.sharpPD;
-operators.sharpDD = dec.sharpDD;
+out.sharpPD = createDataset('sharpPD', Obj.sharpPD, 'Sharp ♯: primal 1-forms → dual vectors');
+out.sharpDD = createDataset('sharpDD', Obj.sharpDD, 'Sharp ♯: dual 1-forms → dual vectors');
 
 end

@@ -82,20 +82,21 @@ if isempty(eigen)
 end
 
 % Validate eigenmode structure
-if ~isfield(eigen, 'vectors') || ~isfield(eigen, 'k')
+if ~isfield(eigen, 'vectors') || ~isfield(eigen, 'attributes') || ...
+   ~isfield(eigen.attributes, 'numModes')
     error('bct:manifold:transform:InvalidEigen', ...
-        'Eigen structure must have fields: vectors, k');
+        'Eigen structure must have fields: vectors, attributes.numModes');
 end
 
-K = double(eigen.k);
+K = double(eigen.attributes.numModes);
 nF = M.numFaces();
 nV = M.numVertices();
 
 % Validate dimensions
-if size(eigen.vectors, 1) ~= nV
+if size(eigen.eigenvectors.value, 1) ~= nV
     error('bct:manifold:transform:DimensionMismatch', ...
         'Eigenvectors must be [nV x K], got [%d x %d]', ...
-        size(eigen.vectors, 1), size(eigen.vectors, 2));
+        size(eigen.eigenvectors.value, 1), size(eigen.eigenvectors.value, 2));
 end
 
 % Get gradient operator
@@ -109,8 +110,8 @@ if size(grad, 1) ~= 3*nF || size(grad, 2) ~= nV
 end
 
 % Project gradient onto eigenmodes: [3*nF x K]
-% grad is [3*nF x nV], eigen.vectors is [nV x K]
-Gpsi = grad * eigen.vectors;
+% grad is [3*nF x nV], eigen.eigenvectors.value is [nV x K]
+Gpsi = grad * eigen.eigenvectors.value;
 
 % Extract component blocks
 Gx = Gpsi(1:nF, :);              % [nF x K]
@@ -128,7 +129,7 @@ end
 if tangentProject
     % Get face normals
     geom = M.geometry();
-    N = geom.face.normals;  % [nF x 3]
+    N = geom.face.normals.value;  % [nF x 3]
     
     % Convert to requested precision
     if strcmp(precision, 'single')

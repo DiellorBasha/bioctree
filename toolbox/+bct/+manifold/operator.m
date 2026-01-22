@@ -30,6 +30,9 @@ function ops = operator(meshInput, varargin)
 %       .stiffnessVariant- Stiffness matrix type
 %       .stiffnessSign   - Sign convention
 %       .sparseFormat    - "coo" (export format for HDF5/Zarr)
+%       .decMethod       - "DECLab" (DEC computation method)
+%       .decBackend      - "DiscreteExteriorCalculus" (DEC implementation)
+%       .hasDEC          - true if DEC operators computed successfully
 %     .mass              - Dataset structure with .value and .attributes
 %     .stiffness         - Dataset structure with .value and .attributes
 %     .d0, .d1           - DEC exterior derivatives (datasets)
@@ -38,13 +41,10 @@ function ops = operator(meshInput, varargin)
 %     .hdd0, .hdd1, .hdd2 - DEC inverse Hodge stars (datasets)
 %     .flatPP, .flatDP, .flatDD - DEC flat operators (datasets)
 %     .sharpPD, .sharpDD - DEC sharp operators (datasets)
-%     .mft               - Forward MFT (optional, if eigenmodes cached)
-%     .imft              - Inverse MFT (optional, if eigenmodes cached)
 %
 % Description:
 %   Aggregates fundamental operator computations from the bct.manifold.operator
-%   subpackage. Computes FEM matrices (mass, stiffness) and optionally
-%   spectral transform operators (MFT, IMFT) if eigenmodes are cached.
+%   subpackage. Computes FEM matrices (mass, stiffness) and all DEC operators.
 %
 %   Returns a schema-compliant structure matching bct.manifold.operator.schema
 %   for HDF5/Zarr serialization. Matrices are stored in native MATLAB sparse
@@ -146,13 +146,18 @@ ops.attributes.numEdges = uint32(size(M.topology().edgeList, 1));
 ops.attributes.massVariant = massVariant;
 ops.attributes.stiffnessVariant = stiffnessVariant;
 ops.attributes.stiffnessSign = stiffnessSign;
-ops.attributes.sparseFormatdataset structures)
+ops.attributes.sparseFormat = 'coo';
+ops.attributes.decMethod = 'DECLab';
+ops.attributes.decBackend = 'DiscreteExteriorCalculus';
+
+% ===============================================================
+% Compute Operators (each returns dataset structure with .value and .attributes)
 % ===============================================================
 
-% Compute mass matrix (returns structure with .value and .attributes)
+% Compute mass matrix
 ops.mass = bct.manifold.operator.mass(M, 'variant', massVariant);
 
-% Compute stiffness matrix (returns structure with .value and .attributes)
+% Compute stiffness matrix
 ops.stiffness = bct.manifold.operator.stiffness(M, ...
     'variant', stiffnessVariant, ...
     'sign', stiffnessSign, ...
@@ -163,6 +168,7 @@ ops.stiffness = bct.manifold.operator.stiffness(M, ...
 % ===============================================================
 
 % Compute DEC operators and flatten to top level
+decSuccess = false;
 try
     decOps = bct.manifold.operator.dec(M);
     
@@ -182,40 +188,28 @@ try
     ops.flatDD = decOps.flatDD;
     ops.sharpPD = decOps.sharpPD;
     ops.sharpDD = decOps.sharpDD;
+    
+    decSuccess = true;
 catch ME
     % If DEC computation fails (e.g., DECLab not available), store error
     warning('bct:manifold:operator:DECError', ...
         'Failed to compute DEC operators: %s', ME.message);
 end
 
-% ===============================================================
-% Spectral Transform Operators (optional)
-% ===============================================================
-
-% Compute MFT and IMFT if eigenmodes are cached
-% These are optional operators that require spectral decomposition
-if ~isempty(fieldnames(M.Cache.eigenmodes.data))
-    % Get cached eigenmodes
-    eigen = M.Cache.eigenmodes.data;
-    
-    % TODO: Update mft/imft functions to return dataset structures
-    % For now, compute directly
-    % Forward MFT: U' * Mass
-    ops.mft = eigen.vectors' * ops.mass.value;
-    
-    % Inverse MFT: U (eigenvectors)
-    ops.imft = eigen.vectors;
-end
+% Update attributes with DEC status
+ops.attributes.hasDEC = decSuccess;
 
 % NOTE: Derived operators (Laplace-Beltrami, gradient, divergence, curl)
 % are NOT included in the schema-compliant output structure.
 % They can be computed on-demand from DEC operators or mass/stiffness matrices.
 % For example: Laplacian = dd0 * d0, Gradient = d0, Divergence = dd0.
+%
+% Spectral transform operators (MFT, IMFT) are also NOT included here.
+% They are computed separately via bct.manifold.operator.mft when needed.
 
 % Apply unit annotation if requested
 if annotate
     ops = bct.manifold.metric.annotate(ops, 'operator');
 end
-% Apply unit annotation if requested
-if annotate
-    ops = bct.manifold.metric.annotate(ops, 'operator');
+
+end

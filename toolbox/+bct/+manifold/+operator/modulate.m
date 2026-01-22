@@ -65,7 +65,7 @@ function modulatedSignal = modulate(meshInput, signal, eigenmodeSpec, varargin)
 %
 %   % Modulate using explicit eigenvector
 %   E = M.eigenmodes(50);
-%   eigenvector = E.vectors(:, 10);
+%   eigenvector = E.eigenvectors.value(:, 10);
 %   modulated = bct.manifold.operator.modulate(M, signal, eigenvector);
 %
 %   % Modulate multiple time samples
@@ -185,19 +185,19 @@ if isscalar(eigenmodeSpec)
     % Retrieve eigenvector
     if useManifold
         E = M.eigenmodes(k);  % Get at least k eigenmodes
-        if k > size(E.vectors, 2)
+        if k > size(E.eigenvectors.value, 2)
             error('bct:manifold:operator:modulate:InsufficientModes', ...
-                'Requested eigenmode %d but only %d modes available', k, size(E.vectors, 2));
+                'Requested eigenmode %d but only %d modes available', k, size(E.eigenvectors.value, 2));
         end
-        eigenvector = E.vectors(:, k);
+        eigenvector = E.eigenvectors.value(:, k);
     else
         % Compute eigenmodes from V, F
         E = bct.graph.eigensolve(V, F_faces, k);
-        if k > size(E.vectors, 2)
+        if k > size(E.eigenvectors.value, 2)
             error('bct:manifold:operator:modulate:InsufficientModes', ...
-                'Requested eigenmode %d but only %d modes computed', k, size(E.vectors, 2));
+                'Requested eigenmode %d but only %d modes computed', k, size(E.eigenvectors.value, 2));
         end
-        eigenvector = E.vectors(:, k);
+        eigenvector = E.eigenvectors.value(:, k);
     end
     
 elseif isvector(eigenmodeSpec)
