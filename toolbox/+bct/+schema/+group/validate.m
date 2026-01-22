@@ -120,10 +120,11 @@ try
         
         % Check pattern (for strings)
         if isfield(fieldSpec, 'pattern') && (isstring(value) || ischar(value))
-            value_str = string(value);
-            if ~matches(value_str, fieldSpec.pattern)
-                msg = sprintf('Field %s value "%s" does not match required pattern: %s', ...
-                    fieldName, value_str, fieldSpec.pattern);
+            value_str = char(value);
+            % Use regexp for pattern matching (matches() has different semantics)
+            if isempty(regexp(value_str, fieldSpec.pattern, 'once'))
+                % Use string concatenation to avoid sprintf backslash escape issues
+                msg = ['Field ' fieldName ' value "' value_str '" does not match required pattern: ' fieldSpec.pattern];
                 addError(report, msg);
                 if strict
                     error('bct:schema:group:InvalidPattern', msg);

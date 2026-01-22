@@ -3,16 +3,21 @@ classdef Manifold < handle
     %
     % Defines geometry, topology, and metric. Provides unified caching of
     % computed properties (geometry, topology, operators, eigenmodes).
+    % Structure conforms to canonical bct.schema.manifold specification.
     %
     % Design principles (from ManifoldContract):
     %   - Manifold owns: Topology, Embedding, Metric, Intrinsic differential structure
     %   - Immutable geometry, mutable representations
     %   - Lazy computation with unified cache structure
     %   - No analysis, filters, brushes, spectral pipelines, or UI state
+    %   - Schema-driven attributes for consistent serialization
     %
     % Usage:
     %   % Construction
     %   M = bct.Manifold(struct('V', V, 'F', F));
+    %   
+    %   % Validate against canonical schema
+    %   M.validate();
     %   
     %   % Access cached properties
     %   ops = M.operators();  % All operators (mass, stiffness, DEC)
@@ -20,7 +25,8 @@ classdef Manifold < handle
     %   topo = M.topology();  % All topology (edges, adjacency, halfedge)
     %   graph = M.Graph();    % Graph representation (lightweight wrapper)
     %
-    % See also: bct.manifold.operator, bct.manifold.geometry, bct.manifold.topology
+    % See also: bct.schema.manifold, bct.manifold.operator, 
+    %           bct.manifold.geometry, bct.manifold.topology
 
     properties (SetAccess = private)
         Vertices         % [N×3] vertex coordinates (immutable)
@@ -116,7 +122,7 @@ classdef Manifold < handle
             % Extract or compute edges
             obj.Edges = bct.manifold.topology.edges(obj.Faces);
             
-            % Initialize Attributes with defaults from schema
+            % Initialize Attributes with defaults from canonical schema
             % Group-level manifold attributes + dataset-level attributes for V, F, E
             obj.Attributes = bct.Manifold.buildDefaultAttributesStatic(obj);
             
@@ -128,6 +134,52 @@ classdef Manifold < handle
                 'operators', struct('data', struct(), 'meta', struct()), ...
                 'eigenmodes', struct('data', struct(), 'meta', struct()), ...
                 'health', struct('data', struct(), 'meta', struct()));
+        end
+
+        % ===============================================================
+        % VALIDATION
+        % ===============================================================
+        
+        function isValid = validate(obj, varargin)
+            %VALIDATE Validate manifold structure against canonical schema
+            %
+            % Syntax:
+            %   isValid = M.validate()
+            %   isValid = M.validate('Strict', false)
+            %
+            % Name-Value Arguments:
+            %   Strict - true (default) throws errors, false returns warnings
+            %
+            % Outputs:
+            %   isValid - true if manifold conforms to bct.schema.manifold
+            %
+            % Description:
+            %   Validates that the Manifold object structure conforms to the
+            %   canonical bct.schema.manifold specification. Checks:
+            %     - Vertices [N×3 double]
+            %     - Faces [M×3 uint32]
+            %     - Edges [E×2 uint32]
+            %     - Attributes (group and dataset metadata)
+            %     - Cache structure
+            %
+            % Examples:
+            %   M = bct.Manifold(V, F);
+            %   M.validate();  % Throws error if invalid
+            %   
+            %   isValid = M.validate('Strict', false);  % Returns false with warnings
+            %
+            % See also: bct.schema.manifold
+            
+            % Create a struct representation for validation
+            manifoldStruct = struct();
+            manifoldStruct.Vertices = obj.Vertices;
+            manifoldStruct.Faces = obj.Faces;
+            manifoldStruct.Edges = obj.Edges;
+            manifoldStruct.Attributes = obj.Attributes;
+            manifoldStruct.Cache = obj.Cache;
+            
+            % Delegate to canonical schema validation
+            isValid = bct.schema.manifold.validate(manifoldStruct, varargin{:});
         end
 
         % ===============================================================
@@ -2016,7 +2068,7 @@ classdef Manifold < handle
             %   % Update single field
             %   M = M.setAttributes('Source', 'new_source.mat');
             %
-            % See also: bct.manifold.schema.manifold, bct.manifold.schema.normalize
+            % See also: bct.schema.manifold
             
             % Parse name-value pairs
             if mod(numel(varargin), 2) ~= 0
@@ -2024,125 +2076,92 @@ classdef Manifold < handle
                     'setAttributes requires name-value pairs.');
             end
             
-            % Get schema for metadata section
-            spec = bct.manifold.schema.manifold();
+            % Get canonical schema for validation
+            spec = bct.schema.manifold();
             
-            % Update Attributes fields with normalization
+            % Update Attributes fields (canonical schema uses simpler structure)
             for i = 1:2:numel(varargin)
                 fieldName = varargin{i};
                 value = varargin{i+1};
                 
-                % Validate field exists in schema
-                if ~isfield(spec.meta.fields, fieldName)
-                    warning('bct:Manifold:UnknownField', ...
-                        'Field "%s" is not defined in schema. Setting anyway.', fieldName);
-                    obj.Attributes.(fieldName) = value;
-                    continue;
+                % Check if field is defined in optional attributes
+                if isfield(spec.attributes.optional, fieldName)
+                    % Validate type if specified
+                    fieldSpec = spec.attributes.optional.(fieldName);
+                    if isfield(fieldSpec, 'type') && strcmp(fieldSpec.type, 'string')
+                        value = string(value);
+                    end
                 end
                 
-                % Get field spec and normalize value
-                fieldSpec = spec.meta.fields.(fieldName);
-                if isfield(fieldSpec, 'normalize') && isa(fieldSpec.normalize, 'function_handle')
-                    try
-                        normalizedValue = fieldSpec.normalize(value);
-                        obj.Attributes.(fieldName) = normalizedValue;
-                    catch ME
-                        warning('bct:Manifold:NormalizeFailed', ...
-                            'Failed to normalize field "%s": %s. Using raw value.', ...
-                            fieldName, ME.message);
-                        obj.Attributes.(fieldName) = value;
-                    end
-                else
-                    obj.Attributes.(fieldName) = value;
-                end
+                % Set the attribute value
+                obj.Attributes.(fieldName) = value;
             end
         end
     end
     
     methods (Static, Access = private)
         function attrs = buildDefaultAttributesStatic(obj)
-            %BUILDDEFAULTATTRIBUTESSTATIC Initialize Attributes with group and dataset metadata
+            %BUILDDEFAULTATTRIBUTESSTATIC Initialize Attributes using canonical schema
             %
             % Returns a struct with:
-            %   - Group-level manifold attributes (path, schema, ID, Metric, etc.)
+            %   - Group-level manifold attributes (path, schema, package, ID, Metric)
             %   - Dataset-level attributes for vertices, faces, edges
             %
-            % Provenance fields are left empty, rendering fields get defaults.
+            % Uses bct.schema.manifold as authoritative source.
             
-            % Get schema
-            spec = bct.manifold.schema.manifold();
+            % Get canonical schema
+            spec = bct.schema.manifold();
             
-            % Initialize attributes structure
-            attrs = struct();
+            % Initialize attributes structure with base group fields
+            attrs = bct.schema.group.make(...
+                'Path', '/manifold', ...
+                'Schema', 'bct.Manifold@1.1', ...
+                'Package', 'bct');
             
-            %% Group-level manifold attributes
-            attrs.path = '/manifold';
-            attrs.schema = 'bct.Manifold@1.1';
-            attrs.package = 'bct.Manifold';
+            % Generate unique ID for this manifold instance
+            attrs.ID = char(java.util.UUID.randomUUID());
             
-            % Apply defaults from schema meta fields
-            fieldNames = fieldnames(spec.meta.fields);
-            for i = 1:numel(fieldNames)
-                fieldName = fieldNames{i};
-                fieldSpec = spec.meta.fields.(fieldName);
-                
-                % Only set defaults for rendering/interoperability fields
-                % Leave provenance fields empty
-                provenanceFields = ["Name", "Source", "CreatedAt", "CreatedBy", "BctVersion", "GitCommit"];
-                
-                if isfield(fieldSpec, 'default') && ~ismember(fieldName, provenanceFields)
-                    attrs.(fieldName) = fieldSpec.default;
-                end
-            end
-            
-            % Generate unique ID for this manifold
-            attrs.ID = string(java.util.UUID.randomUUID());
-            
-            % Initialize metric provenance (all manifolds are in meters by default)
+            % Initialize metric provenance (all manifolds start in meters)
             attrs.Metric = struct( ...
-                'unit', "m", ...
-                'rescale', struct( ...
-                    'applied', false, ...
-                    'fromUnit', "", ...
-                    'factor', 1.0, ...
-                    'timestamp', "") );
+                'units', "m", ...
+                'scale', 1.0, ...
+                'rescalingHistory', struct.empty);
+            
+            % Set face winding (default CCW)
+            attrs.FaceWinding = 'CCW';
             
             %% Dataset-level attributes for vertices, faces, edges
-            % Vertices dataset attributes
-            attrs.vertices = struct();
-            attrs.vertices.attributes = struct( ...
-                'name', 'vertices', ...
-                'path', '/manifold/vertices', ...
-                'description', '3D vertex coordinates', ...
-                'shape', [size(obj.Vertices, 1), 3], ...
-                'dtype', 'double', ...
-                'units', attrs.Metric.unit, ...
-                'support', 'vertex' ...
-            );
+            % Use bct.schema.dataset.make for each array
             
-            % Faces dataset attributes
-            attrs.faces = struct();
-            attrs.faces.attributes = struct( ...
-                'name', 'faces', ...
-                'path', '/manifold/faces', ...
-                'description', 'Triangle face connectivity (1-indexed)', ...
-                'shape', [size(obj.Faces, 1), 3], ...
-                'dtype', 'uint32', ...
-                'indexBase', 1, ...
-                'support', 'face' ...
-            );
+            % Vertices dataset
+            verticesData = bct.schema.dataset.make(obj.Vertices, ...
+                'Name', 'vertices', ...
+                'Path', '/manifold/vertices', ...
+                'Description', '3D vertex coordinates', ...
+                'Units', char(attrs.Metric.units), ...
+                'Support', 'vertex', ...
+                'ComputedBy', 'bct.Manifold');
+            attrs.vertices = verticesData;
             
-            % Edges dataset attributes
-            attrs.edges = struct();
-            attrs.edges.attributes = struct( ...
-                'name', 'edges', ...
-                'path', '/manifold/edges', ...
-                'description', 'Unique edge connectivity (1-indexed)', ...
-                'shape', [size(obj.Edges, 1), 2], ...
-                'dtype', 'uint32', ...
-                'indexBase', 1, ...
-                'support', 'edge' ...
-            );
+            % Faces dataset
+            facesData = bct.schema.dataset.make(obj.Faces, ...
+                'Name', 'faces', ...
+                'Path', '/manifold/faces', ...
+                'Description', 'Triangle face connectivity (1-indexed)', ...
+                'Units', '1', ...
+                'Support', 'face', ...
+                'ComputedBy', 'bct.Manifold');
+            attrs.faces = facesData;
+            
+            % Edges dataset
+            edgesData = bct.schema.dataset.make(obj.Edges, ...
+                'Name', 'edges', ...
+                'Path', '/manifold/edges', ...
+                'Description', 'Unique edge connectivity (1-indexed)', ...
+                'Units', '1', ...
+                'Support', 'edge', ...
+                'ComputedBy', 'bct.manifold.topology.edges');
+            attrs.edges = edgesData;
         end
     end
     
