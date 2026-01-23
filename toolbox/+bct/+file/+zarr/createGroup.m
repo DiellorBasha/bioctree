@@ -40,7 +40,15 @@ end
 %% Create root if needed
 if ~isfolder(zarrPath)
     mkdir(zarrPath);
-    writeZgroupFile(zarrPath);
+end
+
+% Always ensure root .zgroup exists (for empty groupPath)
+if strlength(groupPath) == 0
+    zgroupFile = fullfile(zarrPath, '.zgroup');
+    if ~isfile(zgroupFile)
+        writeZgroupFile(zarrPath);
+    end
+    return;  % Done for root group
 end
 
 %% Create each group level
@@ -50,6 +58,11 @@ for i = 1:length(parts)
     
     if ~isfolder(currentPath)
         mkdir(currentPath);
+    end
+    
+    % Always ensure .zgroup exists
+    zgroupFile = fullfile(currentPath, '.zgroup');
+    if ~isfile(zgroupFile)
         writeZgroupFile(currentPath);
     end
 end

@@ -43,11 +43,16 @@ arguments
     options.Strict (1,1) logical = true
 end
 
-%% Compute eigenmodes
-[eigenvalues, eigenvectors] = bct.manifold.eigenmodes(M, options.NumModes);
+%% Get eigenmodes (from cache if available, otherwise compute)
+if M.hasCached('eigenmodes')
+    eigen = M.eigenmodes;
+else
+    eigen = M.eigenmodes(options.NumModes);
+end
 
-%% Convert to schema
-schema = bct.schema.eigenmodes(eigenvalues, eigenvectors);
+% Extract eigenvalues and eigenvectors from schema structure
+eigenvalues = eigen.eigenvalues.value;
+eigenvectors = eigen.eigenvectors.value;
 
 %% Write group and attributes
 bct.file.zarr.createGroup(zarrPath, 'eigenmodes');
@@ -57,8 +62,8 @@ groupAttrs.schema = 'bct.eigenmodes@1.1';
 groupAttrs.package = 'bct.manifold';
 groupAttrs.path = '/eigenmodes';
 groupAttrs.num_modes = options.NumModes;
-if isfield(schema, 'attributes') && isfield(schema.attributes, 'solver')
-    groupAttrs.solver = schema.attributes.solver;
+if isfield(eigen, 'attributes') && isfield(eigen.attributes, 'solver')
+    groupAttrs.solver = eigen.attributes.solver;
 end
 bct.file.zarr.writeAttrs(zarrPath, 'eigenmodes', groupAttrs);
 
@@ -121,14 +126,14 @@ function writeChunkedArray(zarrPath, arrayPath, data, chunkSize, overwrite)
     zarrMeta.shape = size(data);
     zarrMeta.chunks = chunkSize;
     zarrMeta.dtype = '<f8';  % float64, little-endian
-    zarrMeta.compressor = [];  % No compression
+    zarrMeta.compressor = missing;  % MATLAB missing becomes JSON null
     zarrMeta.fill_value = 0.0;
     zarrMeta.order = 'C';  % Row-major
-    zarrMeta.filters = [];
+    zarrMeta.filters = missing;  % MATLAB missing becomes JSON null
     
     % Write .zarray
     zarrayPath = fullfile(fullPath, '.zarray');
-    jsonStr = jsonencode(zarrMeta);
+    jsonStr = jsonencode(zarrMeta, 'ConvertInfAndNaN', false);
     fid = fopen(zarrayPath, 'w');
     if fid == -1
         error('Failed to create .zarray file');

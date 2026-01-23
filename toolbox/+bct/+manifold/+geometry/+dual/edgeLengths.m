@@ -66,12 +66,12 @@ if ~mesh.hasV
 end
 
 if nF == 0
-    edgeLengths = zeros(0, 1, options.precision);
     header = struct( ...
         'boundaryPolicy', options.boundaryPolicy, ...
         'circumcenterMethod', options.circumcenterMethod, ...
         'precision', options.precision, ...
         'numberOfBoundaryEdges', 0);
+    edgeLengths = zeros(0, 1, options.precision);
     return;
 end
 

@@ -185,6 +185,103 @@ classdef Manifold < handle
         % ===============================================================
         % REPRESENTATION PORTS (Graph)
         % ===============================================================
+        
+        function S = toStruct(obj)
+            %TOSTRUCT Convert Manifold to schema-compliant structure
+            %
+            % Syntax:
+            %   S = M.toStruct()
+            %
+            % Outputs:
+            %   S - Structure matching bct.schema.manifold:
+            %       .Attributes - Group metadata
+            %       .vertices   - [N×3 double] vertex coordinates
+            %       .faces      - [M×3 uint32] face connectivity
+            %       .edges      - [E×2 uint32] edge connectivity
+            %       .geometry   - Geometry subgroup (if cached)
+            %       .topology   - Topology subgroup (if cached)
+            %       .operators  - Operators subgroup (if cached)
+            %       .eigenmodes - Eigenmodes subgroup (if cached)
+            %
+            % Description:
+            %   Aggregates all data from the Manifold object into a single
+            %   structure that conforms to bct.schema.manifold. Only includes
+            %   cached subgroups (geometry, topology, operators, eigenmodes).
+            %   
+            %   This provides a simple interface for serialization - just call
+            %   toStruct() and pass the result to HDF5/Zarr writers.
+            %
+            % Examples:
+            %   % Basic usage
+            %   M = bct.Manifold(V, F);
+            %   S = M.toStruct();
+            %
+            %   % With cached data
+            %   M = bct.Manifold(V, F);
+            %   geom = M.geometry;
+            %   topo = M.topology;
+            %   S = M.toStruct();  % Includes geometry and topology
+            %
+            %   % Write to file
+            %   S = M.toStruct();
+            %   bct.file.h5.writeFromSchema('mesh.h5', S);
+            %
+            % See also: bct.schema.manifold, bct.file.h5.writeFromSchema
+            
+            % Initialize structure with core data
+            S = struct();
+            
+            % Add attributes
+            S.Attributes = obj.Attributes;
+            
+            % Add core arrays in schema format (value + attributes)
+            S.vertices = struct(...
+                'value', obj.Vertices, ...
+                'attributes', struct(...
+                    'dtype', 'double', ...
+                    'units', 'm', ...
+                    'support', 'vertex', ...
+                    'description', 'Vertex coordinates in 3D space'));
+            
+            S.faces = struct(...
+                'value', obj.Faces, ...
+                'attributes', struct(...
+                    'dtype', 'uint32', ...
+                    'units', '1', ...
+                    'support', 'face', ...
+                    'indexBase', 1, ...
+                    'description', 'Face connectivity (indices into vertices)'));
+            
+            S.edges = struct(...
+                'value', obj.Edges, ...
+                'attributes', struct(...
+                    'dtype', 'uint32', ...
+                    'units', '1', ...
+                    'support', 'edge', ...
+                    'indexBase', 1, ...
+                    'description', 'Edge connectivity (unique undirected edges)'));
+            
+            % Add cached subgroups if they exist
+            if obj.hasCached('geometry')
+                S.geometry = obj.geometry;
+            end
+            
+            if obj.hasCached('topology')
+                S.topology = obj.topology;
+            end
+            
+            if obj.hasCached('operators')
+                S.operators = obj.operators;
+            end
+            
+            if obj.hasCached('eigenmodes')
+                S.eigenmodes = obj.eigenmodes;
+            end
+        end
+
+        % ===============================================================
+        % REPRESENTATION PORTS (Graph)
+        % ===============================================================
 
         function ops = operators(obj, varargin)
             %OPERATORS Get or compute all differential operators (lazy creation with caching)
@@ -1127,6 +1224,7 @@ classdef Manifold < handle
             %   'boundaryPolicy'     - 'error' (default) for dual measures with boundaries
             %   'dualCellType'       - 'circumcentric' (default) for dual vertex areas
             %   'annotate'           - false (default) or true to wrap outputs as quantity structs
+            %   'includeDual'        - true (default) or false to skip dual geometry computation
             %   'Force'              - false (default) or true to force recomputation
             %
             % Outputs:
@@ -1178,6 +1276,7 @@ classdef Manifold < handle
             addParameter(p, 'boundaryPolicy', 'error', @(x) ischar(x) || isstring(x));
             addParameter(p, 'dualCellType', 'circumcentric', @(x) ischar(x) || isstring(x));
             addParameter(p, 'annotate', false, @islogical);
+            addParameter(p, 'includeDual', true, @islogical);  % Default to true for M.geometry()
             parse(p, varargin{:});
             
             force = p.Results.Force;
@@ -1194,7 +1293,8 @@ classdef Manifold < handle
                 'circumcenterMethod', p.Results.circumcenterMethod, ...
                 'boundaryPolicy', p.Results.boundaryPolicy, ...
                 'dualCellType', p.Results.dualCellType, ...
-                'annotate', p.Results.annotate);
+                'annotate', p.Results.annotate, ...
+                'includeDual', p.Results.includeDual);
             
             % Cache the result
             obj.Cache.geometry.data = geom;

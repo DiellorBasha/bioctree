@@ -1,11 +1,11 @@
-function [header, Curl] = curl(meshInput, varargin)
+function dataset = curl(meshInput, varargin)
 %CURL Construct DEC curl operator (edge 1-form -> face/vertex scalar)
 %
 % Syntax:
-%   [header, Curl] = bct.manifold.operator.curl(M)
-%   [header, Curl] = bct.manifold.operator.curl(M, 'route', 'primal')
-%   [header, Curl] = bct.manifold.operator.curl(M, 'route', 'dual')
-%   [header, Curl] = bct.manifold.operator.curl(V, F, ...)
+%   dataset = bct.manifold.operator.curl(M)
+%   dataset = bct.manifold.operator.curl(M, 'route', 'primal')
+%   dataset = bct.manifold.operator.curl(M, 'route', 'dual')
+%   dataset = bct.manifold.operator.curl(V, F, ...)
 %
 % Inputs:
 %   M       - bct.Manifold object
@@ -19,20 +19,18 @@ function [header, Curl] = curl(meshInput, varargin)
 %             'dual':   dual 1-form → primal 0-form (vertices)
 %
 % Outputs:
-%   header  - struct with metadata:
-%       .method                = "dec"
-%       .backend               = "declab"
-%       .route                 = "primal" | "dual"
-%       .composition           = operator composition string
-%       .inputSupport          = "edge"
-%       .inputValueType        = "primal1form" | "dual1form"
-%       .outputSupport         = "face" | "vertex"
-%       .outputValueType       = "scalar"
-%       .numVertices, .numEdges, .numFaces
-%
-%   Curl    - Sparse curl operator matrix:
-%             Primal route: [nF×nE] (faces × edges)
-%             Dual route:   [nV×nE] (vertices × edges)
+%   dataset - Schema-compliant structure:
+%       .value      - Sparse curl operator matrix
+%                     Primal route: [nF×nE] (faces × edges)
+%                     Dual route:   [nV×nE] (vertices × edges)
+%       .attributes - Metadata struct with fields:
+%           .name           = "curl"
+%           .route          = "primal" | "dual"
+%           .composition    = operator composition string
+%           .inputSupport   = "edge"
+%           .outputSupport  = "face" | "vertex"
+%           .outputValueType = "scalar"
+%           .computedBy     = "bct.manifold.operator.curl"
 %
 % Description:
 %   Implements DECLab's curl operator for 1-forms using two routes:
@@ -268,23 +266,8 @@ end
 % ----------------------------
 % Build header with metadata
 % ----------------------------
-header = struct();
-header.method = "dec";
-header.backend = "declab";
-header.route = route;
-header.composition = composition;
-
-header.inputSupport = "edge";
-header.inputValueType = inputValueType;
-
-header.outputSupport = outputSupport;
-header.outputValueType = "scalar";
-
-header.numVertices = numVertices;
-header.numEdges = numEdges;
-header.numFaces = numFaces;
-
 % Validate output dimensions
+% ----------------------------
 if strcmpi(route, "primal")
     if size(Curl, 1) ~= numFaces || size(Curl, 2) ~= numEdges
         error('bct:manifold:operator:curl:DimMismatch', ...
@@ -298,5 +281,32 @@ else
             numVertices, numEdges, size(Curl, 1), size(Curl, 2));
     end
 end
+
+% ----------------------------
+% Build schema-compliant dataset structure
+% ----------------------------
+dataset = struct();
+dataset.value = Curl;
+dataset.attributes = struct(...
+    'name', 'curl', ...
+    'path', '/operators/curl', ...
+    'description', sprintf('DEC curl operator (%s route)', route), ...
+    'shape', size(Curl), ...
+    'dtype', 'double', ...
+    'format', 'coo', ...
+    'nnz', nnz(Curl), ...
+    'symmetric', false, ...
+    'method', 'dec', ...
+    'backend', 'declab', ...
+    'route', char(route), ...
+    'composition', char(composition), ...
+    'inputSupport', 'edge', ...
+    'inputValueType', char(inputValueType), ...
+    'outputSupport', char(outputSupport), ...
+    'outputValueType', 'scalar', ...
+    'numVertices', numVertices, ...
+    'numEdges', numEdges, ...
+    'numFaces', numFaces, ...
+    'computedBy', 'bct.manifold.operator.curl');
 
 end

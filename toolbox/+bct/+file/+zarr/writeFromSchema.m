@@ -77,7 +77,8 @@ for i = 1:numel(fields)
         else
             % Subgroup: recurse
             subgroupPath = buildPath(groupPath, field);
-            writeFromSchema(zarrPath, value, subgroupPath, options);
+            bct.file.zarr.writeFromSchema(zarrPath, value, subgroupPath, ...
+                'Overwrite', options.Overwrite, 'Strict', options.Strict);
         end
     end
 end
@@ -135,10 +136,9 @@ function writeDataset(zarrPath, groupPath, fieldName, dataset, options)
     data = dataset.value;
     attrs = dataset.attributes;
     
-    % Handle empty data
+    % Handle empty data (e.g., dual geometry on meshes with boundaries)
     if isempty(data)
-        warning('bct:file:zarr:writeFromSchema:EmptyData', ...
-            'Dataset "%s" is empty, skipping.', arrayPath);
+        % Silently skip - this is expected for optional computations that failed
         return;
     end
     
@@ -149,9 +149,14 @@ function writeDataset(zarrPath, groupPath, fieldName, dataset, options)
     end
     
     % Convert indices if needed (1-based → 0-based)
-    if isfield(attrs, 'index_base')
-        if attrs.index_base == 0 && isinteger(data)
-            % Data should be 0-based, convert from MATLAB's 1-based
+    if isfield(attrs, 'indexBase')
+        if attrs.indexBase == 1 && isinteger(data)
+            % Data is 1-based (MATLAB), convert to 0-based for storage
+            data = data - 1;
+        end
+    elseif isfield(attrs, 'index_base')
+        if attrs.index_base == 1 && isinteger(data)
+            % Data is 1-based (MATLAB), convert to 0-based for storage
             data = data - 1;
         end
     end
@@ -222,13 +227,15 @@ end
 function dtype = determineDtype(attrs, data)
     % Check for explicit dtype in attributes
     if isfield(attrs, 'dtype')
-        dtype = attrs.dtype;
+        % Convert from Zarr dtype to MATLAB type
+        dtype = zarrDtypeToMatlab(attrs.dtype);
         return;
     end
     
     % Check for dtype_target (preferred for GPU)
     if isfield(attrs, 'dtype_target')
-        dtype = attrs.dtype_target;
+        % Convert from Zarr dtype to MATLAB type
+        dtype = zarrDtypeToMatlab(attrs.dtype_target);
         return;
     end
     
@@ -304,5 +311,58 @@ function attrs = flattenStruct(attrs, prefix, s)
         else
             attrs.(flatKey) = value;
         end
+    end
+end
+
+%% ========================================================================
+%% Helper: Convert Zarr dtype to MATLAB type
+%% ========================================================================
+function matlabType = zarrDtypeToMatlab(zarrDtype)
+    % Convert Zarr dtype string to MATLAB class name
+    % Handles both simple and endian-specific formats
+    
+    if isempty(zarrDtype)
+        matlabType = 'double';  % Default
+        return;
+    end
+    
+    % Strip endianness markers if present
+    zarrDtype = strrep(zarrDtype, '<', '');  % Little-endian
+    zarrDtype = strrep(zarrDtype, '>', '');  % Big-endian
+    zarrDtype = strrep(zarrDtype, '|', '');  % Not applicable
+    
+    % Map Zarr dtype to MATLAB type
+    switch zarrDtype
+        case {'float64', 'f8'}
+            matlabType = 'double';
+        case {'float32', 'f4'}
+            matlabType = 'single';
+        case {'int64', 'i8'}
+            matlabType = 'int64';
+        case {'int32', 'i4'}
+            matlabType = 'int32';
+        case {'int16', 'i2'}
+            matlabType = 'int16';
+        case {'int8', 'i1'}
+            matlabType = 'int8';
+        case {'uint64', 'u8'}
+            matlabType = 'uint64';
+        case {'uint32', 'u4'}
+            matlabType = 'uint32';
+        case {'uint16', 'u2'}
+            matlabType = 'uint16';
+        case {'uint8', 'u1'}
+            matlabType = 'uint8';
+        case {'b1', 'bool'}
+            matlabType = 'logical';
+        otherwise
+            % Try to use as-is if it looks like a MATLAB type
+            if ismember(zarrDtype, {'double', 'single', 'int64', 'int32', ...
+                                    'int16', 'int8', 'uint64', 'uint32', ...
+                                    'uint16', 'uint8', 'logical'})
+                matlabType = zarrDtype;
+            else
+                error('Unsupported Zarr dtype: %s', zarrDtype);
+            end
     end
 end

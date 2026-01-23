@@ -1,11 +1,11 @@
-function [header, Div] = divergence(meshInput, varargin)
+function dataset = divergence(meshInput, varargin)
 %DIVERGENCE Construct DEC divergence operator (edge 1-form -> vertex/face scalar)
 %
 % Syntax:
-%   [header, Div] = bct.manifold.operator.divergence(M)
-%   [header, Div] = bct.manifold.operator.divergence(M, 'route', 'primal')
-%   [header, Div] = bct.manifold.operator.divergence(M, 'route', 'dual')
-%   [header, Div] = bct.manifold.operator.divergence(V, F, ...)
+%   dataset = bct.manifold.operator.divergence(M)
+%   dataset = bct.manifold.operator.divergence(M, 'route', 'primal')
+%   dataset = bct.manifold.operator.divergence(M, 'route', 'dual')
+%   dataset = bct.manifold.operator.divergence(V, F, ...)
 %
 % Inputs:
 %   M       - bct.Manifold object
@@ -19,20 +19,18 @@ function [header, Div] = divergence(meshInput, varargin)
 %             'dual':   dual 1-form → dual 0-form (faces)
 %
 % Outputs:
-%   header  - struct with metadata:
-%       .method                = "dec"
-%       .backend               = "declab"
-%       .route                 = "primal" | "dual"
-%       .composition           = operator composition string
-%       .inputSupport          = "edge"
-%       .inputValueType        = "primal1form" | "dual1form"
-%       .outputSupport         = "vertex" | "face"
-%       .outputValueType       = "scalar"
-%       .numVertices, .numEdges, .numFaces
-%
-%   Div     - Sparse divergence operator matrix:
-%             Primal route: [nV×nE] (vertices × edges)
-%             Dual route:   [nF×nE] (faces × edges)
+%   dataset - Schema-compliant structure:
+%       .value      - Sparse divergence operator matrix
+%                     Primal route: [nV×nE] (vertices × edges)
+%                     Dual route:   [nF×nE] (faces × edges)
+%       .attributes - Metadata struct with fields:
+%           .name           = "divergence"
+%           .route          = "primal" | "dual"
+%           .composition    = operator composition string
+%           .inputSupport   = "edge"
+%           .outputSupport  = "vertex" | "face"
+%           .outputValueType = "scalar"
+%           .computedBy     = "bct.manifold.operator.divergence"
 %
 % Description:
 %   Implements DECLab's divergence operator for 1-forms using two routes:
@@ -260,25 +258,8 @@ else % dual route
 end
 
 % ----------------------------
-% Build header with metadata
-% ----------------------------
-header = struct();
-header.method = "dec";
-header.backend = "declab";
-header.route = route;
-header.composition = composition;
-
-header.inputSupport = "edge";
-header.inputValueType = inputValueType;
-
-header.outputSupport = outputSupport;
-header.outputValueType = "scalar";
-
-header.numVertices = numVertices;
-header.numEdges = numEdges;
-header.numFaces = numFaces;
-
 % Validate output dimensions
+% ----------------------------
 if strcmpi(route, "primal")
     if size(Div, 1) ~= numVertices || size(Div, 2) ~= numEdges
         error('bct:manifold:operator:divergence:DimMismatch', ...
@@ -292,5 +273,32 @@ else
             numFaces, numEdges, size(Div, 1), size(Div, 2));
     end
 end
+
+% ----------------------------
+% Build schema-compliant dataset structure
+% ----------------------------
+dataset = struct();
+dataset.value = Div;
+dataset.attributes = struct(...
+    'name', 'divergence', ...
+    'path', '/operators/divergence', ...
+    'description', sprintf('DEC divergence operator (%s route)', route), ...
+    'shape', size(Div), ...
+    'dtype', 'double', ...
+    'format', 'coo', ...
+    'nnz', nnz(Div), ...
+    'symmetric', false, ...
+    'method', 'dec', ...
+    'backend', 'declab', ...
+    'route', char(route), ...
+    'composition', char(composition), ...
+    'inputSupport', 'edge', ...
+    'inputValueType', char(inputValueType), ...
+    'outputSupport', char(outputSupport), ...
+    'outputValueType', 'scalar', ...
+    'numVertices', numVertices, ...
+    'numEdges', numEdges, ...
+    'numFaces', numFaces, ...
+    'computedBy', 'bct.manifold.operator.divergence');
 
 end

@@ -1,10 +1,10 @@
-function [header, grad] = gradient(meshInput, varargin)
+function dataset = gradient(meshInput, varargin)
 %GRADIENT Construct DEC gradient operator (vertex scalar -> face vector)
 %
 % Syntax:
-%   [header, grad] = bct.manifold.operator.gradient(M)
-%   [header, grad] = bct.manifold.operator.gradient(V, F)
-%   [header, grad] = bct.manifold.operator.gradient(d0, sharpPD)
+%   dataset = bct.manifold.operator.gradient(M)
+%   dataset = bct.manifold.operator.gradient(V, F)
+%   dataset = bct.manifold.operator.gradient(d0, sharpPD)
 %
 % Inputs:
 %   M       - bct.Manifold object
@@ -16,21 +16,24 @@ function [header, grad] = gradient(meshInput, varargin)
 %   sharpPD - [(3*nF)×nE] sharp operator mapping primal 1-forms to stacked face vectors
 %
 % Outputs:
-%   header  - struct with metadata:
-%       .method                    = "dec"
-%       .backend                   = "declab" (if constructed via bct.manifold.operator.dec)
-%       .composition               = "sharpPD * d0"
-%       .inputSupport              = "vertex"
-%       .inputValueType            = "scalar"
-%       .outputSupport             = "face"
-%       .outputValueType           = "vector3"
-%       .outputVectorDim           = 3
-%       .outputLayout              = "as-produced-by-sharpPD" (stacking not standardized yet)
-%       .requiresTangentProjection = true (to match DECLab gradient semantics via Operator.apply later)
-%       .numVertices, .numEdges, .numFaces (when inferable)
-%
-%   grad    - [(3*nF)×nV] sparse matrix:
-%             g = grad * s produces a stacked 3D vector per face (one 3-vector per face).
+%   dataset - Schema-compliant structure:
+%       .value      - [(3*nF)×nV] sparse gradient operator matrix
+%       .attributes - Metadata struct with fields:
+%           .name                    = "gradient"
+%           .description             = "DEC gradient operator"
+%           .shape                   = [3*nF, nV]
+%           .dtype                   = "double"
+%           .format                  = "coo"
+%           .nnz                     = number of non-zeros
+%           .method                  = "dec"
+%           .backend                 = "declab"
+%           .composition             = "sharpPD * d0"
+%           .inputSupport            = "vertex"
+%           .inputValueType          = "scalar"
+%           .outputSupport           = "face"
+%           .outputValueType         = "tangent2"
+%           .requiresTangentProjection = true
+%           .computedBy              = "bct.manifold.operator.gradient"
 %
 % Description:
 %   Matches the *linear* portion of DECLab's gradient implementation:
@@ -180,25 +183,30 @@ end
 grad = sharpPD * d0;  % (3*nF) x nV
 
 % ----------------------------
-% Build header
+% Build schema-compliant dataset structure
 % ----------------------------
-header = struct();
-header.method = "dec";
-header.backend = "declab";
-header.composition = "sharpPD * d0";
-
-header.inputSupport   = "vertex";
-header.inputValueType = "scalar";
-
-header.outputSupport   = "face";
-header.outputValueType = "vector3";
-header.outputVectorDim = 3;
-
-header.outputLayout = "as-produced-by-sharpPD";  % stacking not standardized yet
-header.requiresTangentProjection = true;         % enforce later in bct.Operator.apply
-
-header.numVertices = numVertices;
-header.numEdges = numEdges;
-header.numFaces = numFaces;
+dataset = struct();
+dataset.value = grad;
+dataset.attributes = struct(...
+    'name', 'gradient', ...
+    'path', '/operators/gradient', ...
+    'description', 'DEC gradient operator (vertex scalar → face tangent vector)', ...
+    'shape', size(grad), ...
+    'dtype', 'double', ...
+    'format', 'coo', ...
+    'nnz', nnz(grad), ...
+    'symmetric', false, ...
+    'method', 'dec', ...
+    'backend', 'declab', ...
+    'composition', 'sharpPD * d0', ...
+    'inputSupport', 'vertex', ...
+    'inputValueType', 'scalar', ...
+    'outputSupport', 'face', ...
+    'outputValueType', 'tangent2', ...
+    'requiresTangentProjection', true, ...
+    'numVertices', numVertices, ...
+    'numEdges', numEdges, ...
+    'numFaces', numFaces, ...
+    'computedBy', 'bct.manifold.operator.gradient');
 
 end

@@ -95,14 +95,14 @@ try
     zarrMeta.shape = size(data);
     zarrMeta.chunks = chunkSize;
     zarrMeta.dtype = zarrDtype(dtype);
-    zarrMeta.compressor = [];  % No compression
+    zarrMeta.compressor = missing;  % MATLAB missing becomes JSON null
     zarrMeta.fill_value = options.FillValue;
     zarrMeta.order = 'C';  % Row-major (GPU-friendly)
-    zarrMeta.filters = [];
+    zarrMeta.filters = missing;  % MATLAB missing becomes JSON null
     
     % Write .zarray
     zarrayPath = fullfile(fullPath, '.zarray');
-    jsonStr = jsonencode(zarrMeta);
+    jsonStr = jsonencode(zarrMeta, 'ConvertInfAndNaN', false);
     fid = fopen(zarrayPath, 'w');
     if fid == -1
         error('Failed to create .zarray file');
@@ -156,6 +156,8 @@ switch matlabType
         dtype = '<f8';  % 64-bit float, little-endian
     case 'single'
         dtype = '<f4';  % 32-bit float, little-endian (GPU-friendly)
+    case 'logical'
+        dtype = '|b1';  % Boolean, 1 byte
     case 'uint32'
         dtype = '<u4';  % 32-bit unsigned int, little-endian
     case 'uint64'

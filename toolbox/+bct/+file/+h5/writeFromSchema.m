@@ -259,6 +259,12 @@ function writeDataset(file, dataset, overwrite)
 data = dataset.value;
 attrs = dataset.attributes;
 
+% Handle empty data (e.g., dual geometry on meshes with boundaries)
+if isempty(data)
+    % Silently skip - this is expected for optional computations that failed
+    return;
+end
+
 % Get dataset path
 if ~isfield(attrs, 'path')
     error('bct:file:h5:writeFromSchema:MissingDatasetPath', ...
