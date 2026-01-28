@@ -101,23 +101,30 @@ end
 nE = size(he.edgeList, 1);
 dualEdgeLengths = zeros(nE, 1);
 
-% For each edge, get the two incident faces via halfedge structure
-% halfedge h has face he.face(h)
-% twin halfedge has face he.face(he.twin(h))
-% Edge i corresponds to halfedges in the first nE entries of halfedge array
+% Build reverse mapping from edge ID to halfedges (O(n) construction)
+% For each halfedge, we know its edge ID from he.edge
+% We store the first two halfedges per edge (should be exactly 2 for interior edges)
+nH = length(he.edge);
+edgeToHalfedge = zeros(nE, 2, 'uint32');  % [nE×2] first two halfedges per edge
+edgeHalfedgeCount = zeros(nE, 1, 'uint8');  % Count of halfedges per edge
 
+for h = 1:nH
+    edgeID = he.edge(h);
+    count = edgeHalfedgeCount(edgeID) + 1;
+    if count <= 2
+        edgeToHalfedge(edgeID, count) = h;
+    end
+    edgeHalfedgeCount(edgeID) = count;
+end
+
+% Compute dual edge lengths using the precomputed mapping
 for i = 1:nE
-    % Find a halfedge for this edge
-    % Edges are indexed in the stacked order, but we need to map to halfedge ID
-    % The halfedge structure has he.edge mapping halfedge -> edge ID
-    % We need the reverse: find halfedges with he.edge == i
+    numHalfedges = edgeHalfedgeCount(i);
     
-    halfedgesForEdge = find(he.edge == i);
-    
-    if length(halfedgesForEdge) == 2
+    if numHalfedges == 2
         % Interior edge - two incident faces
-        h1 = halfedgesForEdge(1);
-        h2 = halfedgesForEdge(2);
+        h1 = edgeToHalfedge(i, 1);
+        h2 = edgeToHalfedge(i, 2);
         
         face1 = he.face(h1);
         face2 = he.face(h2);
@@ -128,14 +135,14 @@ for i = 1:nE
         
         dualEdgeLengths(i) = norm(c2 - c1);
         
-    elseif length(halfedgesForEdge) == 1
+    elseif numHalfedges == 1
         % Boundary edge - should have been caught earlier
         % Set to NaN for now (should not reach here with error policy)
         dualEdgeLengths(i) = nan;
     else
         % Non-manifold or error
         error('bct:manifold:geometry:dualEdgeLengths:InvalidTopology', ...
-            'Edge %d has unexpected number of halfedges: %d', i, length(halfedgesForEdge));
+            'Edge %d has unexpected number of halfedges: %d', i, numHalfedges);
     end
 end
 

@@ -76,12 +76,14 @@ else
 end
 
 % Guardrail: prevent double-rescaling
-if M.Header.Metric.rescale.applied && ~options.Force
+% Check if rescaling history exists
+if isfield(M.Attributes, 'Metric') && ~isempty(M.Attributes.Metric.rescalingHistory) && ~options.Force
+    lastRescale = M.Attributes.Metric.rescalingHistory(end);
     error('bct:manifold:metric:DoubleRescale', ...
         ['Rescaling has already been applied (from "%s" with factor %.2e). ' ...
          'This likely indicates an attempt to rescale twice, which would corrupt the geometry. ' ...
          'If you are certain you want to rescale again, use ''Force'', true.'], ...
-        M.Header.Metric.rescale.fromUnit, M.Header.Metric.rescale.factor);
+        lastRescale.fromUnit, lastRescale.factor);
 end
 
 % Use surfaceMesh.scale() for actual scaling
@@ -89,6 +91,7 @@ mesh = surfaceMesh(M.Vertices, M.Faces);
 scale(mesh, factor);  % Modifies mesh in-place
 
 % Create new Manifold with scaled vertices
+% The new Manifold is automatically initialized in meters (default)
 M = bct.Manifold(mesh.Vertices, mesh.Faces);
 
 end

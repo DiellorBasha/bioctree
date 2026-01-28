@@ -62,21 +62,41 @@ end
 badInteriorEdgeIdx = [];
 badFacePairs = [];
 
+% Build reverse mapping from canonical edge index to occurrences (O(n) construction)
+% This avoids O(n²) complexity from repeated find() calls
+nDE = length(ic);
+maxMultiplicity = max(multiplicity);
+edgeToOccurrence = zeros(length(multiplicity), maxMultiplicity, 'uint32');
+edgeOccurrenceCount = zeros(length(multiplicity), 1, 'uint8');
+
+for idx = 1:nDE
+    eIdx = ic(idx);
+    count = edgeOccurrenceCount(eIdx) + 1;
+    if count <= maxMultiplicity
+        edgeToOccurrence(eIdx, count) = idx;
+    end
+    edgeOccurrenceCount(eIdx) = count;
+end
+
+% Now check each interior edge using the precomputed mapping
 for i = 1:length(interiorEdgeIdx)
     eIdx = interiorEdgeIdx(i);
     
-    % Find the two directed face-edge occurrences for this canonical edge
-    occurrenceIdx = find(ic == eIdx);
+    % Get the two directed face-edge occurrences from precomputed mapping
+    numOccurrences = edgeOccurrenceCount(eIdx);
     
-    if length(occurrenceIdx) ~= 2
+    if numOccurrences ~= 2
         error('bct:manifold:health:InconsistentMultiplicity', ...
             'Interior edge %d has multiplicity 2 but found %d occurrences', ...
-            eIdx, length(occurrenceIdx));
+            eIdx, numOccurrences);
     end
     
+    occurrenceIdx1 = edgeToOccurrence(eIdx, 1);
+    occurrenceIdx2 = edgeToOccurrence(eIdx, 2);
+    
     % Get the two directed edges
-    dEdge1 = dE(occurrenceIdx(1), :);
-    dEdge2 = dE(occurrenceIdx(2), :);
+    dEdge1 = dE(occurrenceIdx1, :);
+    dEdge2 = dE(occurrenceIdx2, :);
     
     % Check if they are identical (both same direction)
     % If consistent orientation, they should be opposite: [u v] and [v u]
@@ -85,8 +105,8 @@ for i = 1:length(interiorEdgeIdx)
         badInteriorEdgeIdx(end+1) = eIdx;
         
         % Identify the two faces
-        face1 = mod(occurrenceIdx(1)-1, nF) + 1;
-        face2 = mod(occurrenceIdx(2)-1, nF) + 1;
+        face1 = mod(occurrenceIdx1-1, nF) + 1;
+        face2 = mod(occurrenceIdx2-1, nF) + 1;
         badFacePairs(end+1, :) = [face1 face2];
     end
 end
