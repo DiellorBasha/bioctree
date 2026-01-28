@@ -35,15 +35,12 @@ arguments
     options.Strict (1,1) logical = true
 end
 
-%% Compute topology
-topo = bct.manifold.topology(M);
-
-%% Convert to schema
-schema = bct.schema.topology(topo);
+%% Get topology (from cache if available)
+topo = M.topology;
 
 %% Write using schema engine
 try
-    bct.file.zarr.writeFromSchema(zarrPath, schema, 'topology', ...
+    bct.file.zarr.writeFromSchema(zarrPath, topo, 'topology', ...
         'Overwrite', options.Overwrite, 'Strict', options.Strict);
 catch ME
     error('bct:file:write:manifold:zarr:topology:WriteFailed', ...

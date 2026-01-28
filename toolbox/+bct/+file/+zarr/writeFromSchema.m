@@ -164,6 +164,11 @@ function writeDataset(zarrPath, groupPath, fieldName, dataset, options)
     % Determine datatype
     dtype = determineDtype(attrs, data);
     
+    % Convert data to target dtype if needed (e.g., double → single for Float32 export)
+    if ~strcmp(class(data), dtype)
+        data = cast(data, dtype);
+    end
+    
     % Write array
     try
         bct.file.zarr.writeArray(zarrPath, arrayPath, data, ...

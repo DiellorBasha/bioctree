@@ -35,15 +35,12 @@ arguments
     options.Strict (1,1) logical = true
 end
 
-%% Compute operators
-ops = bct.manifold.operators(M);
-
-%% Convert to schema
-schema = bct.schema.operators(ops);
+%% Get operators (from cache if available)
+ops = M.operators;
 
 %% Write using schema engine
 try
-    bct.file.zarr.writeFromSchema(zarrPath, schema, 'operators', ...
+    bct.file.zarr.writeFromSchema(zarrPath, ops, 'operators', ...
         'Overwrite', options.Overwrite, 'Strict', options.Strict);
 catch ME
     error('bct:file:write:manifold:zarr:operators:WriteFailed', ...

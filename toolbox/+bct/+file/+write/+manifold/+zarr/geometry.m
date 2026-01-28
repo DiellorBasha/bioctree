@@ -34,15 +34,12 @@ arguments
     options.Strict (1,1) logical = true
 end
 
-%% Compute geometry
-geom = bct.manifold.geometry(M);
-
-%% Convert to schema
-schema = bct.schema.geometry(geom);
+%% Get geometry (from cache if available)
+geom = M.geometry;
 
 %% Write using schema engine
 try
-    bct.file.zarr.writeFromSchema(zarrPath, schema, 'geometry', ...
+    bct.file.zarr.writeFromSchema(zarrPath, geom, 'geometry', ...
         'Overwrite', options.Overwrite, 'Strict', options.Strict);
 catch ME
     error('bct:file:write:manifold:zarr:geometry:WriteFailed', ...
