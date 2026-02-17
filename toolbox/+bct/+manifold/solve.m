@@ -1,14 +1,32 @@
-function solvers = solve()
-%BCT.MANIFOLD.SOLVE  Access solvers for differential equations on manifolds
+function solvers = solve(varargin)
+%BCT.MANIFOLD.SOLVE  Build or access solvers for differential equations on manifolds
 %
 % Syntax:
-%   solvers = bct.manifold.solve()
+%   solvers = bct.manifold.solve()           % Get function handles only
+%   solvers = bct.manifold.solve(M)          % Build all solvers for Manifold M
+%   solvers = bct.manifold.solve(M, Name, Value)
+%
+% Inputs:
+%   M - bct.Manifold object (optional)
+%
+% Name-Value Arguments (when M is provided):
+%   't_heat'         - Heat time for heat/heatDistance solvers (default: auto)
+%   'pinnedVertex'   - Vertex to pin in Poisson solver (default: 1)
+%   'alpha'          - Regularization for screened Poisson (default: 0.01)
+%   'method'         - Poisson method: 'pinned' or 'screened' (default: 'pinned')
 %
 % Outputs:
-%   solvers - Structure containing solver constructors:
-%     .poisson      - Function handle to bct.manifold.solve.poisson
-%     .heat         - Function handle to bct.manifold.solve.heat
-%     .heatDistance - Function handle to bct.manifold.solve.heatDistance
+%   solvers - Structure containing:
+%     Without M (function handles only):
+%       .poisson      - Function handle to bct.manifold.solve.poisson
+%       .heat         - Function handle to bct.manifold.solve.heat
+%       .heatDistance - Function handle to bct.manifold.solve.heatDistance
+%     
+%     With M (actual solver instances):
+%       .attributes   - Group-level metadata
+%       .poisson      - Cached Poisson solver instance
+%       .heat         - Cached heat solver instance
+%       .heatDistance - Cached heat distance solver instance
 %
 % Description:
 %   Aggregator function providing access to all differential equation
@@ -86,20 +104,20 @@ function solvers = solve()
 %   - helmholtz:  (Δ + k²)φ = f for wave equations
 %
 % Examples:
-%   % Get solver structure
+%   % Get solver function handles only
 %   solvers = bct.manifold.solve();
 %   
-%   % Poisson solver
-%   poisson = solvers.poisson(M);
-%   phi = poisson.value(rhs);
+%   % Build all solvers for a manifold
+%   M = bct.Manifold(V, F);
+%   solvers = bct.manifold.solve(M);
 %   
-%   % Heat solver
-%   heat = solvers.heat(M);
-%   u = heat.value(100);  % Heat diffusion from vertex 100
+%   % Use cached solvers
+%   phi = solvers.poisson.value(rhs);
+%   u = solvers.heat.value(100);
+%   dist = solvers.heatDistance.value(100);
 %   
-%   % Geodesic distance solver
-%   distSolver = solvers.heatDistance(M);
-%   phi = distSolver.value(100);  % Distance from vertex 100
+%   % Build with custom parameters
+%   solvers = bct.manifold.solve(M, 't_heat', 1.0, 'pinnedVertex', 100);
 %   
 %   % Direct call (bypass aggregator)
 %   solver = bct.manifold.solve.poisson(M);
@@ -109,9 +127,72 @@ function solvers = solve()
 % See also: bct.manifold.solve.poisson, bct.manifold.solve.heat,
 %           bct.manifold.solve.heatDistance
 
-% Build solver structure
-solvers.poisson = @bct.manifold.solve.poisson;
-solvers.heat = @bct.manifold.solve.heat;
-solvers.heatDistance = @bct.manifold.solve.heatDistance;
+% Parse inputs
+p = inputParser;
+p.FunctionName = 'bct.manifold.solve';
+
+% Check if first argument is Manifold
+if nargin == 0 || ~isa(varargin{1}, 'bct.Manifold')
+    % No Manifold provided - return function handles only
+    solvers = struct();
+    solvers.poisson = @bct.manifold.solve.poisson;
+    solvers.heat = @bct.manifold.solve.heat;
+    solvers.heatDistance = @bct.manifold.solve.heatDistance;
+    return;
+end
+
+% Manifold provided - build actual solvers
+addRequired(p, 'M', @(x) isa(x, 'bct.Manifold'));
+addParameter(p, 't_heat', [], @isnumeric);
+addParameter(p, 'pinnedVertex', 1, @isnumeric);
+addParameter(p, 'alpha', 0.01, @isnumeric);
+addParameter(p, 'method', 'pinned', @(x) ischar(x) || isstring(x));
+parse(p, varargin{:});
+
+M = p.Results.M;
+t_heat = p.Results.t_heat;
+pinnedVertex = p.Results.pinnedVertex;
+alpha = p.Results.alpha;
+method = string(p.Results.method);
+
+% Initialize output structure
+solvers = struct();
+
+% Group-level attributes
+solvers.attributes = struct();
+solvers.attributes.schema = 'bct.manifold.solve@1.0.0';
+solvers.attributes.package = 'bct.manifold.solve';
+solvers.attributes.t_heat = t_heat;
+solvers.attributes.pinnedVertex = pinnedVertex;
+solvers.attributes.method = char(method);
+solvers.attributes.alpha = alpha;
+solvers.attributes.computed_utc = char(datetime('now', 'TimeZone', 'UTC', ...
+    'Format', 'yyyy-MM-dd''T''HH:mm:ss''Z'''));
+
+% Build Poisson solver
+solvers.poisson = bct.manifold.solve.poisson(M, ...
+    'method', method, ...
+    'pinnedVertex', pinnedVertex, ...
+    'alpha', alpha);
+
+% Build heat solver
+if isempty(t_heat)
+    solvers.heat = bct.manifold.solve.heat(M);
+else
+    % Get heat operator with custom t_heat
+    heatOp = bct.manifold.operator.heat(M, 't_heat', t_heat);
+    ops = M.operators();
+    solvers.heat = bct.manifold.solve.heat(heatOp.value, ops.mass.value);
+end
+
+% Build heat distance solver
+if isempty(t_heat)
+    solvers.heatDistance = bct.manifold.solve.heatDistance(M, ...
+        'pinnedVertex', pinnedVertex);
+else
+    solvers.heatDistance = bct.manifold.solve.heatDistance(M, ...
+        't_heat', t_heat, ...
+        'pinnedVertex', pinnedVertex);
+end
 
 end

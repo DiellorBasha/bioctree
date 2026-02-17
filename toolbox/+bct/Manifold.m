@@ -133,7 +133,8 @@ classdef Manifold < handle
                 'halfedge', struct('data', struct(), 'meta', struct()), ...
                 'operators', struct('data', struct(), 'meta', struct()), ...
                 'eigenmodes', struct('data', struct(), 'meta', struct()), ...
-                'health', struct('data', struct(), 'meta', struct()));
+                'health', struct('data', struct(), 'meta', struct()), ...
+                'solvers', struct('data', struct(), 'meta', struct()));
         end
 
         % ===============================================================
@@ -375,6 +376,179 @@ classdef Manifold < handle
             obj.Cache.operators.meta.stiffnessVariant = string(p.Results.StiffnessVariant);
             obj.Cache.operators.meta.stiffnessSign = string(p.Results.StiffnessSign);
             obj.Cache.operators.meta.symmetrize = p.Results.Symmetrize;
+        end
+        
+        % ===============================================================
+        % SOLVER METHODS
+        % ===============================================================
+        
+        function solvers = solvers(obj, varargin)
+            %SOLVERS Get or compute all differential equation solvers (lazy creation with caching)
+            %
+            % Syntax:
+            %   solvers = M.solvers()
+            %   solvers = M.solvers(Name, Value)
+            %
+            % Optional Parameters:
+            %   't_heat'       - Heat time for heat/heatDistance solvers (default: auto)
+            %   'pinnedVertex' - Vertex to pin in Poisson solver (default: 1)
+            %   'alpha'        - Regularization for screened Poisson (default: 0.01)
+            %   'method'       - Poisson method: 'pinned' or 'screened' (default: 'pinned')
+            %   'Force'        - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   solvers - Structure with fields:
+            %     .attributes   - Group-level metadata
+            %     .poisson      - Cached Poisson solver instance
+            %     .heat         - Cached heat solver instance
+            %     .heatDistance - Cached heat distance solver instance
+            %
+            % Description:
+            %   Returns cached solver structure if available, or computes
+            %   using bct.manifold.solve() with specified parameters.
+            %   Result is cached for future calls.
+            %
+            %   Each solver has .value() method for solving and .attributes
+            %   for metadata.
+            %
+            % Examples:
+            %   % Get cached or compute with defaults
+            %   solvers = M.solvers();
+            %   phi = solvers.poisson.value(rhs);
+            %   u = solvers.heat.value(100);
+            %   dist = solvers.heatDistance.value(100);
+            %
+            %   % Compute with custom parameters (updates cache)
+            %   solvers = M.solvers('t_heat', 1.0, 'pinnedVertex', 100);
+            %
+            %   % Force recomputation
+            %   solvers = M.solvers('Force', true);
+            %
+            % See also: bct.manifold.solve, poissonSolver, heatSolver, heatDistanceSolver
+            
+            % Parse inputs
+            p = inputParser;
+            p.addParameter('Force', false, @islogical);
+            p.addParameter('t_heat', [], @isnumeric);
+            p.addParameter('pinnedVertex', 1, @isnumeric);
+            p.addParameter('alpha', 0.01, @isnumeric);
+            p.addParameter('method', 'pinned', @(x) ischar(x) || isstring(x));
+            p.parse(varargin{:});
+            
+            force = p.Results.Force;
+            
+            % Check if we have cached solvers and not forcing recomputation
+            if ~force && ~isempty(fieldnames(obj.Cache.solvers.data))
+                cachedSolvers = obj.Cache.solvers.data;
+                % Simple validation: check if cache has required fields
+                if isfield(cachedSolvers, 'poisson') && ...
+                   isfield(cachedSolvers, 'heat') && ...
+                   isfield(cachedSolvers, 'heatDistance')
+                    solvers = cachedSolvers;
+                    return;
+                end
+            end
+            
+            % Compute all solvers using bct.manifold.solve
+            solvers = bct.manifold.solve(obj, ...
+                't_heat', p.Results.t_heat, ...
+                'pinnedVertex', p.Results.pinnedVertex, ...
+                'alpha', p.Results.alpha, ...
+                'method', p.Results.method);
+            
+            % Cache the result
+            obj.Cache.solvers.data = solvers;
+            obj.Cache.solvers.meta.computed = datetime('now');
+            obj.Cache.solvers.meta.t_heat = p.Results.t_heat;
+            obj.Cache.solvers.meta.pinnedVertex = p.Results.pinnedVertex;
+            obj.Cache.solvers.meta.alpha = p.Results.alpha;
+            obj.Cache.solvers.meta.method = string(p.Results.method);
+        end
+        
+        function solver = poissonSolver(obj, varargin)
+            %POISSONSOLVER Get or compute Poisson solver
+            %
+            % Syntax:
+            %   solver = M.poissonSolver()
+            %   solver = M.poissonSolver(Name, Value)
+            %
+            % Optional Parameters:
+            %   'method'       - 'pinned' (default) or 'screened'
+            %   'pinnedVertex' - Vertex to pin (default: 1)
+            %   'alpha'        - Regularization parameter (default: 0.01)
+            %   'Force'        - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   solver - Poisson solver instance with:
+            %     .value(rhs)   - Solve Δφ = rhs
+            %     .attributes   - Solver metadata
+            %
+            % Example:
+            %   solver = M.poissonSolver();
+            %   phi = solver.value(rhs);
+            %
+            % See also: solvers, heatSolver, heatDistanceSolver
+            
+            % Get all solvers (uses cache)
+            allSolvers = obj.solvers(varargin{:});
+            solver = allSolvers.poisson;
+        end
+        
+        function solver = heatSolver(obj, varargin)
+            %HEATSOLVER Get or compute heat diffusion solver
+            %
+            % Syntax:
+            %   solver = M.heatSolver()
+            %   solver = M.heatSolver(Name, Value)
+            %
+            % Optional Parameters:
+            %   't_heat' - Heat diffusion time (default: auto)
+            %   'Force'  - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   solver - Heat solver instance with:
+            %     .value(seed)  - Solve heat equation from seed vertex
+            %     .attributes   - Solver metadata
+            %
+            % Example:
+            %   solver = M.heatSolver();
+            %   u = solver.value(100);  % Heat from vertex 100
+            %
+            % See also: solvers, poissonSolver, heatDistanceSolver
+            
+            % Get all solvers (uses cache)
+            allSolvers = obj.solvers(varargin{:});
+            solver = allSolvers.heat;
+        end
+        
+        function solver = heatDistanceSolver(obj, varargin)
+            %HEATDISTANCESOLVER Get or compute heat-based geodesic distance solver
+            %
+            % Syntax:
+            %   solver = M.heatDistanceSolver()
+            %   solver = M.heatDistanceSolver(Name, Value)
+            %
+            % Optional Parameters:
+            %   't_heat'       - Heat diffusion time (default: auto)
+            %   'pinnedVertex' - Vertex to pin in Poisson solve (default: 1)
+            %   'Force'        - false (default) or true to force recomputation
+            %
+            % Outputs:
+            %   solver - Heat distance solver instance with:
+            %     .value(seed)     - Compute geodesic distances from seed
+            %     .value(seeds)    - Compute distances from multiple seeds
+            %     .attributes      - Solver metadata
+            %
+            % Example:
+            %   solver = M.heatDistanceSolver();
+            %   phi = solver.value(100);  % Distances from vertex 100
+            %   PHI = solver.value([100, 200, 300]);  % Multiple seeds
+            %
+            % See also: solvers, poissonSolver, heatSolver
+            
+            % Get all solvers (uses cache)
+            allSolvers = obj.solvers(varargin{:});
+            solver = allSolvers.heatDistance;
         end
         
         % ===============================================================
@@ -815,6 +989,7 @@ classdef Manifold < handle
             %   - geometry: edge lengths, face areas, dual areas, centroids, etc.
             %   - operators: mass, stiffness, Laplacians, DEC operators
             %   - eigenmodes: spectral decompositions of metric-dependent operators
+            %   - solvers: cached factorizations (Poisson, heat, etc.)
             %
             %   Does NOT invalidate:
             %   - topology: adjacency, edges, halfedge (combinatorial, scale-invariant)
@@ -833,6 +1008,10 @@ classdef Manifold < handle
             % Clear spectral caches
             obj.Cache.eigenmodes.data = struct();
             obj.Cache.eigenmodes.meta = struct();
+            
+            % Clear solver caches
+            obj.Cache.solvers.data = struct();
+            obj.Cache.solvers.meta = struct();
             
             % Topology remains valid (combinatorial structure)
             % Health will be recomputed on demand
@@ -1230,8 +1409,8 @@ classdef Manifold < handle
             % Outputs:
             %   geom - Structure matching bct.manifold.geometry.schema:
             %     .attributes - Group-level metadata (computation options)
-            %     .face       - Face geometry (7 datasets: areas, centroids, circumcenters, 
-            %                   normals, cotan, tangent1, tangent2; each with .value and .attributes)
+            %     .face       - Face geometry (8 datasets: areas, centroids, circumcenters, 
+            %                   normals, cotan, tangent1, tangent2, angleDefect; each with .value and .attributes)
             %     .vertex     - Vertex geometry (3 datasets: normals, tangent1, tangent2;
             %                   each with .value and .attributes)
             %     .edge       - Edge geometry (3 datasets: lengths, weights_cotangent, 
