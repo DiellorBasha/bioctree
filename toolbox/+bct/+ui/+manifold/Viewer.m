@@ -189,18 +189,26 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             end
         end
         
-        function setScalar(comp, scalarData)
+        function setScalar(comp, scalarData, options)
             % setScalar - Map scalar data to vertex colors
             %
             % Syntax:
             %   comp.setScalar(scalarData)
+            %   comp.setScalar(scalarData, 'clim', [min max])
             %
             % Inputs:
             %   scalarData - [N×1] vector of scalar values (one per vertex)
             %
+            % Name-Value Arguments:
+            %   clim - [1×2] vector specifying color limits [min max]
+            %          If not provided, auto-ranges to data min/max
+            %
             % Examples:
-            %   % Visualize scalar field
+            %   % Visualize scalar field with auto-ranging
             %   viewer.setScalar(scalarData);
+            %
+            %   % Set fixed color limits for consistent mapping
+            %   viewer.setScalar(scalarData, 'clim', [0 1]);
             %
             %   % Clear scalar visualization
             %   viewer.setScalar([]);
@@ -208,11 +216,13 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             % Notes:
             %   - Scalar data must match number of vertices from last setMesh call
             %   - Colormap can be changed via viewer UI controls
+            %   - Fixed clim prevents auto-normalization across different data
             %   - Call without arguments or empty array to clear visualization
             
             arguments
                 comp (1,1) bct.ui.manifold.Viewer
                 scalarData (:,1) double = []
+                options.clim double {mustBeValidClim} = []
             end
             
             % Validate scalar data is real and finite if not empty
@@ -244,6 +254,11 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                     'action', 'update', ...
                     'data', scalarFlat ...
                 );
+                
+                % Add clim if provided
+                if ~isempty(options.clim)
+                    scalarPayload.clim = options.clim;
+                end
             end
             
             % Send to JavaScript
@@ -262,6 +277,7 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %   comp.setVector(vectorData)
             %   comp.setVector(vectorData, 'Support', 'vertex')
             %   comp.setVector(vectorData, 'Stride', 5, 'LengthScale', 1.0)
+            %   comp.setVector(vectorData, 'RenderMode', 'lines')
             %
             % Inputs:
             %   vectorData - [N×3] or [M×3] matrix of vectors
@@ -270,14 +286,23 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %
             % Optional Parameters:
             %   'Support'      - 'face' (default) or 'vertex'
+            %   'RenderMode'   - '3d' (default) for mesh arrows, 'lines' for line segments
             %   'Stride'       - Draw every Nth vector (default: 5)
             %   'LengthScale'  - Arrow length multiplier (default: 1.0)
             %   'MaxLength'    - Maximum arrow length (default: 10.0)
             %   'MinMagnitude' - Skip vectors below this magnitude (default: 1e-12)
+            %   'LineWidth'    - Line width for 'lines' mode (default: 1)
+            %   'Color'        - Arrow color as [R G B] or hex (default: [0 0 0] black)
             %
             % Examples:
-            %   % Visualize face-based gradient field
+            %   % Visualize face-based gradient field (3D arrows)
             %   viewer.setVector(gradients, 'Support', 'face');
+            %
+            %   % High-performance line-based visualization
+            %   viewer.setVector(gradients, 'RenderMode', 'lines', 'LineWidth', 2);
+            %
+            %   % Red arrows with custom color
+            %   viewer.setVector(gradients, 'Color', [1 0 0]);
             %
             %   % Sparse vertex vectors with custom scaling
             %   viewer.setVector(velocities, 'Support', 'vertex', 'Stride', 10, 'LengthScale', 0.5);
@@ -286,7 +311,8 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %   viewer.setVector([]);
             %
             % Notes:
-            %   - Vectors are displayed as 3D arrows (quiver plot)
+            %   - RenderMode '3d': Full 3D mesh arrows with lighting (higher quality)
+            %   - RenderMode 'lines': Line segment arrows (higher performance)
             %   - For face support, arrows placed at face centroids
             %   - For vertex support, arrows placed at vertex positions
             
@@ -302,17 +328,29 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             % Parse optional parameters
             p = inputParser();
             p.addParameter('Support', 'face', @(x) ismember(lower(x), {'face', 'vertex'}));
+            p.addParameter('RenderMode', '3d', @(x) ismember(lower(x), {'3d', 'lines'}));
             p.addParameter('Stride', 5, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.addParameter('LengthScale', 1.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.addParameter('MaxLength', 10.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.addParameter('MinMagnitude', 1e-12, @(x) isnumeric(x) && isscalar(x) && x >= 0);
+            p.addParameter('LineWidth', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Color', [0 0 0], @(x) (isnumeric(x) && numel(x) == 3 && all(x >= 0) && all(x <= 1)));
             p.parse(varargin{:});
             
             support = lower(p.Results.Support);
+            renderMode = lower(p.Results.RenderMode);
             stride = p.Results.Stride;
             lengthScale = p.Results.LengthScale;
             maxLength = p.Results.MaxLength;
             minMagnitude = p.Results.MinMagnitude;
+            lineWidth = p.Results.LineWidth;
+            color = p.Results.Color;
+            
+            % Convert RGB [0-1] to hex integer for JavaScript
+            colorHex = bitor(bitor(bitshift(uint32(color(1)*255), 16), ...
+                                   bitshift(uint32(color(2)*255), 8)), ...
+                             uint32(color(3)*255));
+            colorHex = double(colorHex);  % Ensure it's a double for JSON serialization
             
             % Validate vector data
             if ~isempty(vectorData)
@@ -348,10 +386,13 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                     'action', 'update', ...
                     'data', vectorFlat, ...
                     'support', support, ...
+                    'renderMode', renderMode, ...
                     'stride', stride, ...
                     'lengthScale', lengthScale, ...
                     'maxLength', maxLength, ...
-                    'minMagnitude', minMagnitude ...
+                    'minMagnitude', minMagnitude, ...
+                    'lineWidth', lineWidth, ...
+                    'color', colorHex ...
                 );
             end
             
@@ -362,6 +403,28 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Vector data not sent.');
             end
+        end
+    end
+end
+
+function mustBeValidClim(clim)
+    % Validate clim parameter: must be empty or [1x2] finite double
+    if ~isempty(clim)
+        if ~isnumeric(clim) || ~isreal(clim)
+            error('bct:ui:manifold:Viewer:InvalidClim', ...
+                'clim must be a real numeric vector');
+        end
+        if numel(clim) ~= 2
+            error('bct:ui:manifold:Viewer:InvalidClim', ...
+                'clim must have exactly 2 elements [min max]');
+        end
+        if ~all(isfinite(clim))
+            error('bct:ui:manifold:Viewer:InvalidClim', ...
+                'clim values must be finite');
+        end
+        if clim(2) <= clim(1)
+            error('bct:ui:manifold:Viewer:InvalidClim', ...
+                'clim(2) must be greater than clim(1)');
         end
     end
 end

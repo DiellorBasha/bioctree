@@ -1,35 +1,234 @@
 /**
  * quiver.js
  * 
- * Vector field visualization using instanced arrow glyphs.
+ * Vector field visualization using instanced arrow glyphs or line segments.
  * 
  * Responsibilities:
- * - Create 3D arrow glyphs for vector fields
+ * - Create 3D arrow glyphs for vector fields (high quality)
+ * - Create line-based arrows for vector fields (high performance)
  * - Support face-centered and vertex-centered vectors
  * - Handle tangent plane projection for surface vectors
- * - Efficient rendering via InstancedMesh
+ * - Efficient rendering via InstancedMesh or LineSegments
  */
 
 import * as THREE from 'three';
 
 /**
- * Create an InstancedMesh showing vectors as 3D arrows
+ * Create vector field visualization (auto-selects renderer based on mode)
  *
  * @param {Object} options - Configuration options
  * @param {Float32Array} options.positions - Base positions [x1,y1,z1,x2,y2,z2,...]
  * @param {Float32Array} options.vectors - Vector components [vx1,vy1,vz1,vx2,vy2,vz2,...]
  * @param {Float32Array} [options.normals] - Surface normals for tangent projection
+ * @param {string} [options.renderMode='3d'] - '3d' for mesh arrows, 'lines' for line segments
  * @param {number} [options.stride=5] - Draw every Nth vector
  * @param {number} [options.lengthScale=1.0] - Global arrow length scaling
  * @param {number} [options.maxLength=10.0] - Maximum arrow length (world units)
  * @param {number} [options.minMagnitude=1e-12] - Skip vectors below this magnitude
- * @param {number} [options.shaftRadius=0.15] - Arrow shaft thickness
- * @param {number} [options.headRadius=0.35] - Arrow head cone radius
- * @param {number} [options.headLength=0.9] - Arrow head cone height
- * @param {number} [options.color=0xff6600] - Arrow color
- * @returns {THREE.InstancedMesh} Instanced mesh with arrow glyphs
+ * @param {number} [options.shaftRadius=0.15] - Arrow shaft thickness (3d mode only)
+ * @param {number} [options.headRadius=0.35] - Arrow head cone radius (3d mode only)
+ * @param {number} [options.headLength=0.9] - Arrow head cone height (3d mode only)
+ * @param {number} [options.lineWidth=1] - Line width (lines mode only)
+ * @param {number} [options.color=0x000000] - Arrow color (default black)
+ * @returns {THREE.InstancedMesh|THREE.LineSegments} Vector field visualization
  */
 export function createVectorQuiver({
+  positions,
+  vectors,
+  normals = null,
+  renderMode = '3d',
+  stride = 5,
+  lengthScale = 1.0,
+  maxLength = 10.0,
+  minMagnitude = 1e-12,
+  shaftRadius = 0.15,
+  headRadius = 0.35,
+  headLength = 0.9,
+  lineWidth = 1,
+  color = 0x000000
+}) {
+  // Dispatch to appropriate renderer
+  if (renderMode === 'lines') {
+    return createVectorQuiverLines({
+      positions,
+      vectors,
+      normals,
+      stride,
+      lengthScale,
+      maxLength,
+      minMagnitude,
+      lineWidth,
+      color
+    });
+  } else {
+    return createVectorQuiver3D({
+      positions,
+      vectors,
+      normals,
+      stride,
+      lengthScale,
+      maxLength,
+      minMagnitude,
+      shaftRadius,
+      headRadius,
+      headLength,
+      color
+    });
+  }
+}
+
+/**
+ * Create line-based vector field visualization (high performance)
+ *
+ * Each arrow consists of 3 line segments (6 vertices):
+ * - Main shaft from base to tip
+ * - Two angled barbs forming the arrowhead
+ *
+ * @param {Object} options - Configuration options
+ * @returns {THREE.LineSegments} Line-based arrow visualization
+ */
+function createVectorQuiverLines({
+  positions,
+  vectors,
+  normals = null,
+  stride = 5,
+  lengthScale = 1.0,
+  maxLength = 10.0,
+  minMagnitude = 1e-12,
+  lineWidth = 1,
+  color = 0x000000
+}) {
+  const numVectors = positions.length / 3;
+  const maxArrows = Math.ceil(numVectors / stride);
+  
+  // Allocate buffer: each arrow = 6 vertices × 3 coords = 18 floats
+  const linePositions = new Float32Array(maxArrows * 18);
+  
+  // Helpers for vector math
+  const pos = new THREE.Vector3();
+  const vec = new THREE.Vector3();
+  const norm = new THREE.Vector3();
+  const vT = new THREE.Vector3();
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  
+  let arrowCount = 0;
+  
+  // Build arrows
+  for (let i = 0; i < numVectors; i += stride) {
+    const idx = 3 * i;
+    
+    // Get position
+    pos.set(
+      positions[idx],
+      positions[idx + 1],
+      positions[idx + 2]
+    );
+    
+    // Get vector
+    vec.set(
+      vectors[idx],
+      vectors[idx + 1],
+      vectors[idx + 2]
+    );
+    
+    // Optional: project to tangent plane
+    if (normals) {
+      norm.set(
+        normals[idx],
+        normals[idx + 1],
+        normals[idx + 2]
+      ).normalize();
+      
+      const normalComponent = vec.dot(norm);
+      vec.addScaledVector(norm, -normalComponent);
+    } else {
+      // Default normal for arrowhead construction (arbitrary perpendicular)
+      norm.set(0, 1, 0);
+    }
+    
+    // Check magnitude
+    const mag = vec.length();
+    if (mag < minMagnitude) continue;
+    
+    // Compute scaled length
+    const length = Math.min(maxLength, mag * lengthScale);
+    
+    // Normalize direction
+    vec.normalize();
+    
+    // Arrow points from a to b
+    a.copy(pos).addScaledVector(vec, -length * 0.5);
+    b.copy(pos).addScaledVector(vec, length * 0.5);
+    
+    // Compute perpendicular direction for arrowhead
+    vT.crossVectors(norm, vec).normalize();
+    
+    // Arrowhead parameters (20% of length, 10% width)
+    const headLength = length * 0.2;
+    const headWidth = length * 0.1;
+    
+    const baseIdx = arrowCount * 18;
+    
+    // Main line (vertices 0-1)
+    linePositions[baseIdx + 0] = a.x;
+    linePositions[baseIdx + 1] = a.y;
+    linePositions[baseIdx + 2] = a.z;
+    linePositions[baseIdx + 3] = b.x;
+    linePositions[baseIdx + 4] = b.y;
+    linePositions[baseIdx + 5] = b.z;
+    
+    // Right arrowhead barb (vertices 2-3)
+    const barb1 = b.clone().addScaledVector(vec, -headLength).addScaledVector(vT, headWidth);
+    linePositions[baseIdx + 6] = b.x;
+    linePositions[baseIdx + 7] = b.y;
+    linePositions[baseIdx + 8] = b.z;
+    linePositions[baseIdx + 9] = barb1.x;
+    linePositions[baseIdx + 10] = barb1.y;
+    linePositions[baseIdx + 11] = barb1.z;
+    
+    // Left arrowhead barb (vertices 4-5)
+    const barb2 = b.clone().addScaledVector(vec, -headLength).addScaledVector(vT, -headWidth);
+    linePositions[baseIdx + 12] = b.x;
+    linePositions[baseIdx + 13] = b.y;
+    linePositions[baseIdx + 14] = b.z;
+    linePositions[baseIdx + 15] = barb2.x;
+    linePositions[baseIdx + 16] = barb2.y;
+    linePositions[baseIdx + 17] = barb2.z;
+    
+    arrowCount++;
+    if (arrowCount >= maxArrows) break;
+  }
+  
+  // Trim buffer to actual arrow count
+  const finalPositions = linePositions.slice(0, arrowCount * 18);
+  
+  // Create line geometry
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(finalPositions, 3));
+  
+  console.log('[createVectorQuiverLines] Using color:', color, '(hex: 0x' + color.toString(16).padStart(6, '0') + ')');
+  
+  // Create line material
+  const material = new THREE.LineBasicMaterial({
+    color: color,
+    linewidth: lineWidth  // Note: linewidth > 1 not supported in most WebGL implementations
+  });
+  
+  // Create line segments
+  const lineSegments = new THREE.LineSegments(geometry, material);
+  lineSegments.name = 'vectorQuiverLines';
+  
+  return lineSegments;
+}
+
+/**
+ * Create 3D mesh-based vector field visualization (high quality)
+ *
+ * @param {Object} options - Configuration options
+ * @returns {THREE.InstancedMesh} Instanced mesh with 3D arrow glyphs
+ */
+function createVectorQuiver3D({
   positions,
   vectors,
   normals = null,
@@ -40,7 +239,7 @@ export function createVectorQuiver({
   shaftRadius = 0.15,
   headRadius = 0.35,
   headLength = 0.9,
-  color = 0xff6600
+  color = 0x000000
 }) {
   const numVectors = positions.length / 3;
   const instanceCapacity = Math.ceil(numVectors / stride);

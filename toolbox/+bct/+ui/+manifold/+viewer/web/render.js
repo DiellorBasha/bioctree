@@ -462,7 +462,7 @@ export function setScalarData(scalarData) {
         return;
       }
 
-      const { data } = scalarData;
+      const { data, clim: userClim } = scalarData;
       
       if (!data || data.length === 0) {
         console.error('[setScalarData] No scalar data provided');
@@ -475,9 +475,14 @@ export function setScalarData(scalarData) {
       // Use colormap from vizState
       const colormap = vizState.scalar.colormap;
       
-      // Auto-compute clim if autoRange is enabled
+      // Use user-provided clim if available, otherwise auto-compute
       let clim = null;
-      if (vizState.scalar.autoRange) {
+      if (userClim && Array.isArray(userClim) && userClim.length === 2) {
+        // Use fixed color limits from MATLAB
+        clim = userClim;
+        console.log('[setScalarData] Using fixed clim:', clim);
+      } else if (vizState.scalar.autoRange) {
+        // Auto-compute clim from data range
         let min = Infinity;
         let max = -Infinity;
         for (let i = 0; i < data.length; i++) {
@@ -485,6 +490,7 @@ export function setScalarData(scalarData) {
           if (data[i] > max) max = data[i];
         }
         clim = [min, max];
+        console.log('[setScalarData] Auto-computed clim:', clim);
       }
 
       // Apply to all meshes in scene
@@ -532,10 +538,13 @@ export function setScalarData(scalarData) {
  * @param {string} vectorData.action - 'update' or 'clear'
  * @param {Array} [vectorData.data] - Flat array of vector components [vx,vy,vz,...]
  * @param {string} [vectorData.support] - 'face' or 'vertex'
+ * @param {string} [vectorData.renderMode] - '3d' for mesh arrows, 'lines' for line segments
  * @param {number} [vectorData.stride] - Draw every Nth vector
  * @param {number} [vectorData.lengthScale] - Arrow length scaling
  * @param {number} [vectorData.maxLength] - Maximum arrow length
  * @param {number} [vectorData.minMagnitude] - Minimum vector magnitude to display
+ * @param {number} [vectorData.lineWidth] - Line width for 'lines' mode
+ * @param {number} [vectorData.color] - Arrow color as hex integer (e.g., 0x000000 for black)
  */
 export function setVectorData(vectorData) {
   if (!meshManager || !scene || !stateManager) {
@@ -561,7 +570,9 @@ export function setVectorData(vectorData) {
         return;
       }
 
-      const { data, support, stride, lengthScale, maxLength, minMagnitude } = vectorData;
+      const { data, support, renderMode, stride, lengthScale, maxLength, minMagnitude, lineWidth, color } = vectorData;
+      
+      console.log('[setVectorData] Received color:', color, '(hex: 0x' + (color !== undefined ? color.toString(16).padStart(6, '0') : 'undefined') + ')');
       
       if (!data || data.length === 0) {
         console.error('[setVectorData] No vector data provided');
@@ -635,10 +646,13 @@ export function setVectorData(vectorData) {
         positions: positions,
         vectors: vectorsFloat32,
         normals: normals,
+        renderMode: renderMode || '3d',
         stride: stride || 5,
         lengthScale: lengthScale || 1.0,
         maxLength: maxLength || 10.0,
-        minMagnitude: minMagnitude || 1e-12
+        minMagnitude: minMagnitude || 1e-12,
+        lineWidth: lineWidth || 1,
+        color: color !== undefined ? color : 0x000000
       });
 
       // Determine which frame root the mesh is in
@@ -658,7 +672,9 @@ export function setVectorData(vectorData) {
       
       frameRoot.add(currentQuiver);
       
-      console.log(`[setVectorData] Vector quiver added: ${currentQuiver.count} arrows`);
+      const arrowCount = currentQuiver.count !== undefined ? currentQuiver.count : 
+                        (currentQuiver.geometry?.attributes?.position?.count || 0) / 6;
+      console.log(`[setVectorData] Vector quiver added: ${arrowCount} arrows (${renderMode || '3d'} mode)`);
     }
   } catch (err) {
     console.error('[setVectorData] Error setting vector data:', err);
