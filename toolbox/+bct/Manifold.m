@@ -1409,9 +1409,9 @@ classdef Manifold < handle
             % Outputs:
             %   geom - Structure matching bct.manifold.geometry.schema:
             %     .attributes - Group-level metadata (computation options)
-            %     .face       - Face geometry (8 datasets: areas, centroids, circumcenters, 
-            %                   normals, cotan, tangent1, tangent2, angleDefect; each with .value and .attributes)
-            %     .vertex     - Vertex geometry (3 datasets: normals, tangent1, tangent2;
+            %     .face       - Face geometry (7 datasets: areas, centroids, circumcenters, 
+            %                   normals, cotan, tangent1, tangent2; each with .value and .attributes)
+            %     .vertex     - Vertex geometry (4 datasets: normals, tangent1, tangent2, angleDefect;
             %                   each with .value and .attributes)
             %     .edge       - Edge geometry (3 datasets: lengths, weights_cotangent, 
             %                   weights_euclidean; each with .value and .attributes)

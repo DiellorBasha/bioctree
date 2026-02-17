@@ -1,9 +1,9 @@
 function [header, K] = angleDefect(meshInput, options)
 %ANGLEDEFECT Compute vertex angle defect (integrated Gaussian curvature)
 %
-%   [header, K] = bct.manifold.geometry.face.angleDefect(M)
-%   [header, K] = bct.manifold.geometry.face.angleDefect(V, F)
-%   [header, K] = bct.manifold.geometry.face.angleDefect(__, 'precision', p)
+%   [header, K] = bct.manifold.geometry.vertex.angleDefect(M)
+%   [header, K] = bct.manifold.geometry.vertex.angleDefect(V, F)
+%   [header, K] = bct.manifold.geometry.vertex.angleDefect(__, 'precision', p)
 %
 % Inputs
 %   M : bct.Manifold object
@@ -30,16 +30,15 @@ function [header, K] = angleDefect(meshInput, options)
 %   to avoid numerical issues with acos near ±1.
 %
 % Notes
-%   - Output is per-vertex despite being in the face geometry package
 %   - Computation starts from face corner angles, then accumulates to vertices
 %   - Assumes closed surface (no boundary) - K = 2π - sum(angles)
 %   - For surfaces with boundary, modify to K = π - sum(angles) for boundary vertices
 %
 % Example
-%   [header, K] = bct.manifold.geometry.face.angleDefect(M);
+%   [header, K] = bct.manifold.geometry.vertex.angleDefect(M);
 %   totalCurvature = sum(K);  % Should equal 4π for sphere (Gauss-Bonnet)
 %
-% See also: bct.manifold.geometry.face.cotan, bct.manifold.geometry.vertex
+% See also: bct.manifold.geometry.face.cotan, bct.manifold.geometry.vertex.frame
 
 arguments
     meshInput
@@ -56,7 +55,7 @@ nF = mesh.nF;
 
 % Validate inputs
 if ~mesh.hasV
-    error('bct:manifold:geometry:face:angleDefect:NoVertices', ...
+    error('bct:manifold:geometry:vertex:angleDefect:NoVertices', ...
         'Vertices required to compute angle defect');
 end
 
