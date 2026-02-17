@@ -71,17 +71,15 @@ if nargin == 1
         % Optional: if you later decide dec(M) should populate cache, do it there
     end
 
-    if isfield(opsAll, 'dec')
-        opsAll = opsAll.dec; % if your cache stores operators under .dec
-    end
-
+    % Operators are at top level (no .dec nesting)
     if ~isfield(opsAll, 'd0') || ~isfield(opsAll, 'sharpPD')
         error('bct:manifold:operator:gradient:MissingOperators', ...
             'Operators must contain fields d0 and sharpPD.');
     end
 
-    d0 = opsAll.d0;
-    sharpPD = opsAll.sharpPD;
+    % Extract .value from operator structs (following bct convention)
+    d0 = opsAll.d0.value;
+    sharpPD = opsAll.sharpPD.value;
 
     numVertices = M.numVertices();
     numFaces    = M.numFaces();
@@ -139,8 +137,9 @@ elseif nargin == 2
 
         % Compute DEC primitives from V,F
         [~, dec_ops] = bct.manifold.operator.dec(V, F);
-        d0 = dec_ops.d0;
-        sharpPD = dec_ops.sharpPD;
+        % Extract .value from operator structs
+        d0 = dec_ops.d0.value;
+        sharpPD = dec_ops.sharpPD.value;
 
         numVertices = size(V, 1);
         numFaces    = size(F, 1);

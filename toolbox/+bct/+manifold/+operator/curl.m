@@ -119,11 +119,8 @@ if nargin >= 1 && isa(meshInput, 'bct.Manifold')
         [~, opsAll] = bct.manifold.operator.dec(M); % compute primitives
     end
 
-    if isfield(opsAll, 'dec')
-        ops = opsAll.dec; % if cache stores operators under .dec
-    else
-        ops = opsAll;
-    end
+    % Operators are at top level (no .dec nesting)
+    ops = opsAll;
 
     numVertices = M.numVertices();
     numFaces    = M.numFaces();
@@ -170,9 +167,9 @@ elseif nargin >= 2 && isnumeric(meshInput) && ~issparse(meshInput)
     
     % Get numEdges from DEC operators
     if isfield(ops, 'hd1')
-        numEdges = size(ops.hd1, 1);
+        numEdges = size(ops.hd1.value, 1);
     elseif isfield(ops, 'd0')
-        numEdges = size(ops.d0, 1);
+        numEdges = size(ops.d0.value, 1);
     else
         error('bct:manifold:operator:curl:MissingOperators', ...
             'Cannot determine number of edges from DEC operators.');
@@ -197,20 +194,20 @@ if strcmpi(route, "primal")
     end
     
     % Validate dimensions
-    if size(ops.hd2, 1) ~= numFaces || size(ops.hd2, 2) ~= numFaces
+    if size(ops.hd2.value, 1) ~= numFaces || size(ops.hd2.value, 2) ~= numFaces
         error('bct:manifold:operator:curl:DimMismatch', ...
             'hd2 must be [%d×%d] but is [%d×%d].', ...
-            numFaces, numFaces, size(ops.hd2, 1), size(ops.hd2, 2));
+            numFaces, numFaces, size(ops.hd2.value, 1), size(ops.hd2.value, 2));
     end
-    if size(ops.d1, 2) ~= numEdges
+    if size(ops.d1.value, 2) ~= numEdges
         error('bct:manifold:operator:curl:DimMismatch', ...
             'd1 columns (%d) must equal numEdges (%d).', ...
-            size(ops.d1, 2), numEdges);
+            size(ops.d1.value, 2), numEdges);
     end
-    if size(ops.d1, 1) ~= numFaces
+    if size(ops.d1.value, 1) ~= numFaces
         error('bct:manifold:operator:curl:DimMismatch', ...
             'd1 rows (%d) must equal numFaces (%d).', ...
-            size(ops.d1, 1), numFaces);
+            size(ops.d1.value, 1), numFaces);
     end
     
 else % dual route
@@ -224,20 +221,20 @@ else % dual route
     end
     
     % Validate dimensions
-    if size(ops.hdd2, 1) ~= numVertices || size(ops.hdd2, 2) ~= numVertices
+    if size(ops.hdd2.value, 1) ~= numVertices || size(ops.hdd2.value, 2) ~= numVertices
         error('bct:manifold:operator:curl:DimMismatch', ...
             'hdd2 must be [%d×%d] but is [%d×%d].', ...
-            numVertices, numVertices, size(ops.hdd2, 1), size(ops.hdd2, 2));
+            numVertices, numVertices, size(ops.hdd2.value, 1), size(ops.hdd2.value, 2));
     end
-    if size(ops.dd1, 2) ~= numEdges
+    if size(ops.dd1.value, 2) ~= numEdges
         error('bct:manifold:operator:curl:DimMismatch', ...
             'dd1 columns (%d) must equal numEdges (%d).', ...
-            size(ops.dd1, 2), numEdges);
+            size(ops.dd1.value, 2), numEdges);
     end
-    if size(ops.dd1, 1) ~= numVertices
+    if size(ops.dd1.value, 1) ~= numVertices
         error('bct:manifold:operator:curl:DimMismatch', ...
             'dd1 rows (%d) must equal numVertices (%d).', ...
-            size(ops.dd1, 1), numVertices);
+            size(ops.dd1.value, 1), numVertices);
     end
 end
 
@@ -248,7 +245,7 @@ if strcmpi(route, "primal")
     % Primal curl: hd2 * d1
     % Maps primal 1-form (edges) → dual 0-form (faces)
     % Size: [nF × nE]
-    Curl = ops.hd2 * ops.d1;
+    Curl = ops.hd2.value * ops.d1.value;
     composition = "hd2 * d1";
     inputValueType = "primal1form";
     outputSupport = "face";
@@ -257,7 +254,7 @@ else % dual route
     % Dual curl: hdd2 * dd1
     % Maps dual 1-form (edges) → primal 0-form (vertices)
     % Size: [nV × nE]
-    Curl = ops.hdd2 * ops.dd1;
+    Curl = ops.hdd2.value * ops.dd1.value;
     composition = "hdd2 * dd1";
     inputValueType = "dual1form";
     outputSupport = "vertex";

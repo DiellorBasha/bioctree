@@ -146,11 +146,8 @@ if nargin >= 1 && isa(meshInput, 'bct.Manifold')
         [~, opsAll] = bct.manifold.operator.dec(M); % compute primitives
     end
 
-    if isfield(opsAll, 'dec')
-        ops = opsAll.dec; % if cache stores operators under .dec
-    else
-        ops = opsAll;
-    end
+    % Operators are at top level (no .dec nesting)
+    ops = opsAll;
 
     numVertices = M.numVertices();
     numFaces    = M.numFaces();
@@ -199,9 +196,9 @@ elseif nargin >= 2 && isnumeric(meshInput) && ~issparse(meshInput)
     
     % Get numEdges from DEC operators
     if isfield(ops, 'hd1')
-        numEdges = size(ops.hd1, 1);
+        numEdges = size(ops.hd1.value, 1);
     elseif isfield(ops, 'd0')
-        numEdges = size(ops.d0, 1);
+        numEdges = size(ops.d0.value, 1);
     else
         error('bct:manifold:operator:hodgelaplacian:MissingOperators', ...
             'Cannot determine number of edges from DEC operators.');
@@ -249,13 +246,13 @@ if kform == 0
         % Normalized: hdd2 * dd1 * hd1 * d0
         % Size: [nV × nV]
         % Output is primal 0-form (vertex values)
-        Lap = ops.hdd2 * ops.dd1 * ops.hd1 * ops.d0;
+        Lap = ops.hdd2.value * ops.dd1.value * ops.hd1.value * ops.d0.value;
         composition = "hdd2 * dd1 * hd1 * d0";
     else
         % Unnormalized: dd1 * hd1 * d0
         % Size: [nV × nV]
         % Output is dual 2-form (integrated per vertex cell)
-        Lap = ops.dd1 * ops.hd1 * ops.d0;
+        Lap = ops.dd1.value * ops.hd1.value * ops.d0.value;
         composition = "dd1 * hd1 * d0";
     end
     inputSupport = "vertex";
@@ -265,8 +262,8 @@ elseif kform == 1
     % 1-form Hodge Laplacian (dual route from DECLab)
     % hd1 * d0 * hdd2 * dd1 + dd0 * hd2 * d1 * hdd1
     % Size: [nE × nE]
-    term1 = ops.hd1 * ops.d0 * ops.hdd2 * ops.dd1;
-    term2 = ops.dd0 * ops.hd2 * ops.d1 * ops.hdd1;
+    term1 = ops.hd1.value * ops.d0.value * ops.hdd2.value * ops.dd1.value;
+    term2 = ops.dd0.value * ops.hd2.value * ops.d1.value * ops.hdd1.value;
     Lap = term1 + term2;
     composition = "hd1 * d0 * hdd2 * dd1 + dd0 * hd2 * d1 * hdd1";
     inputSupport = "edge";
@@ -276,7 +273,7 @@ else % kform == 2
     % 2-form Hodge Laplacian
     % d1 * hdd1 * dd0 * hd2
     % Size: [nF × nF]
-    Lap = ops.d1 * ops.hdd1 * ops.dd0 * ops.hd2;
+    Lap = ops.d1.value * ops.hdd1.value * ops.dd0.value * ops.hd2.value;
     composition = "d1 * hdd1 * dd0 * hd2";
     inputSupport = "face";
     outputSupport = "face";
