@@ -47,6 +47,7 @@ function geom = geometry(M, varargin)
 %   A = geom.face.areas.value;
 %   L = geom.edge.lengths.value;
 %   VN = geom.vertex.normals.value;
+%   dTheta = geom.face.transport.value;      % Halfedge transport angles
 %   
 %   % Compute with single precision
 %   geom = bct.manifold.geometry(M, 'precision', 'single');

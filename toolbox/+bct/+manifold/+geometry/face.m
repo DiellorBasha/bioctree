@@ -33,12 +33,17 @@ function out = face(meshInput, varargin)
 %     .tangent1.attributes     - Dataset metadata
 %     .tangent2.value          - [Nf×3] Second tangent vectors (unit)
 %     .tangent2.attributes     - Dataset metadata
+%     .transport.value         - [Nh×1] Parallel transport angles (halfedge-based)
+%     .transport.attributes    - Dataset metadata (only for Manifold input)
 %
 % Description:
 %   Aggregator function that computes all face-based geometric properties.
 %   Output structure conforms to bct.manifold.geometry.face.schema for
 %   seamless serialization to HDF5/Zarr formats.
 %   The normals, tangent1, and tangent2 form right-handed orthonormal frames.
+%
+%   Transport angles are only computed when input is a Manifold object (requires
+%   topology for halfedge connectivity).
 %
 % Examples:
 %   % Compute all face geometry
@@ -99,6 +104,17 @@ mesh = surfaceMesh(V, F);
 [centroidHeader, centroids] = bct.manifold.geometry.face.centroids(mesh);
 [cotanHeader, cotan] = bct.manifold.geometry.face.cotan(mesh);
 [frameHeader, normals, tangent1, tangent2] = bct.manifold.geometry.face.frame(mesh);
+
+% Compute transport (only for Manifold input, requires topology)
+if isa(meshInput, 'bct.Manifold')
+    [transportHeader, transport] = bct.manifold.geometry.face.transport(meshInput, ...
+        'precision', precision, ...
+        'tangent1', tangent1, ...
+        'tangent2', tangent2);
+    hasTransport = true;
+else
+    hasTransport = false;
+end
 
 % Initialize output structure matching schema
 out = struct();
@@ -202,5 +218,23 @@ out.tangent2.attributes = struct(...
     'support', 'face', ...
     'normalization', 'unit', ...
     'computedBy', 'bct.manifold.geometry.face.frame');
+
+% Dataset 8: transport (only if Manifold input)
+if hasTransport
+    out.transport.value = transport;
+    out.transport.attributes = transportHeader;
+else
+    % Return empty structure for V,F input
+    out.transport.value = [];
+    out.transport.attributes = struct(...
+        'name', 'transport', ...
+        'path', 'geometry/face/transport', ...
+        'description', 'Not computed (requires Manifold input with topology)', ...
+        'shape', [0, 1], ...
+        'dtype', 'double', ...
+        'units', 'radians', ...
+        'support', 'halfedge', ...
+        'skipped', true);
+end
 
 end

@@ -552,6 +552,54 @@ classdef Manifold < handle
         end
         
         % ===============================================================
+        % CONNECTION METHODS
+        % ===============================================================
+        
+        function conn = connection(obj, varargin)
+            %CONNECTION Compute connections on the manifold
+            %
+            % Syntax:
+            %   conn = M.connection(type, ...)
+            %   conn = M.connection('trivial', 'singularities', indices)
+            %
+            % Inputs:
+            %   type - Connection type: 'trivial' (default)
+            %
+            % Name-Value Arguments (for 'trivial' type):
+            %   'singularities' - Vertex indices where singularities are placed
+            %   'weights'       - Weights for each singularity (default: all 1)
+            %
+            % Outputs:
+            %   conn - Connection structure with type-specific fields
+            %     For 'trivial': .trivialConnection, .connectionEdge, .scalarPotential, .singularityVector
+            %
+            % Description:
+            %   Wrapper for bct.manifold.connection() that computes various
+            %   types of connections on the manifold surface.
+            %
+            % Examples:
+            %   % Trivial connection with two singularities
+            %   conn = M.connection('trivial', ...
+            %       'singularities', [6653, 978], 'weights', [1, 1]);
+            %   
+            %   % Access connection 1-form
+            %   connectionEdge = conn.connectionEdge.value;
+            %   trivialConn = conn.trivialConnection.value;
+            %   
+            %   % Default type is trivial
+            %   conn = M.connection('singularities', [100, 500]);
+            %   
+            %   % Combined transport (geometric + connection)
+            %   trans = bct.manifold.connection.transport(M, conn);
+            %   combined = trans.combinedTransport.value;
+            %
+            % See also: bct.manifold.connection, bct.manifold.connection.trivial,
+            %           bct.manifold.connection.transport
+            
+            conn = bct.manifold.connection(obj, varargin{:});
+        end
+        
+        % ===============================================================
         % GRAPH QUERY METHODS
         % ===============================================================
         
@@ -1409,8 +1457,8 @@ classdef Manifold < handle
             % Outputs:
             %   geom - Structure matching bct.manifold.geometry.schema:
             %     .attributes - Group-level metadata (computation options)
-            %     .face       - Face geometry (7 datasets: areas, centroids, circumcenters, 
-            %                   normals, cotan, tangent1, tangent2; each with .value and .attributes)
+            %     .face       - Face geometry (8 datasets: areas, centroids, circumcenters, 
+            %                   normals, cotan, tangent1, tangent2, transport; each with .value and .attributes)
             %     .vertex     - Vertex geometry (4 datasets: normals, tangent1, tangent2, angleDefect;
             %                   each with .value and .attributes)
             %     .edge       - Edge geometry (3 datasets: lengths, weights_cotangent, 
@@ -1436,6 +1484,7 @@ classdef Manifold < handle
             %   A = geom.face.areas.value;        % [nF×1] Face areas
             %   VN = geom.vertex.normals.value;   % [nV×3] Vertex normals
             %   L = geom.edge.lengths.value;      % [nE×1] Edge lengths
+            %   dTheta = geom.face.transport.value;    % [nH×1] Halfedge transport angles
             %   
             %   % Force recomputation
             %   geom = M.geometry('Force', true);

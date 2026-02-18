@@ -168,4 +168,7 @@ header = struct( ...
     'numberOfBoundaryEdges', nBoundary ...
 );
 
+% Assign output
+edgeLengths = dualEdgeLengths;
+
 end

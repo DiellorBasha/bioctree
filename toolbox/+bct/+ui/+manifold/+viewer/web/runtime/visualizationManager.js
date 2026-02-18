@@ -30,6 +30,7 @@ export class VisualizationManager {
     // Helper visuals owned by this manager
     this.normalsHelper = null;
     this.tangentsHelper = null;
+    this.wireframeOverlay = null;  // Wireframe overlay mesh
   }
 
   /**
@@ -67,7 +68,7 @@ export class VisualizationManager {
   }
 
   /**
-   * Update mesh material based on material dropdown
+   * Update mesh material and wireframe overlay
    * @private
    */
   updateMaterial(vizState) {
@@ -82,16 +83,55 @@ export class VisualizationManager {
 
       if (!baseMat || !wireMat) return;
 
-      // Switch material based on dropdown selection
+      // Update base material color
+      baseMat.color.set(vizState.surface.color);
+
+      // Update wireframe color
+      wireMat.color.set(vizState.edges.color);
+
+      // Set primary material (base or wireframe only)
       if (vizState.surface.material === 'wireframe') {
+        // Wireframe only mode
         obj.material = wireMat;
-        wireMat.color.set(vizState.edges.color);
       } else {
+        // Default: base material
         obj.material = baseMat;
       }
       
-      obj.material.visible = true;
       obj.material.needsUpdate = true;
+
+      // Handle wireframe overlay (on top of base material)
+      if (vizState.surface.wireframe && vizState.surface.material !== 'wireframe') {
+        // Create wireframe overlay if it doesn't exist
+        if (!this.wireframeOverlay) {
+          const wireframeGeometry = new THREE.WireframeGeometry(obj.geometry);
+          const wireframeMaterial = new THREE.LineBasicMaterial({ 
+            color: vizState.edges.color,
+            linewidth: 1,
+            transparent: false
+          });
+          this.wireframeOverlay = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+          this.wireframeOverlay.name = 'wireframeOverlay';
+          
+          // Add to same parent as the mesh
+          if (obj.parent) {
+            obj.parent.add(this.wireframeOverlay);
+          }
+        } else {
+          // Update existing wireframe color
+          this.wireframeOverlay.material.color.set(vizState.edges.color);
+        }
+      } else {
+        // Remove wireframe overlay if it exists
+        if (this.wireframeOverlay) {
+          if (this.wireframeOverlay.parent) {
+            this.wireframeOverlay.parent.remove(this.wireframeOverlay);
+          }
+          this.wireframeOverlay.geometry?.dispose();
+          this.wireframeOverlay.material?.dispose();
+          this.wireframeOverlay = null;
+        }
+      }
     });
   }
 
@@ -323,6 +363,16 @@ export class VisualizationManager {
         this.tangentsHelper.parent.remove(this.tangentsHelper);
       }
       this.tangentsHelper = null;
+    }
+
+    if (this.wireframeOverlay) {
+      // Remove wireframe overlay
+      if (this.wireframeOverlay.parent) {
+        this.wireframeOverlay.parent.remove(this.wireframeOverlay);
+      }
+      this.wireframeOverlay.geometry?.dispose();
+      this.wireframeOverlay.material?.dispose();
+      this.wireframeOverlay = null;
     }
   }
 

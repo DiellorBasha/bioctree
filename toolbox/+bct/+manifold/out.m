@@ -101,7 +101,11 @@ switch targetType
         
         % Get edge weights from cached geometry
         geom = M.geometry();
-        w = geom.edgeWeights.(options.EdgeWeights);
+        if options.EdgeWeights == "cotangent"
+            w = geom.edge.weights_cotangent.value;
+        else
+            w = geom.edge.weights_euclidean.value;
+        end
         
         % Create weighted MATLAB graph
         obj = graph(E(:,1), E(:,2), full(w), N);
@@ -118,7 +122,11 @@ switch targetType
         
         % Get edge weights from cached geometry
         geom = M.geometry();
-        w = geom.edgeWeights.(options.EdgeWeights);
+        if options.EdgeWeights == "cotangent"
+            w = geom.edge.weights_cotangent.value;
+        else
+            w = geom.edge.weights_euclidean.value;
+        end
         
         % Build sparse symmetric adjacency matrix
         W = sparse(E(:,1), E(:,2), w, N, N);

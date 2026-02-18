@@ -190,7 +190,7 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
         end
         
         function setScalar(comp, scalarData)
-            % setScalar - Map scalar data to vertex colors
+            % setScalar - Replace scalar field visualization (no blending)
             %
             % Syntax:
             %   comp.setScalar(scalarData)
@@ -206,9 +206,13 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %   viewer.setScalar([]);
             %
             % Notes:
+            %   - This always REPLACES the existing scalar field
+            %   - Use addScalar() with 'Mode' to blend/combine fields
             %   - Scalar data must match number of vertices from last setMesh call
             %   - Colormap can be changed via viewer UI controls
             %   - Call without arguments or empty array to clear visualization
+            %
+            % See also: addScalar, clearScalar
             
             arguments
                 comp (1,1) bct.ui.manifold.Viewer
@@ -240,8 +244,10 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 % Flatten scalar data
                 scalarFlat = reshape(scalarData, 1, []);
                 
+                % setScalar always replaces (mode: 'replace')
                 scalarPayload = struct(...
-                    'action', 'update', ...
+                    'action', 'add', ...
+                    'mode', 'replace', ...
                     'data', scalarFlat ...
                 );
             end
@@ -256,12 +262,13 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
         end
         
         function setVector(comp, vectorData, varargin)
-            % setVector - Visualize vector field with quiver plot
+            % setVector - Visualize vector field with line segments or arrows
             %
             % Syntax:
             %   comp.setVector(vectorData)
             %   comp.setVector(vectorData, 'Support', 'vertex')
-            %   comp.setVector(vectorData, 'Stride', 5, 'LengthScale', 1.0)
+            %   comp.setVector(vectorData, 'Positions', centroids, 'Normals', normals)
+            %   comp.setVector(vectorData, 'Style', 'arrow', 'LengthScale', 1.0)
             %
             % Inputs:
             %   vectorData - [N×3] or [M×3] matrix of vectors
@@ -270,25 +277,37 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             %
             % Optional Parameters:
             %   'Support'      - 'face' (default) or 'vertex'
-            %   'Stride'       - Draw every Nth vector (default: 5)
-            %   'LengthScale'  - Arrow length multiplier (default: 1.0)
+            %   'Positions'    - [N×3] Base positions (centroids for faces, vertices for vertex support)
+            %                    If not provided, uses stored vertices for vertex support
+            %   'Normals'      - [N×3] Surface normals for tangent projection
+            %                    If not provided, no tangent projection
+            %   'Style'        - 'arrow' (default) or 'line' - both use 2D line segments
+            %   'Stride'       - Draw every Nth vector (default: 1 - all vectors)
+            %   'LengthScale'  - Arrow length multiplier (default: 1.5)
             %   'MaxLength'    - Maximum arrow length (default: 10.0)
             %   'MinMagnitude' - Skip vectors below this magnitude (default: 1e-12)
+            %   'Color'        - Line segment color as hex (default: 0x0000ff blue)
+            %   'LineWidth'    - Line width in pixels (default: 1)
             %
             % Examples:
-            %   % Visualize face-based gradient field
-            %   viewer.setVector(gradients, 'Support', 'face');
+            %   % Face-based field with pre-computed centroids and normals
+            %   geom = M.geometry();
+            %   viewer.setVector(X_face, ...
+            %       'Support', 'face', ...
+            %       'Positions', geom.face.centroids.value, ...
+            %       'Normals', geom.face.normals.value, ...
+            %       'Style', 'arrow', 'LengthScale', 0.3);
             %
-            %   % Sparse vertex vectors with custom scaling
-            %   viewer.setVector(velocities, 'Support', 'vertex', 'Stride', 10, 'LengthScale', 0.5);
+            %   % Vertex vectors (uses stored vertex positions)
+            %   viewer.setVector(velocities, 'Support', 'vertex', 'Stride', 10);
             %
             %   % Clear vector visualization
             %   viewer.setVector([]);
             %
             % Notes:
-            %   - Vectors are displayed as 3D arrows (quiver plot)
-            %   - For face support, arrows placed at face centroids
-            %   - For vertex support, arrows placed at vertex positions
+            %   - Pre-computed positions and normals avoid duplicate geometry computation
+            %   - 'arrow' style: 2D line segments with V-shaped arrowheads at tips
+            %   - 'line' style: Simple 2D line segments without arrowheads (faster)
             
             arguments
                 comp (1,1) bct.ui.manifold.Viewer
@@ -302,13 +321,21 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             % Parse optional parameters
             p = inputParser();
             p.addParameter('Support', 'face', @(x) ismember(lower(x), {'face', 'vertex'}));
-            p.addParameter('Stride', 5, @(x) isnumeric(x) && isscalar(x) && x > 0);
-            p.addParameter('LengthScale', 1.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Positions', [], @(x) isempty(x) || (isnumeric(x) && size(x,2) == 3));
+            p.addParameter('Normals', [], @(x) isempty(x) || (isnumeric(x) && size(x,2) == 3));
+            p.addParameter('Style', 'arrow', @(x) ismember(lower(x), {'arrow', 'line'}));
+            p.addParameter('Stride', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('LengthScale', 1.5, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.addParameter('MaxLength', 10.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.addParameter('MinMagnitude', 1e-12, @(x) isnumeric(x) && isscalar(x) && x >= 0);
+            p.addParameter('Color', 0x0000ff, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('LineWidth', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
             p.parse(varargin{:});
             
             support = lower(p.Results.Support);
+            positions = p.Results.Positions;
+            normals = p.Results.Normals;
+            style = lower(p.Results.Style);
             stride = p.Results.Stride;
             lengthScale = p.Results.LengthScale;
             maxLength = p.Results.MaxLength;
@@ -320,18 +347,38 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                     error('bct:ui:manifold:Viewer:InvalidVectorData', ...
                         'Vector data must contain only finite values');
                 end
-                
-                % Validate size based on support
-                if ~isempty(comp.Vertices) && ~isempty(comp.Faces)
-                    expectedSize = size(comp.Faces, 1);
+            end
+            
+            % Get or validate positions
+            if ~isempty(vectorData)
+                if isempty(positions)
+                    % Use stored vertices for vertex support
                     if strcmp(support, 'vertex')
-                        expectedSize = size(comp.Vertices, 1);
+                        if isempty(comp.Vertices)
+                            error('bct:ui:manifold:Viewer:NoVertices', ...
+                                'No vertex positions available. Call setMesh() first or provide Positions parameter.');
+                        end
+                        positions = comp.Vertices;
+                    else
+                        % For face support, positions must be provided
+                        error('bct:ui:manifold:Viewer:NoPositions', ...
+                            'For face support, you must provide Positions parameter (face centroids).');
                     end
-                    
-                    if size(vectorData, 1) ~= expectedSize
-                        error('bct:ui:manifold:Viewer:VectorSizeMismatch', ...
-                            'Vector data rows (%d) must match %s count (%d)', ...
-                            size(vectorData, 1), support, expectedSize);
+                end
+                
+                % Validate positions match vector count
+                if size(positions, 1) ~= size(vectorData, 1)
+                    error('bct:ui:manifold:Viewer:PositionVectorMismatch', ...
+                        'Positions rows (%d) must match vector data rows (%d)', ...
+                        size(positions, 1), size(vectorData, 1));
+                end
+                
+                % Validate normals if provided
+                if ~isempty(normals)
+                    if size(normals, 1) ~= size(vectorData, 1)
+                        error('bct:ui:manifold:Viewer:NormalVectorMismatch', ...
+                            'Normals rows (%d) must match vector data rows (%d)', ...
+                            size(normals, 1), size(vectorData, 1));
                     end
                 end
             end
@@ -341,18 +388,30 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 % Clear vector visualization
                 vectorPayload = struct('action', 'clear');
             else
-                % Flatten vector data: [vx1 vy1 vz1 vx2 vy2 vz2 ...]
-                vectorFlat = reshape(vectorData.', 1, []);
+                % Flatten arrays for transfer
+                vectorFlat = reshape(vectorData.', 1, []);      % [vx1 vy1 vz1 ...]
+                positionsFlat = reshape(positions.', 1, []);    % [px1 py1 pz1 ...]
                 
                 vectorPayload = struct(...
                     'action', 'update', ...
                     'data', vectorFlat, ...
+                    'positions', positionsFlat, ...
                     'support', support, ...
+                    'style', style, ...
                     'stride', stride, ...
                     'lengthScale', lengthScale, ...
                     'maxLength', maxLength, ...
-                    'minMagnitude', minMagnitude ...
+                    'minMagnitude', minMagnitude, ...
+                    'color', p.Results.Color, ...
+                    'lineWidth', p.Results.LineWidth, ...
+                    'frame', 'matlab' ...  % Vectors/positions are in MATLAB Z-up frame
                 );
+                
+                % Add normals if provided
+                if ~isempty(normals)
+                    normalsFlat = reshape(normals.', 1, []);    % [nx1 ny1 nz1 ...]
+                    vectorPayload.normals = normalsFlat;
+                end
             end
             
             % Send to JavaScript
@@ -361,6 +420,605 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             else
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Vector data not sent.');
+            end
+        end
+        
+        function addScalar(comp, scalarData, varargin)
+            % addScalar - Add/blend scalar field with existing visualization
+            %
+            % Syntax:
+            %   comp.addScalar(scalarData)
+            %   comp.addScalar(scalarData, 'Name', 'myfield')
+            %   comp.addScalar(scalarData, 'Mode', 'add')
+            %
+            % Inputs:
+            %   scalarData - [N×1] vector of scalar values
+            %
+            % Optional Parameters:
+            %   'Name' - Layer name (default: auto-generated)
+            %   'Mode' - Blending mode: 'add', 'replace', 'multiply', 'max', 'min'
+            %            (default: 'add')
+            %
+            % Blending Modes:
+            %   'add'      - Add to existing field: result = existing + new
+            %   'replace'  - Replace existing field: result = new
+            %   'multiply' - Multiply with existing: result = existing * new
+            %   'max'      - Take maximum: result = max(existing, new)
+            %   'min'      - Take minimum: result = min(existing, new)
+            %
+            % Examples:
+            %   % Replace existing (like setScalar)
+            %   viewer.addScalar(field1, 'Mode', 'replace');
+            %
+            %   % Add two fields together
+            %   viewer.addScalar(heatDistanceA, 'Name', 'sourceA');
+            %   viewer.addScalar(heatDistanceB, 'Mode', 'add');  % Combines A + B
+            %
+            %   % Multiply fields
+            %   viewer.addScalar(amplitude, 'Mode', 'replace');
+            %   viewer.addScalar(mask, 'Mode', 'multiply');  % Result = amplitude * mask
+            %
+            % Note:
+            %   Use setScalar() to always replace the existing field.
+            %   Use addScalar() with 'Mode' to combine fields.
+            
+            p = inputParser();
+            p.addParameter('Name', sprintf('scalar_%d', randi(1e6)), @ischar);
+            p.addParameter('Mode', 'add', @(x) ismember(x, {'add', 'replace', 'multiply', 'max', 'min'}));
+            p.parse(varargin{:});
+            
+            % Validate scalar data
+            if isempty(scalarData)
+                warning('bct:ui:manifold:Viewer:EmptyScalarData', 'Empty scalar data provided');
+                return;
+            end
+            
+            validateattributes(scalarData, {'double'}, {'real', 'finite', 'vector'}, 'addScalar', 'scalarData');
+            
+            % Flatten scalar data
+            scalarFlat = reshape(scalarData, 1, []);
+            
+            % Build payload
+            scalarPayload = struct(...
+                'action', 'add', ...
+                'name', p.Results.Name, ...
+                'mode', p.Results.Mode, ...
+                'data', scalarFlat ...
+            );
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('scalar', scalarPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Scalar data not sent.');
+            end
+        end
+        
+        function setColorLimits(comp, limits)
+            % setColorLimits - Set color limits for scalar visualization
+            %
+            % Syntax:
+            %   comp.setColorLimits([min, max])
+            %   comp.setColorLimits('auto')
+            %
+            % Inputs:
+            %   limits - Either:
+            %            [min, max] - Two-element vector specifying color limits
+            %            'auto'     - Reset to automatic range
+            %
+            % Examples:
+            %   % Set custom color limits
+            %   viewer.setScalar(scalarData);
+            %   viewer.setColorLimits([0, 50]);  % Clamp colormap to [0, 50]
+            %
+            %   % Reset to auto range
+            %   viewer.setColorLimits('auto');
+            %
+            % Notes:
+            %   - Affects current and future scalar field visualizations
+            %   - Values outside the range are clamped to min/max
+            %   - Use 'auto' to return to data-driven range
+            %
+            % See also: setScalar, addScalar
+            
+            arguments
+                comp (1,1) bct.ui.manifold.Viewer
+                limits
+            end
+            
+            % Validate and parse limits
+            if ischar(limits) || isstring(limits)
+                if ~strcmpi(limits, 'auto')
+                    error('bct:ui:manifold:Viewer:InvalidLimits', ...
+                        'String input must be ''auto''');
+                end
+                climPayload = struct('action', 'setClim', 'clim', 'auto');
+            elseif isnumeric(limits)
+                if numel(limits) ~= 2
+                    error('bct:ui:manifold:Viewer:InvalidLimits', ...
+                        'Numeric limits must be a two-element vector [min, max]');
+                end
+                if ~all(isfinite(limits))
+                    error('bct:ui:manifold:Viewer:InvalidLimits', ...
+                        'Color limits must be finite values');
+                end
+                if limits(1) >= limits(2)
+                    error('bct:ui:manifold:Viewer:InvalidLimits', ...
+                        'Color limits must satisfy min < max');
+                end
+                climPayload = struct('action', 'setClim', 'clim', limits(:)');
+            else
+                error('bct:ui:manifold:Viewer:InvalidLimits', ...
+                    'Limits must be [min, max] or ''auto''');
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('colorLimits', climPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Color limits not applied.');
+            end
+        end
+        
+        function clearScalar(comp, varargin)
+            % clearScalar - Clear scalar visualization
+            %
+            % Syntax:
+            %   comp.clearScalar()          % Clear all scalar layers
+            %   comp.clearScalar('Name', 'myfield')  % Clear specific layer
+            %
+            % Examples:
+            %   viewer.clearScalar();
+            %   viewer.clearScalar('Name', 'curvature');
+            
+            p = inputParser();
+            p.addParameter('Name', '', @ischar);
+            p.parse(varargin{:});
+            
+            % Build payload
+            scalarPayload = struct('action', 'clear');
+            if ~isempty(p.Results.Name)
+                scalarPayload.name = p.Results.Name;
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('scalar', scalarPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Clear command not sent.');
+            end
+        end
+        
+        function addVector(comp, vectorData, varargin)
+            % addVector - Add vector field without clearing existing ones
+            %
+            % Syntax:
+            %   comp.addVector(vectorData, 'Positions', positions, ...)
+            %   comp.addVector(vectorData, 'Name', 'field1', ...)
+            %
+            % Inputs:
+            %   vectorData - [N×3] matrix of vectors
+            %   'Name' - Layer name (default: auto-generated)
+            %   (All other parameters same as setVector)
+            %
+            % Examples:
+            %   viewer.addVector(field1, 'Name', 'tangent1', ...
+            %       'Positions', centroids, 'Normals', normals);
+            %   viewer.addVector(field2, 'Name', 'tangent2', ...
+            %       'Positions', centroids, 'Normals', normals);
+            
+            % Parse parameters (reuse setVector's parameter parsing)
+            p = inputParser();
+            p.addParameter('Name', sprintf('vector_%d', randi(1e6)), @ischar);
+            p.addParameter('Support', 'face', @(x) ismember(lower(x), {'face', 'vertex'}));
+            p.addParameter('Positions', [], @(x) isempty(x) || (isnumeric(x) && size(x,2) == 3));
+            p.addParameter('Normals', [], @(x) isempty(x) || (isnumeric(x) && size(x,2) == 3));
+            p.addParameter('Style', 'arrow', @(x) ismember(lower(x), {'arrow', 'line'}));
+            p.addParameter('Stride', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('LengthScale', 1.5, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('MaxLength', 10.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('MinMagnitude', 1e-12, @(x) isnumeric(x) && isscalar(x) && x >= 0);
+            p.addParameter('Color', 0x0000ff, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('LineWidth', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.parse(varargin{:});
+            
+            % Validate vector data
+            if isempty(vectorData)
+                warning('bct:ui:manifold:Viewer:EmptyVectorData', 'Empty vector data provided');
+                return;
+            end
+            
+            validateattributes(vectorData, {'double'}, {'real', 'finite', 'ncols', 3}, 'addVector', 'vectorData');
+            
+            % Get positions
+            positions = p.Results.Positions;
+            if isempty(positions)
+                if strcmp(lower(p.Results.Support), 'vertex')
+                    if isempty(comp.Vertices)
+                        error('bct:ui:manifold:Viewer:NoVertices', ...
+                            'No vertex positions available. Call setMesh() first or provide Positions parameter.');
+                    end
+                    positions = comp.Vertices;
+                else
+                    error('bct:ui:manifold:Viewer:NoPositions', ...
+                        'For face support, you must provide Positions parameter (face centroids).');
+                end
+            end
+            
+            % Flatten arrays
+            vectorFlat = reshape(vectorData.', 1, []);
+            positionsFlat = reshape(positions.', 1, []);
+            
+            % Build payload
+            vectorPayload = struct(...
+                'action', 'add', ...
+                'name', p.Results.Name, ...
+                'data', vectorFlat, ...
+                'positions', positionsFlat, ...
+                'support', lower(p.Results.Support), ...
+                'style', lower(p.Results.Style), ...
+                'stride', p.Results.Stride, ...
+                'lengthScale', p.Results.LengthScale, ...
+                'maxLength', p.Results.MaxLength, ...
+                'minMagnitude', p.Results.MinMagnitude, ...
+                'color', p.Results.Color, ...
+                'lineWidth', p.Results.LineWidth, ...
+                'frame', 'matlab' ...
+            );
+            
+            % Add normals if provided
+            if ~isempty(p.Results.Normals)
+                normalsFlat = reshape(p.Results.Normals.', 1, []);
+                vectorPayload.normals = normalsFlat;
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('vector', vectorPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Vector data not sent.');
+            end
+        end
+        
+        function clearVector(comp, varargin)
+            % clearVector - Clear vector visualization
+            %
+            % Syntax:
+            %   comp.clearVector()          % Clear all vector layers
+            %   comp.clearVector('Name', 'field1')  % Clear specific layer
+            %
+            % Examples:
+            %   viewer.clearVector();
+            %   viewer.clearVector('Name', 'tangent1');
+            
+            p = inputParser();
+            p.addParameter('Name', '', @ischar);
+            p.parse(varargin{:});
+            
+            % Build payload
+            vectorPayload = struct('action', 'clear');
+            if ~isempty(p.Results.Name)
+                vectorPayload.name = p.Results.Name;
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('vector', vectorPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Clear command not sent.');
+            end
+        end
+        
+        function setPoint(comp, varargin)
+            % setPoint - Visualize point markers (spheres) at vertices/faces
+            %
+            % Syntax:
+            %   comp.setPoint('Positions', positions, ...)
+            %   comp.setPoint('Indices', indices, ...)
+            %   comp.setPoint('Positions', positions, 'Radius', 2.0, 'Color', 0xff0000)
+            %
+            % Optional Parameters:
+            %   'Action'    - 'set' (default, replace), 'add' (add to layer), or 'clear'
+            %   'Positions' - [N×3] Explicit positions for markers
+            %   'Indices'   - [M×1] Vertex/face indices to mark
+            %   'Radius'    - Sphere radius (default: 1.0)
+            %   'Color'     - Hex color or array of colors (default: 0xff0000 red)
+            %   'Opacity'   - Opacity 0-1 (default: 1.0)
+            %   'Transparent' - Enable transparency (default: false)
+            %   'Name'      - Layer name (default: 'default')
+            %
+            % Examples:
+            %   % Mark specific vertices
+            %   viewer.setPoint('Indices', [1, 10, 100], 'Radius', 2.0, 'Color', 0x00ff00);
+            %
+            %   % Mark custom positions
+            %   viewer.setPoint('Positions', customPos, 'Radius', 1.5, 'Color', 0xff0000);
+            %
+            %   % Named layer
+            %   viewer.setPoint('Indices', boundaryVerts, 'Name', 'boundaries');
+            %
+            %   % Clear
+            %   viewer.setPoint('Action', 'clear');
+            
+            p = inputParser();
+            p.addParameter('Action', 'set', @(x) ismember(lower(x), {'set', 'add', 'clear'}));
+            p.addParameter('Name', 'default', @ischar);
+            p.addParameter('Positions', [], @(x) isempty(x) || (isnumeric(x) && size(x,2) == 3));
+            p.addParameter('Indices', [], @(x) isempty(x) || (isnumeric(x) && isvector(x)));
+            p.addParameter('Radius', 1.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Color', 0xff0000, @(x) isnumeric(x));
+            p.addParameter('Opacity', 1.0, @(x) isnumeric(x) && isscalar(x) && x >= 0 && x <= 1);
+            p.addParameter('Transparent', false, @islogical);
+            p.parse(varargin{:});
+            
+            if strcmp(lower(p.Results.Action), 'clear')
+                % Clear point cloud
+                pointPayload = struct('action', 'clear');
+                if ~strcmp(p.Results.Name, 'default')
+                    pointPayload.name = p.Results.Name;
+                end
+            else
+                % Set/add point cloud
+                action = lower(p.Results.Action);  % 'set' or 'add'
+                positions = p.Results.Positions;
+                indices = p.Results.Indices;
+                
+                if isempty(positions) && isempty(indices)
+                    error('bct:ui:manifold:Viewer:NoPositionsOrIndices', ...
+                        'Either Positions or Indices must be provided');
+                end
+                
+                % Build payload
+                pointPayload = struct(...
+                    'action', action, ...  % 'set' or 'add'
+                    'name', p.Results.Name, ...
+                    'radius', p.Results.Radius, ...
+                    'color', p.Results.Color, ...
+                    'opacity', p.Results.Opacity, ...
+                    'transparent', p.Results.Transparent, ...
+                    'frame', 'matlab' ...
+                );
+                
+                % Add positions or indices
+                if ~isempty(positions)
+                    positionsFlat = reshape(positions.', 1, []);
+                    pointPayload.positions = positionsFlat;
+                elseif ~isempty(indices)
+                    % Convert to 0-based indexing for JavaScript
+                    pointPayload.indices = double(indices(:)') - 1;
+                end
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('point', pointPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Point data not sent.');
+            end
+        end
+        
+        function addPoint(comp, varargin)
+            % addPoint - Add point markers without clearing existing ones
+            %
+            % Syntax:
+            %   comp.addPoint('Name', 'markers1', 'Positions', positions, ...)
+            %   comp.addPoint('Name', 'markers2', 'Indices', indices, ...)
+            %
+            % Parameters: Same as setPoint
+            %
+            % Examples:
+            %   viewer.addPoint('Name', 'set1', 'Indices', [1,2,3], 'Color', 0xff0000);
+            %   viewer.addPoint('Name', 'set2', 'Indices', [10,20,30], 'Color', 0x00ff00);
+            
+            % Parse to override action to 'add'
+            p = inputParser();
+            p.KeepUnmatched = true;
+            p.addParameter('Name', sprintf('point_%d', randi(1e6)), @ischar);
+            p.parse(varargin{:});
+            
+            % Create modified varargin with action='add'
+            modifiedArgs = [{'Action', 'add'}, varargin];
+            
+            % Call setPoint with action='add'
+            comp.setPoint(modifiedArgs{:});
+        end
+        
+        function clearPoint(comp, varargin)
+            % clearPoint - Clear point markers
+            %
+            % Syntax:
+            %   comp.clearPoint()                % Clear all point layers
+            %   comp.clearPoint('Name', 'set1')  % Clear specific layer
+            %
+            % Examples:
+            %   viewer.clearPoint();
+            %   viewer.clearPoint('Name', 'boundaries');
+            
+            p = inputParser();
+            p.addParameter('Name', '', @ischar);
+            p.parse(varargin{:});
+            
+            % Build payload
+            pointPayload = struct('action', 'clear');
+            if ~isempty(p.Results.Name)
+                pointPayload.name = p.Results.Name;
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('point', pointPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Clear command not sent.');
+            end
+        end
+        
+        function addLine(comp, varargin)
+            % addLine - Add arbitrary line segments to the visualization
+            %
+            % Syntax:
+            %   comp.addLine('Segments', segments, ...)
+            %   comp.addLine('Start', startPoints, 'End', endPoints, ...)
+            %
+            % Parameters:
+            %   'Name'     - Layer name for management (default: auto-generated)
+            %   'Action'   - 'set' (replace), 'add' (keep existing), 'clear' (remove)
+            %   'Segments' - [N×6] or [1×6*N] array of endpoints [x1,y1,z1,x2,y2,z2,...]
+            %   'Start'    - [N×3] array of start points (alternative to Segments)
+            %   'End'      - [N×3] array of end points (alternative to Segments)
+            %   'Color'    - Line color as hex (0xRRGGBB) or string (default: 0xff0000)
+            %   'LineWidth'- Line width in pixels (default: 2)
+            %   'Frame'    - 'matlab' (default, Z-up) or 'threejs' (Y-up)
+            %
+            % Examples:
+            %   % Direct segment specification
+            %   segments = [0,0,0, 1,0,0; 1,0,0, 1,1,0];  % 2 line segments
+            %   viewer.addLine('Segments', segments, 'Color', 0x00ff00);
+            %
+            %   % Start/End point specification
+            %   startPts = [0,0,0; 1,0,0];
+            %   endPts = [1,0,0; 1,1,0];
+            %   viewer.addLine('Start', startPts, 'End', endPts, 'LineWidth', 3);
+            %
+            %   % Clear specific layer
+            %   viewer.addLine('Name', 'isolines', 'Action', 'clear');
+            %
+            %   % Clear all line layers
+            %   viewer.addLine('Action', 'clear');
+            
+            p = inputParser();
+            p.addParameter('Name', '', @ischar);  % Empty default - will auto-generate if needed
+            p.addParameter('Action', 'set', @(x) ismember(x, {'set', 'add', 'clear'}));
+            p.addParameter('Segments', [], @isnumeric);
+            p.addParameter('Start', [], @isnumeric);
+            p.addParameter('End', [], @isnumeric);
+            p.addParameter('Color', 0xff0000, @(x) (isnumeric(x) && isscalar(x)) || ischar(x));
+            p.addParameter('LineWidth', 2, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Frame', 'matlab', @(x) ismember(x, {'matlab', 'threejs'}));
+            p.parse(varargin{:});
+            
+            % Build payload
+            linePayload = struct();
+            linePayload.action = p.Results.Action;
+            linePayload.frame = p.Results.Frame;
+            
+            % Handle Name parameter
+            if ~isempty(p.Results.Name)
+                linePayload.name = p.Results.Name;
+            elseif ~strcmp(p.Results.Action, 'clear')
+                % Auto-generate name only if not clearing
+                linePayload.name = sprintf('line_%d', randi(1e6));
+            end
+            % For 'clear' with no name, don't set linePayload.name (clears all)
+            
+            if strcmp(p.Results.Action, 'clear')
+                % Clear action: send payload immediately
+                if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                    comp.HTMLComponent.Data = struct('lines', linePayload);
+                else
+                    warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                        'HTMLComponent not ready. Clear command not sent.');
+                end
+                return;
+            end
+            
+            % Generate segments array
+            if ~isempty(p.Results.Segments)
+                % Direct segment specification
+                segments = p.Results.Segments;
+                if size(segments, 2) == 6
+                    % [N×6] format → reshape to [1×6*N]
+                    segments = reshape(segments', 1, []);
+                elseif numel(segments) ~= 6 * floor(numel(segments) / 6)
+                    error('bct:ui:manifold:Viewer:InvalidSegments', ...
+                        'Segments must be N×6 or 1×(6*N) array');
+                end
+            elseif ~isempty(p.Results.Start) && ~isempty(p.Results.End)
+                % Start/End point specification
+                startPts = p.Results.Start;
+                endPts = p.Results.End;
+                
+                if size(startPts, 1) ~= size(endPts, 1)
+                    error('bct:ui:manifold:Viewer:MismatchedPoints', ...
+                        'Start and End must have same number of points');
+                end
+                
+                if size(startPts, 2) ~= 3 || size(endPts, 2) ~= 3
+                    error('bct:ui:manifold:Viewer:InvalidPoints', ...
+                        'Start and End must be N×3 arrays');
+                end
+                
+                % Interleave start and end points
+                N = size(startPts, 1);
+                segments = zeros(1, 6 * N);
+                for i = 1:N
+                    segments((i-1)*6 + 1 : (i-1)*6 + 3) = startPts(i, :);
+                    segments((i-1)*6 + 4 : (i-1)*6 + 6) = endPts(i, :);
+                end
+            else
+                error('bct:ui:manifold:Viewer:NoSegments', ...
+                    'Must provide either Segments or both Start and End points');
+            end
+            
+            % Add to payload
+            linePayload.segments = segments;
+            linePayload.color = p.Results.Color;
+            linePayload.linewidth = p.Results.LineWidth;
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('lines', linePayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Line data not sent.');
+            end
+        end
+        
+        function background(comp, varargin)
+            % background - Set scene background color
+            %
+            % Syntax:
+            %   comp.background('Color', color)
+            %   comp.background('Color', 'white')
+            %   comp.background('Color', 0xffffff)
+            %   comp.background('Color', 'none')  % Transparent background
+            %
+            % Parameters:
+            %   'Color' - Color as hex (0xRRGGBB), string ('white', 'black', etc.), or 'none'
+            %
+            % Examples:
+            %   viewer.background('Color', 0xffffff);  % White
+            %   viewer.background('Color', 'white');    % White (named)
+            %   viewer.background('Color', 0x000000);  % Black
+            %   viewer.background('Color', 'none');     % Transparent
+            
+            p = inputParser();
+            p.addParameter('Color', 0xffffff, @(x) (isnumeric(x) && isscalar(x)) || ischar(x));
+            p.parse(varargin{:});
+            
+            colorValue = p.Results.Color;
+            
+            % Convert color to appropriate format
+            if ischar(colorValue)
+                % Named colors or 'none'
+                colorPayload = struct('color', colorValue);
+            else
+                % Numeric color (hex)
+                colorPayload = struct('color', colorValue);
+            end
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('background', colorPayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Background command not sent.');
             end
         end
     end

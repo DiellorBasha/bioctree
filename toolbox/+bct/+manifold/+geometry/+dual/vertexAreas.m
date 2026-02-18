@@ -192,4 +192,7 @@ header = struct( ...
     'numberOfNonPositiveDualVertexAreas', nNonPositive ...
 );
 
+% Assign output
+vertexAreas = dualVertexAreas;
+
 end

@@ -7,10 +7,13 @@ import { createLightingRig } from './core/lighting.js';
 import { createVisualizationControls } from './ui/visualizationControls.js';
 import { MeshManager } from './runtime/meshManager.js';
 import { VisualizationManager } from './runtime/visualizationManager.js';
+import { LayerManager } from './runtime/layerManager.js';
 import { ScalarMapper } from './visualization/scalarMapper.js';
 import { Colorbar } from './ui/colorbar.js';
 import { StateManager, StateEvent, AppState } from './core/stateManager.js';
-import { createVectorQuiver, computeFaceCentroids, computeFaceNormals } from './visualization/quiver.js';
+import { createVectorLineSegments } from './visualization/lineSegments.js';
+import { createLineSegments3D } from './visualization/lineSegments3D.js';
+import { createPointCloud } from './visualization/pointCloud.js';
 
 // Application state manager
 let stateManager = null;
@@ -28,14 +31,12 @@ let lightRig = null;
 // Runtime managers
 let meshManager = null;
 let vizManager = null;
+let layerManager = null;
 let scalarMapper = null;
 let colorbar = null;
 
 // Scalar data cache (for re-applying when colormap changes)
 let currentScalarData = null;
-
-// Vector quiver visualization
-let currentQuiver = null;
 
 // Debug visuals
 let targetMarker = null; // follows controls.target (rotation anchor)
@@ -56,7 +57,9 @@ const SHOW_TARGET = false; // hide pivot marker
 // Visualization state (lil-gui contract)
 const vizState = {
   surface: {
-    material: 'default'  // 'default' or 'wireframe'
+    material: 'default',  // 'default' or 'wireframe'
+    color: '#ffffff',     // Base mesh color (white)
+    wireframe: false      // Show wireframe overlay on top of mesh
   },
   edges: {
     color: '#ffffff'
@@ -68,7 +71,8 @@ const vizState = {
   scalar: {
     colormap: 'inferno',
     autoRange: true,
-    colorbar: false
+    colorbar: false,
+    clim: null  // null = auto, or [min, max] array
   }
 };
 
@@ -120,6 +124,7 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   // Initialize runtime managers
   meshManager = new MeshManager(viewerCore);
   vizManager = new VisualizationManager(viewerCore, meshManager, lightRig);
+  layerManager = new LayerManager();
   scalarMapper = new ScalarMapper();
   
   // Initialize colorbar UI overlay
@@ -184,6 +189,9 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
     // Resize pin on viewport changes
     pin?.onResize();
 
+    // Update LineMaterial resolutions for LineSegments2 objects
+    updateLineMaterialResolutions();
+
     // Update normals/tangents helpers if active (via vizManager)
     vizManager?.updateNormalsHelpers();
     vizManager?.updateTangentsHelpers();
@@ -194,6 +202,12 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
   
   // Create visualization controls GUI
   try {
+    // Dispose old GUI if exists
+    if (vizGUI) {
+      vizGUI.destroy();
+      vizGUI = null;
+    }
+    
     vizGUI = createVisualizationControls({
       vizState,
       onChange: () => {
@@ -229,6 +243,25 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
       console.error(err);
     });
   }
+}
+
+/**
+ * Update LineMaterial resolution for all LineSegments2 objects
+ * Called each frame to ensure line width renders correctly on viewport resize
+ * @private
+ */
+function updateLineMaterialResolutions() {
+  if (!scene || !renderer) return;
+  
+  const width = renderer.domElement.width;
+  const height = renderer.domElement.height;
+  
+  scene.traverse((obj) => {
+    // Check if object has LineMaterial (from LineSegments2)
+    if (obj.material && obj.material.isLineMaterial) {
+      obj.material.resolution.set(width, height);
+    }
+  });
 }
 
 /**
@@ -405,6 +438,11 @@ export function clearMesh() {
       colorbar.setVisible(false);
     }
     
+    // Clear all layers (scalars, vectors, points)
+    if (layerManager) {
+      layerManager.clearAll();
+    }
+    
     // Clear the mesh
     meshManager.clearModel();
   } catch (err) {
@@ -416,7 +454,9 @@ export function clearMesh() {
  * Set scalar data for color mapping
  * Called from MATLAB via HTMLComponent.Data = {scalar: scalarData}
  * @param {Object} scalarData - Scalar field configuration
- * @param {string} scalarData.action - 'update' or 'clear'
+ * @param {string} scalarData.action - 'add'|'set'|'clear'
+ * @param {string} [scalarData.name='default'] - Layer name for add/clear operations
+ * @param {string} [scalarData.mode='replace'] - Blending mode: 'add'|'replace'|'multiply'|'max'|'min'
  * @param {Array} [scalarData.data] - Flat array of scalar values
  */
 export function setScalarData(scalarData) {
@@ -426,9 +466,21 @@ export function setScalarData(scalarData) {
   }
 
   try {
-    if (scalarData.action === 'clear') {
+    const action = scalarData.action || 'set';
+    const name = scalarData.name || 'default';
+    const mode = scalarData.mode || 'replace';
+
+    if (action === 'clear') {
       // Dispatch clear data event
       stateManager.dispatch(StateEvent.CLEAR_DATA_REQUESTED);
+      
+      // Clear specific layer or all
+      if (scalarData.name) {
+        console.log(`[setScalarData] Clearing scalar layer: ${name}`);
+        // Note: Scalar layers currently don't support independent clearing
+        // This would require layer-based color management
+        // For now, clear all
+      }
       
       // Clear scalar visualization
       currentScalarData = null;
@@ -440,16 +492,26 @@ export function setScalarData(scalarData) {
           }
         });
       }
+      
+      // Clear all scalar layers
+      if (layerManager) {
+        layerManager.clearAllScalarLayers();
+      }
+      
       // Hide colorbar and update vizState
       if (colorbar) {
         colorbar.setVisible(false);
         vizState.scalar.colorbar = false;
-        // Update GUI to reflect the state change
         if (vizGUI) {
           vizGUI.updateDisplay();
         }
       }
-    } else if (scalarData.action === 'update') {
+    } else if (action === 'add' || action === 'set' || action === 'update') {
+      // 'update' is legacy alias for 'set'
+      if (action === 'update') {
+        console.warn('[setScalarData] action="update" is deprecated, use "set" instead');
+      }
+      
       // Dispatch load data requested event
       const requestId = stateManager.generateRequestId();
       stateManager.dispatch(StateEvent.LOAD_DATA_REQUESTED, { requestId });
@@ -469,39 +531,98 @@ export function setScalarData(scalarData) {
         return;
       }
 
-      // Cache the data for colormap updates
-      currentScalarData = data;
+      // Apply blending mode if currentScalarData exists and mode is not 'replace'
+      let finalData = data;
+      if (currentScalarData && mode !== 'replace') {
+        if (currentScalarData.length !== data.length) {
+          console.error('[setScalarData] Cannot blend: scalar data length mismatch');
+          return;
+        }
+        
+        finalData = new Array(data.length);
+        
+        switch (mode) {
+          case 'add':
+            for (let i = 0; i < data.length; i++) {
+              finalData[i] = currentScalarData[i] + data[i];
+            }
+            console.log(`[setScalarData] Blending mode: ADD (existing + new)`);
+            break;
+          
+          case 'multiply':
+            for (let i = 0; i < data.length; i++) {
+              finalData[i] = currentScalarData[i] * data[i];
+            }
+            console.log(`[setScalarData] Blending mode: MULTIPLY (existing * new)`);
+            break;
+          
+          case 'max':
+            for (let i = 0; i < data.length; i++) {
+              finalData[i] = Math.max(currentScalarData[i], data[i]);
+            }
+            console.log(`[setScalarData] Blending mode: MAX`);
+            break;
+          
+          case 'min':
+            for (let i = 0; i < data.length; i++) {
+              finalData[i] = Math.min(currentScalarData[i], data[i]);
+            }
+            console.log(`[setScalarData] Blending mode: MIN`);
+            break;
+          
+          default:
+            console.warn(`[setScalarData] Unknown blend mode: ${mode}, using replace`);
+            finalData = data;
+        }
+      }
+
+      // Cache the blended data for future updates
+      currentScalarData = finalData;
       
       // Use colormap from vizState
       const colormap = vizState.scalar.colormap;
       
-      // Auto-compute clim if autoRange is enabled
+      // Determine clim: use custom if set, otherwise auto-compute
       let clim = null;
-      if (vizState.scalar.autoRange) {
+      if (vizState.scalar.clim !== null) {
+        // Use custom color limits
+        clim = vizState.scalar.clim;
+      } else if (vizState.scalar.autoRange) {
+        // Auto-compute clim from data
         let min = Infinity;
         let max = -Infinity;
-        for (let i = 0; i < data.length; i++) {
-          if (data[i] < min) min = data[i];
-          if (data[i] > max) max = data[i];
+        for (let i = 0; i < finalData.length; i++) {
+          if (finalData[i] < min) min = finalData[i];
+          if (finalData[i] > max) max = finalData[i];
         }
         clim = [min, max];
       }
 
       // Apply to all meshes in scene
+      let meshObject = null;
       loadedScene.traverse(obj => {
         if (obj.isMesh) {
-          scalarMapper.applyToMesh(obj, data, { colormap, clim });
+          scalarMapper.applyToMesh(obj, finalData, { colormap, clim });
+          if (!meshObject) meshObject = obj;
         }
       });
       
-      // Update colorbar with range and colormap, and show it automatically
+      // Store layer in manager
+      if (layerManager && meshObject) {
+        layerManager.setScalarLayer(name, {
+          data: finalData,
+          meshObject: meshObject,
+          metadata: { colormap, clim, action, mode }
+        });
+        console.log(`[setScalarData] ${action === 'add' ? 'Added' : 'Set'} scalar layer: ${name} (mode: ${mode})`);
+      }
+      
+      // Update colorbar with range and colormap
       if (colorbar && clim) {
         try {
           colorbar.update(colormap, clim[0], clim[1]);
-          // Auto-show colorbar when scalar data is applied
           colorbar.setVisible(true);
           vizState.scalar.colorbar = true;
-          // Update GUI to reflect the state change
           if (vizGUI) {
             vizGUI.updateDisplay();
           }
@@ -514,9 +635,12 @@ export function setScalarData(scalarData) {
       stateManager.dispatch(StateEvent.LOAD_DATA_SUCCEEDED, {
         requestId,
         type: 'scalar',
-        count: data.length,
+        name: name,
+        count: finalData.length,
         range: clim
       });
+      
+      console.log(`[setScalarData] Scalar layer '${name}' applied: ${finalData.length} values, range [${clim[0].toFixed(2)}, ${clim[1].toFixed(2)}]`);
     }
   } catch (err) {
     console.error('[setScalarData] Error setting scalar data:', err);
@@ -526,10 +650,76 @@ export function setScalarData(scalarData) {
 }
 
 /**
+ * Set color limits for scalar visualization
+ * Called from MATLAB via HTMLComponent.Data = {colorLimits: climData}
+ * @param {Object} climData - Color limit configuration
+ */
+export function setColorLimits(climData) {
+  try {
+    if (!climData || !climData.action || climData.action !== 'setClim') {
+      console.warn('[setColorLimits] Invalid color limits payload');
+      return;
+    }
+    
+    if (climData.clim === 'auto') {
+      // Reset to auto range
+      vizState.scalar.clim = null;
+      vizState.scalar.autoRange = true;
+      console.log('[setColorLimits] Color limits reset to auto');
+    } else if (Array.isArray(climData.clim) && climData.clim.length === 2) {
+      // Set custom limits
+      vizState.scalar.clim = climData.clim;
+      vizState.scalar.autoRange = false;
+      console.log(`[setColorLimits] Color limits set to [${climData.clim[0]}, ${climData.clim[1]}]`);
+    } else {
+      console.warn('[setColorLimits] Invalid clim format:', climData.clim);
+      return;
+    }
+    
+    // Re-apply current scalar data with new limits
+    if (layerManager) {
+      const currentLayer = layerManager.getScalarLayer('default');
+      if (currentLayer && currentLayer.data) {
+        const colormap = vizState.scalar.colormap;
+        let clim = vizState.scalar.clim;
+        
+        // If auto, recompute from data
+        if (clim === null && vizState.scalar.autoRange) {
+          let min = Infinity;
+          let max = -Infinity;
+          for (let i = 0; i < currentLayer.data.length; i++) {
+            if (currentLayer.data[i] < min) min = currentLayer.data[i];
+            if (currentLayer.data[i] > max) max = currentLayer.data[i];
+          }
+          clim = [min, max];
+        }
+        
+        // Re-apply to mesh
+        loadedScene.traverse(obj => {
+          if (obj.isMesh) {
+            scalarMapper.applyToMesh(obj, currentLayer.data, { colormap, clim });
+          }
+        });
+        
+        // Update colorbar
+        if (colorbar && clim) {
+          colorbar.update(colormap, clim[0], clim[1]);
+        }
+        
+        console.log(`[setColorLimits] Scalar visualization updated with new limits`);
+      }
+    }
+  } catch (err) {
+    console.error('[setColorLimits] Error setting color limits:', err);
+  }
+}
+
+/**
  * Set vector data for quiver visualization
  * Called from MATLAB via HTMLComponent.Data = {vector: vectorData}
  * @param {Object} vectorData - Vector field configuration
- * @param {string} vectorData.action - 'update' or 'clear'
+ * @param {string} vectorData.action - 'add'|'set'|'clear'
+ * @param {string} [vectorData.name='default'] - Layer name for add/clear operations
  * @param {Array} [vectorData.data] - Flat array of vector components [vx,vy,vz,...]
  * @param {string} [vectorData.support] - 'face' or 'vertex'
  * @param {number} [vectorData.stride] - Draw every Nth vector
@@ -544,16 +734,35 @@ export function setVectorData(vectorData) {
   }
 
   try {
-    if (vectorData.action === 'clear') {
-      // Clear vector visualization
-      if (currentQuiver) {
-        scene.remove(currentQuiver);
-        currentQuiver.geometry?.dispose();
-        currentQuiver.material?.dispose();
-        currentQuiver = null;
+    const action = vectorData.action || 'set';
+    const name = vectorData.name || 'default';
+
+    if (action === 'clear') {
+      if (vectorData.name) {
+        // Clear specific layer
+        if (layerManager && layerManager.clearVectorLayer(name)) {
+          console.log(`[setVectorData] Cleared vector layer: ${name}`);
+        } else {
+          console.warn(`[setVectorData] Vector layer not found: ${name}`);
+        }
+      } else {
+        // Clear all vector layers
+        if (layerManager) {
+          layerManager.clearAllVectorLayers();
+          console.log('[setVectorData] Cleared all vector layers');
+        }
       }
-      console.log('[setVectorData] Vector visualization cleared');
-    } else if (vectorData.action === 'update') {
+    } else if (action === 'add' || action === 'set' || action === 'update') {
+      // 'update' is legacy alias for 'set'
+      if (action === 'update') {
+        console.warn('[setVectorData] action="update" is deprecated, use "set" instead');
+      }
+      
+      // For 'set', clear existing layer with this name
+      if (action === 'set' && layerManager) {
+        layerManager.clearVectorLayer(name);
+      }
+      
       // Get loaded mesh
       const loadedScene = meshManager.getLoadedScene();
       if (!loadedScene) {
@@ -561,19 +770,24 @@ export function setVectorData(vectorData) {
         return;
       }
 
-      const { data, support, stride, lengthScale, maxLength, minMagnitude } = vectorData;
+      const { 
+        data, 
+        positions: positionsRaw,
+        normals: normalsRaw,
+        support, 
+        stride, 
+        lengthScale, 
+        maxLength, 
+        minMagnitude,
+        style = 'arrow',  // 'arrow' (default, 3D InstancedMesh) or 'line' (LineSegments)
+        frame = 'matlab',  // 'matlab' (default, Z-up) or 'threejs' (Y-up)
+        color = 0xff0000,  // Default red for line segments
+        lineWidth = 2      // Default line width
+      } = vectorData;
       
       if (!data || data.length === 0) {
         console.error('[setVectorData] No vector data provided');
         return;
-      }
-
-      // Remove old quiver if exists
-      if (currentQuiver) {
-        scene.remove(currentQuiver);
-        currentQuiver.geometry?.dispose();
-        currentQuiver.material?.dispose();
-        currentQuiver = null;
       }
 
       // Find mesh in loaded scene
@@ -589,80 +803,374 @@ export function setVectorData(vectorData) {
         return;
       }
 
-      const geometry = mesh.geometry;
-      const posAttr = geometry.attributes.position;
-      const vertices = posAttr.array;
+      // Get positions and normals from MATLAB payload
+      const positions = positionsRaw ? new Float32Array(positionsRaw) : null;
+      const normals = normalsRaw ? new Float32Array(normalsRaw) : null;
       
-      let positions, normals;
+      if (!positions) {
+        console.error('[setVectorData] No positions provided in payload');
+        return;
+      }
       
-      if (support === 'face') {
-        // Use pre-computed face centroids and normals from mesh payload
-        const faceCentroidsAttr = geometry.userData?.faceCentroids;
-        const faceNormalsAttr = geometry.userData?.faceNormals;
-        
-        if (faceCentroidsAttr && faceNormalsAttr) {
-          // Use pre-computed from MATLAB
-          positions = faceCentroidsAttr;
-          normals = faceNormalsAttr;
-          console.log(`[setVectorData] Face support (pre-computed): ${positions.length / 3} centroids, ${data.length / 3} vectors`);
-        } else {
-          // Fallback: compute on-the-fly
-          const indexAttr = geometry.index;
-          if (!indexAttr) {
-            console.error('[setVectorData] Geometry has no index attribute');
-            return;
-          }
-          const faces = indexAttr.array;
-          positions = computeFaceCentroids(vertices, faces);
-          normals = computeFaceNormals(vertices, faces);
-          console.log(`[setVectorData] Face support (computed): ${faces.length / 3} faces, ${data.length / 3} vectors`);
-        }
-      } else {
-        // Vertex support: use vertex positions directly
-        positions = vertices;
-        
-        // Get vertex normals if available
-        const normalAttr = geometry.attributes.normal;
-        normals = normalAttr ? normalAttr.array : null;
-        
-        console.log(`[setVectorData] Vertex support: ${vertices.length / 3} vertices, ${data.length / 3} vectors`);
+      const numPositions = positions.length / 3;
+      const numVectors = data.length / 3;
+      
+      if (numPositions !== numVectors) {
+        console.error(`[setVectorData] Position count (${numPositions}) does not match vector count (${numVectors})`);
+        return;
+      }
+      
+      console.log(`[setVectorData] Frame: ${frame}, Support: ${support}, Vectors: ${numVectors}` + 
+                  (normals ? `, with normals` : `, no normals`));
+      console.log(`[setVectorData] Style: ${style}, Stride: ${stride}, LengthScale: ${lengthScale}`);
+      if (style === 'line') {
+        console.log(`[setVectorData] Color: 0x${color.toString(16)}, LineWidth: ${lineWidth}`);
       }
 
-      // Create quiver visualization
+      // Create vector visualization using LineSegments
       const vectorsFloat32 = new Float32Array(data);
       
-      currentQuiver = createVectorQuiver({
+      const vectorObject = createVectorLineSegments({
         positions: positions,
         vectors: vectorsFloat32,
         normals: normals,
+        style: style || 'arrow',  // 'arrow' or 'line'
         stride: stride || 5,
         lengthScale: lengthScale || 1.0,
         maxLength: maxLength || 10.0,
-        minMagnitude: minMagnitude || 1e-12
+        minMagnitude: minMagnitude || 1e-12,
+        color: color,
+        linewidth: lineWidth
       });
+      console.log(`[setVectorData] Created LineSegments (${style}): ${vectorObject.userData.vectorCount} vectors`);
 
-      // Determine which frame root the mesh is in
-      const modelRoot = meshManager.modelRoot;
-      let frameRoot = scene; // Default to scene
-      
-      if (modelRoot && modelRoot.parent) {
-        // Check if mesh is in matlab or threejs frame
-        if (modelRoot.parent === viewerCore.roots.matlab) {
-          frameRoot = viewerCore.roots.matlab;
-          console.log('[setVectorData] Adding quiver to MATLAB frame (Z-up → Y-up transform)');
-        } else if (modelRoot.parent === viewerCore.roots.threejs) {
-          frameRoot = viewerCore.roots.threejs;
-          console.log('[setVectorData] Adding quiver to three.js frame (no transform)');
-        }
+      // Store layer metadata in object
+      vectorObject.userData.layerName = name;
+      vectorObject.userData.layerType = 'vector';
+
+      // Determine frame root
+      let frameRoot = scene;
+      if (frame === 'matlab') {
+        frameRoot = viewerCore.roots.matlab;
+        console.log('[setVectorData] ✓ Using MATLAB frame root (Z-up → Y-up transform)');
+      } else if (frame === 'threejs') {
+        frameRoot = viewerCore.roots.threejs;
+        console.log('[setVectorData] ✓ Using three.js frame root (no transform)');
+      } else {
+        console.warn(`[setVectorData] ⚠ Unknown frame: ${frame}, defaulting to MATLAB frame`);
+        frameRoot = viewerCore.roots.matlab;
       }
       
-      frameRoot.add(currentQuiver);
+      // Verify mesh and vectors are in same frame
+      const meshFrame = meshManager.modelRoot?.parent === viewerCore.roots.matlab ? 'matlab' : 'threejs';
+      console.log(`[setVectorData] Mesh in: ${meshFrame}, Vectors in: ${frame}` + 
+                  (meshFrame === frame ? ' ✓ MATCH' : ' ✗ MISMATCH!'));
       
-      console.log(`[setVectorData] Vector quiver added: ${currentQuiver.count} arrows`);
+      frameRoot.add(vectorObject);
+      console.log(`[setVectorData] ✓ Added vectors to ${frame} frame root`);
+      
+      // Store in layer manager
+      if (layerManager) {
+        layerManager.setVectorLayer(name, {
+          quiverObject: vectorObject,
+          metadata: { style, stride, lengthScale, maxLength, support, frame, action }
+        });
+        console.log(`[setVectorData] ${action === 'add' ? 'Added' : 'Set'} vector layer: ${name}`);
+      }
+      
+      console.log(`[setVectorData] Vector layer '${name}' added: ${vectorObject.userData.vectorCount} vectors (style: ${style})`);
     }
   } catch (err) {
     console.error('[setVectorData] Error setting vector data:', err);
     console.error('[setVectorData] Stack trace:', err.stack);
+  }
+}
+
+/**
+ * Set point cloud data for marker visualization
+ * Called from MATLAB via HTMLComponent.Data = {point: pointData}
+ * @param {Object} pointData - Point cloud configuration
+ * @param {string} pointData.action - 'add'|'set'|'clear'
+ * @param {string} [pointData.name='default'] - Layer name for add/clear operations
+ * @param {Array} [pointData.positions] - Flat array of positions [x,y,z,...]
+ * @param {Array<number>} [pointData.indices] - Vertex/face indices to mark
+ * @param {number} [pointData.radius=1.0] - Sphere radius
+ * @param {number|Array} [pointData.color=0xff0000] - Color (hex or array of hex values)
+ * @param {number} [pointData.opacity=1.0] - Opacity (0-1)
+ * @param {boolean} [pointData.transparent=false] - Enable transparency
+ * @param {string} [pointData.frame='matlab'] - Coordinate frame ('matlab' or 'threejs')
+ */
+export function setPointData(pointData) {
+  if (!meshManager || !scene || !stateManager) {
+    console.error('[setPointData] Viewer not initialized');
+    return;
+  }
+
+  try {
+    const action = pointData.action || 'set';
+    const name = pointData.name || 'default';
+
+    if (action === 'clear') {
+      if (pointData.name) {
+        // Clear specific layer
+        if (layerManager && layerManager.clearPointLayer(name)) {
+          console.log(`[setPointData] Cleared point layer: ${name}`);
+        } else {
+          console.warn(`[setPointData] Point layer not found: ${name}`);
+        }
+      } else {
+        // Clear all point layers
+        if (layerManager) {
+          layerManager.clearAllPointLayers();
+          console.log('[setPointData] Cleared all point layers');
+        }
+      }
+    } else if (action === 'add' || action === 'set') {
+      // For 'set', clear existing layer with this name
+      if (action === 'set' && layerManager) {
+        layerManager.clearPointLayer(name);
+      }
+      
+      const {
+        positions: positionsRaw,
+        indices,
+        radius = 1.0,
+        color = 0xff0000,
+        opacity = 1.0,
+        transparent = false,
+        frame = 'matlab'
+      } = pointData;
+      
+      if ((!positionsRaw || positionsRaw.length === 0) && (!indices || indices.length === 0)) {
+        console.error('[setPointData] No positions or indices provided');
+        return;
+      }
+
+      let positions = null;
+      
+      if (indices && indices.length > 0) {
+        // Create positions from vertex indices
+        const loadedScene = meshManager.getLoadedScene();
+        if (!loadedScene) {
+          console.error('[setPointData] No mesh loaded. Call setMesh first.');
+          return;
+        }
+        
+        // Find mesh in loaded scene
+        let mesh = null;
+        loadedScene.traverse(obj => {
+          if (obj.isMesh && !mesh) {
+            mesh = obj;
+          }
+        });
+        
+        if (!mesh || !mesh.geometry) {
+          console.error('[setPointData] No mesh geometry found');
+          return;
+        }
+        
+        const vertexPositions = mesh.geometry.attributes.position.array;
+        positions = new Float32Array(indices.length * 3);
+        
+        for (let i = 0; i < indices.length; i++) {
+          const idx = indices[i];
+          positions[i * 3] = vertexPositions[idx * 3];
+          positions[i * 3 + 1] = vertexPositions[idx * 3 + 1];
+          positions[i * 3 + 2] = vertexPositions[idx * 3 + 2];
+        }
+        
+        console.log(`[setPointData] Created positions from ${indices.length} vertex indices`);
+      } else {
+        positions = new Float32Array(positionsRaw);
+      }
+      
+      const numPoints = positions.length / 3;
+      console.log(`[setPointData] Creating point cloud: ${numPoints} points, radius ${radius}`);
+      
+      // Create point cloud visualization
+      const pointObject = createPointCloud({
+        positions: positions,
+        radius: radius,
+        color: color,
+        opacity: opacity,
+        transparent: transparent,
+        useInstancing: numPoints > 100 // Use instancing for large point clouds
+      });
+      
+      // Store layer metadata in object
+      pointObject.userData.layerName = name;
+      pointObject.userData.layerType = 'point';
+      
+      // Determine frame root
+      let frameRoot = scene;
+      if (frame === 'matlab') {
+        frameRoot = viewerCore.roots.matlab;
+        console.log('[setPointData] ✓ Using MATLAB frame root (Z-up → Y-up transform)');
+      } else if (frame === 'threejs') {
+        frameRoot = viewerCore.roots.threejs;
+        console.log('[setPointData] ✓ Using three.js frame root (no transform)');
+      } else {
+        console.warn(`[setPointData] ⚠ Unknown frame: ${frame}, defaulting to MATLAB frame`);
+        frameRoot = viewerCore.roots.matlab;
+      }
+      
+      frameRoot.add(pointObject);
+      console.log(`[setPointData] ✓ Added point cloud to ${frame} frame root`);
+      
+      // Store in layer manager
+      if (layerManager) {
+        layerManager.setPointLayer(name, {
+          pointObject: pointObject,
+          metadata: { radius, color, opacity, transparent, frame, action }
+        });
+        console.log(`[setPointData] ${action === 'add' ? 'Added' : 'Set'} point layer: ${name}`);
+      }
+      
+      console.log(`[setPointData] Point layer '${name}' added: ${numPoints} points`);
+    }
+  } catch (err) {
+    console.error('[setPointData] Error setting point data:', err);
+    console.error('[setPointData] Stack trace:', err.stack);
+  }
+}
+
+/**
+ * setLineData - Set arbitrary line segments
+ * 
+ * @param {Object} lineData - Line data configuration
+ * @param {string} [lineData.name='default'] - Layer name for management
+ * @param {string} [lineData.action='set'] - 'set', 'add', or 'clear'
+ * @param {Float32Array} lineData.segments - Line segment endpoints [x1,y1,z1,x2,y2,z2,...]
+ * @param {number|string} [lineData.color=0xff0000] - Line color (hex number or CSS string)
+ * @param {number} [lineData.linewidth=2] - Line width in pixels
+ * @param {string} [lineData.frame='matlab'] - Coordinate frame ('matlab' or 'threejs')
+ */
+export function setLineData(lineData) {
+  if (!meshManager || !scene || !stateManager) {
+    console.error('[setLineData] Viewer not initialized');
+    return;
+  }
+
+  try {
+    const action = lineData.action || 'set';
+    const name = lineData.name || 'default';
+
+    if (action === 'clear') {
+      if (lineData.name) {
+        // Clear specific layer
+        if (layerManager && layerManager.clearLineLayer(name)) {
+          console.log(`[setLineData] Cleared line layer: ${name}`);
+        } else {
+          console.warn(`[setLineData] Line layer not found: ${name}`);
+        }
+      } else {
+        // Clear all line layers
+        if (layerManager) {
+          layerManager.clearAllLineLayers();
+          console.log('[setLineData] Cleared all line layers');
+        }
+      }
+    } else if (action === 'add' || action === 'set') {
+      // For 'set', clear existing layer with this name
+      if (action === 'set' && layerManager) {
+        layerManager.clearLineLayer(name);
+      }
+      
+      const {
+        segments,
+        color = 0xff0000,
+        linewidth = 2,
+        frame = 'matlab'
+      } = lineData;
+      
+      if (!segments || segments.length === 0) {
+        console.error('[setLineData] No segments provided');
+        return;
+      }
+
+      const segmentCount = segments.length / 6;
+      console.log(`[setLineData] Creating line segments: ${segmentCount} segments, linewidth ${linewidth}`);
+      
+      // Create line segment visualization
+      const lineObject = createLineSegments3D({
+        segments: new Float32Array(segments),
+        color: color,
+        linewidth: linewidth
+      });
+      
+      // Store layer metadata in object
+      lineObject.userData.layerName = name;
+      lineObject.userData.layerType = 'line';
+      lineObject.userData.segmentCount = segmentCount;
+      
+      // Determine frame root
+      let frameRoot = scene;
+      if (frame === 'matlab') {
+        frameRoot = viewerCore.roots.matlab;
+        console.log('[setLineData] ✓ Using MATLAB frame root (Z-up → Y-up transform)');
+      } else if (frame === 'threejs') {
+        frameRoot = viewerCore.roots.threejs;
+        console.log('[setLineData] ✓ Using three.js frame root (no transform)');
+      } else {
+        console.warn(`[setLineData] ⚠ Unknown frame: ${frame}, defaulting to MATLAB frame`);
+        frameRoot = viewerCore.roots.matlab;
+      }
+      
+      frameRoot.add(lineObject);
+      console.log(`[setLineData] ✓ Added line segments to ${frame} frame root`);
+      
+      // Store in layer manager
+      if (layerManager) {
+        layerManager.setLineLayer(name, {
+          lineObject: lineObject,
+          metadata: { segmentCount, color, linewidth, frame, action }
+        });
+        console.log(`[setLineData] ${action === 'add' ? 'Added' : 'Set'} line layer: ${name}`);
+      }
+      
+      console.log(`[setLineData] Line layer '${name}' added: ${segmentCount} segments`);
+    }
+  } catch (err) {
+    console.error('[setLineData] Error setting line data:', err);
+    console.error('[setLineData] Stack trace:', err.stack);
+  }
+}
+
+/* -------------------- Pivot control -------------------- */
+
+/**
+ * Set scene background color
+ * Called from MATLAB via HTMLComponent.Data = {background: {color: ...}}
+ * @param {Object} backgroundData - Background configuration
+ * @param {number|string} backgroundData.color - Color (hex number, color name, or 'none')
+ */
+export function setBackground(backgroundData) {
+  if (!scene) {
+    console.error('[setBackground] Viewer not initialized');
+    return;
+  }
+
+  try {
+    const { color } = backgroundData;
+    
+    if (color === 'none' || color === null) {
+      // Transparent background
+      scene.background = null;
+      console.log('[setBackground] Set background to transparent');
+    } else if (typeof color === 'string') {
+      // Named color
+      scene.background = new THREE.Color(color);
+      console.log(`[setBackground] Set background to '${color}'`);
+    } else if (typeof color === 'number') {
+      // Hex color
+      scene.background = new THREE.Color(color);
+      console.log(`[setBackground] Set background to 0x${color.toString(16).padStart(6, '0')}`);
+    } else {
+      console.error('[setBackground] Invalid color:', color);
+    }
+  } catch (err) {
+    console.error('[setBackground] Error setting background:', err);
+    console.error('[setBackground] Stack trace:', err.stack);
   }
 }
 
