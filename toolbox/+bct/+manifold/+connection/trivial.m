@@ -124,13 +124,8 @@ end
 % Build or validate singularity vector
 if isempty(singularityVec)
     % Build from indices and weights
-    if isempty(singularityIndices)
-        error('bct:manifold:connection:trivial:NoSingularities', ...
-            'Must provide either singularityVec or singularities parameter');
-    end
-    
     % Default weights to 1
-    if isempty(singularityWeights)
+    if isempty(singularityWeights) && ~isempty(singularityIndices)
         singularityWeights = ones(size(singularityIndices));
     end
     
@@ -195,16 +190,9 @@ scalarPotential = solvers.poisson.value(rhs);  % [nV×1]
 deltaBeta = star1 * (d0 * scalarPotential);  % [nE×1]
 
 % Step 5: Compute harmonic component γ
-% For genus 0 (sphere), γ = 0
-% For genus > 0, would need harmonic bases and period matrix (not implemented)
-if abs(genus) < 1e-6
-    gamma = zeros(nE, 1);  % No harmonic component for sphere
-else
-    % Placeholder: would compute via period matrix and harmonic bases
-    % See geometry-processing-js TrivialConnections.computeHarmonicComponent
-    gamma = zeros(nE, 1);
-    % This is INCORRECT for genus > 0!
-end
+% For genus 0: γ = 0 (no harmonic component)
+% For genus > 0: γ requires period matrix (not implemented, warning issued above)
+gamma = zeros(nE, 1);  % [nE×1]
 
 % Step 6: Combine coexact and harmonic components
 % φ = δβ + γ (trivial connection formula)

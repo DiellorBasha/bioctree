@@ -22,18 +22,152 @@
     <canvas id="canvas"></canvas>
   </div>
 
+  <!-- MATLAB Bridge: Initialize setup flag -->
+  <script>
+    // Flag to indicate setup has been called
+    window._setupCalled = false;
+    window._setupReady = false;
+    window._htmlComponent = null;
+    window._pendingSetupCall = false;
+    
+    // Stub setup function that queues the call until the real one is ready
+    // This ensures MATLAB's automatic setup call doesn't fail
+    window.setup = function(htmlComponent) {
+      console.log('[MATLAB Bridge] setup() called (stub version)');
+      window._setupCalled = true;
+      window._htmlComponent = htmlComponent;
+      window._pendingSetupCall = true;
+      
+      // If the real setup is ready, call it immediately
+      if (window._realSetup) {
+        console.log('[MATLAB Bridge] Real setup ready, calling now');
+        window._realSetup(htmlComponent);
+        window._pendingSetupCall = false;
+      } else {
+        console.log('[MATLAB Bridge] Real setup not ready, call queued');
+      }
+    };
+    
+    // Debug helper
+    window.debugViewer = function() {
+      console.log('Setup called:', window._setupCalled);
+      console.log('Setup ready:', window._setupReady);
+      console.log('Pending setup call:', window._pendingSetupCall);
+      console.log('Setup function exists:', typeof window.setup === 'function');
+      console.log('Real setup exists:', typeof window._realSetup === 'function');
+    };
+  </script>
+
   <!-- MATLAB Bridge: setup function for uihtml communication -->
   <script type="module">
-    import { initViewer, setMeshFromData, setScalarData, setVectorData, setPointData, setLineData, setBackground, clearMesh, setColorLimits } from "./render.js";
+    import { initViewer, setMeshFromData, setScalarData, setVectorData, setPointData, setLineData, setBackground, clearMesh, setColorLimits, setParticleFlow, getDiagnostics } from "./render.js";
 
-    // Global setup function for MATLAB uihtml component
-    window.setup = function(htmlComponent) {
+    console.log('[MATLAB Bridge] Module loaded, defining real setup function');
+    
+    // Expose diagnostics globally
+    window.getViewerDiagnostics = getDiagnostics;
+
+    // Real setup function for MATLAB uihtml component
+    window._realSetup = function(htmlComponent) {
+      console.log('[MATLAB Bridge] Real setup() executing');
+      
       try {
         // Get DOM elements
         const canvas = document.getElementById('canvas');
         
+        // Ready state tracking
+        let isViewerReady = false;
+        let pendingData = null;
+        
+        // Process data (either immediately or queued)
+        function processData(data) {
+          console.log('[MATLAB Bridge] Processing data:', data);
+          
+          // Check if clearMesh is requested
+          if (data && data.clearMesh) {
+            clearMesh();
+            return;
+          }
+
+          // Check if mesh data is present
+          if (data && data.mesh) {
+            console.log('[MATLAB Bridge] Mesh data received, calling setMeshFromData');
+            setMeshFromData(data.mesh);
+          }
+          
+          // Check if scalar data is present
+          if (data && data.scalar) {
+            setScalarData(data.scalar);
+          }
+          
+          // Check if color limits update is requested
+          if (data && data.colorLimits) {
+            setColorLimits(data.colorLimits);
+          }
+          
+          // Check if vector data is present
+          if (data && data.vector) {
+            setVectorData(data.vector);
+          }
+          
+          // Check if point data is present
+          if (data && data.point) {
+            setPointData(data.point);
+          }
+          
+          // Check if line data is present
+          if (data && data.lines) {
+            setLineData(data.lines);
+          }
+          
+          // Check if particle flow data is present
+          if (data && data.particleFlow) {
+            setParticleFlow(data.particleFlow);
+          }
+          
+          // Check if background color change is requested
+          if (data && data.background) {
+            setBackground(data.background);
+          }
+        }
+        
+        // Check WebGL support
+        const checkWebGL = () => {
+          try {
+            const testCanvas = document.createElement('canvas');
+            const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+            if (!gl) {
+              console.error('[WebGL] WebGL not supported in this browser');
+              return false;
+            }
+            console.log('[WebGL] WebGL supported');
+            console.log('[WebGL] Vendor:', gl.getParameter(gl.VENDOR));
+            console.log('[WebGL] Renderer:', gl.getParameter(gl.RENDERER));
+            console.log('[WebGL] Version:', gl.getParameter(gl.VERSION));
+            console.log('[WebGL] GLSL Version:', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+            return true;
+          } catch (e) {
+            console.error('[WebGL] WebGL check failed:', e);
+            return false;
+          }
+        };
+        
+        checkWebGL();
+        
         // Initialize viewer without loading a mesh
         initViewer({ canvasEl: canvas, glbUrl: null })
+          .then(() => {
+            console.log('[MATLAB Bridge] Viewer ready');
+            isViewerReady = true;
+            window._setupReady = true;
+            
+            // Process any data that arrived while we were initializing
+            if (pendingData) {
+              console.log('[MATLAB Bridge] Processing queued data');
+              processData(pendingData);
+              pendingData = null;
+            }
+          })
           .catch((err) => {
             console.error('[MATLAB Bridge] Viewer initialization failed:', err);
             console.error('[MATLAB Bridge] Stack:', err.stack);
@@ -41,48 +175,17 @@
 
         // Listen for data changes from MATLAB
         htmlComponent.addEventListener("DataChanged", (event) => {
+          console.log('[MATLAB Bridge] DataChanged event fired');
           try {
             const data = htmlComponent.Data;
 
-            // Check if clearMesh is requested
-            if (data && data.clearMesh) {
-              clearMesh();
-              return;
-            }
-
-            // Check if mesh data is present
-            if (data && data.mesh) {
-              setMeshFromData(data.mesh);
-            }
-            
-            // Check if scalar data is present
-            if (data && data.scalar) {
-              setScalarData(data.scalar);
-            }
-            
-            // Check if color limits update is requested
-            if (data && data.colorLimits) {
-              setColorLimits(data.colorLimits);
-            }
-            
-            // Check if vector data is present
-            if (data && data.vector) {
-              setVectorData(data.vector);
-            }
-            
-            // Check if point data is present
-            if (data && data.point) {
-              setPointData(data.point);
-            }
-            
-            // Check if line data is present
-            if (data && data.lines) {
-              setLineData(data.lines);
-            }
-            
-            // Check if background color change is requested
-            if (data && data.background) {
-              setBackground(data.background);
+            if (isViewerReady) {
+              // Viewer ready - process immediately
+              processData(data);
+            } else {
+              // Viewer not ready yet - queue the data
+              console.log('[MATLAB Bridge] Viewer not ready, queuing data');
+              pendingData = data;
             }
           } catch (err) {
             console.error('[MATLAB Bridge] DataChanged handler error:', err);
@@ -94,6 +197,20 @@
         console.error('[MATLAB Bridge] Stack:', err.stack);
       }
     };
+    
+    // Mark setup function as ready
+    window._setupReady = true;
+    console.log('[MATLAB Bridge] Real setup function defined and ready');
+    
+    // Check if there was a pending setup call from MATLAB
+    if (window._pendingSetupCall && window._htmlComponent) {
+      console.log('[MATLAB Bridge] Processing pending setup call');
+      window._realSetup(window._htmlComponent);
+      window._pendingSetupCall = false;
+    }
+    
+    // Update the stub to just call the real setup directly now
+    window.setup = window._realSetup;
   </script>
 
   <script type="module" src="./main.js"></script>

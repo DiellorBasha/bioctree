@@ -980,6 +980,239 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             end
         end
         
+        function addCross(comp, crossField, varargin)
+            % addCross - Visualize cross field as line segments forming crosses
+            %
+            % Syntax:
+            %   comp.addCross(crossField)
+            %   comp.addCross(crossField, 'Scale', 5)
+            %   comp.addCross(crossField, 'Color', 0xff0000, 'LineWidth', 2)
+            %
+            % Inputs:
+            %   crossField - Cross field from bct.field.cross() as struct with:
+            %                .d1, .d2, .d3, .d4 - [nF×3] direction vectors
+            %
+            % Parameters:
+            %   'Name'      - Layer name (default: auto-generated)
+            %   'Scale'     - Length of cross arms (default: 5)
+            %   'Color'     - Cross color as hex (default: 0x000000 black)
+            %   'LineWidth' - Line width in pixels (default: 1)
+            %   'Action'    - 'set' (replace) or 'add' (keep existing)
+            %
+            % Examples:
+            %   % Create and visualize cross field
+            %   M = bct.data.load(Dataset="fsaverage6", Hemi="rh", Surface="pial");
+            %   dirField = computeDirectionField(M);
+            %   cross = bct.field.cross(M, dirField);
+            %   
+            %   viewer = bct.ui.show(M);
+            %   viewer.addCross(cross, 'Scale', 3, 'Color', 0xff0000);
+            %   
+            %   % Add multiple cross fields with different colors
+            %   viewer.addCross(cross1, 'Name', 'principal', 'Color', 0xff0000);
+            %   viewer.addCross(cross2, 'Name', 'secondary', 'Color', 0x00ff00, 'Action', 'add');
+            %
+            % Notes:
+            %   - Creates 2 line segments per face (cross arms)
+            %   - Much more efficient than 4 separate addVector calls
+            %   - Crosses are centered at face centroids
+            %   - All crosses rendered as single LineSegments object
+            %
+            % See also: bct.field.cross, addLine, addVector
+            
+            p = inputParser();
+            p.addParameter('Name', sprintf('cross_%d', randi(1e6)), @ischar);
+            p.addParameter('Scale', 5, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Color', 0x000000, @(x) (isnumeric(x) && isscalar(x)) || ischar(x));
+            p.addParameter('LineWidth', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Action', 'set', @(x) ismember(x, {'set', 'add'}));
+            p.parse(varargin{:});
+            
+            opts = p.Results;
+            
+            % Validate cross field input
+            if ~isstruct(crossField) || ~all(isfield(crossField, {'d1', 'd2', 'd3', 'd4'}))
+                error('bct:ui:manifold:Viewer:InvalidCrossField', ...
+                    'Cross field must be struct with fields d1, d2, d3, d4 from bct.field.cross()');
+            end
+            
+            % Validate mesh loaded
+            if isempty(comp.Vertices)
+                error('bct:ui:manifold:Viewer:NoMesh', ...
+                    'No mesh loaded. Call setMesh first.');
+            end
+            
+            % Get number of faces
+            nF = size(crossField.d1, 1);
+            
+            % Validate field dimensions
+            if size(crossField.d1, 2) ~= 3 || size(crossField.d2, 2) ~= 3
+                error('bct:ui:manifold:Viewer:InvalidDimensions', ...
+                    'Cross field directions must be [nF×3]');
+            end
+            
+            % Get face centroids from existing mesh
+            % Compute centroids from vertices and faces
+            V = comp.Vertices;
+            F = comp.Faces;
+            centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
+            
+            if size(centroids, 1) ~= nF
+                error('bct:ui:manifold:Viewer:SizeMismatch', ...
+                    'Cross field has %d faces but mesh has %d faces', ...
+                    nF, size(centroids, 1));
+            end
+            
+            % Create line segments for crosses
+            % Each cross = 2 line segments (d1 ↔ d3, d2 ↔ d4)
+            % Since d3 = -d1 and d4 = -d2, we create:
+            %   Segment 1: center - d1*scale → center + d1*scale
+            %   Segment 2: center - d2*scale → center + d2*scale
+            
+            scale = opts.Scale;
+            
+            % Extract directions
+            d1 = crossField.d1;  % [nF×3]
+            d2 = crossField.d2;  % [nF×3]
+            
+            % Preallocate segments array [N×6] for N = 2*nF segments
+            segments = zeros(2 * nF, 6);
+            
+            % First arm of cross (d1 ↔ -d1)
+            segments(1:2:end, 1:3) = centroids - d1 * scale;  % Start points
+            segments(1:2:end, 4:6) = centroids + d1 * scale;  % End points
+            
+            % Second arm of cross (d2 ↔ -d2)
+            segments(2:2:end, 1:3) = centroids - d2 * scale;  % Start points
+            segments(2:2:end, 4:6) = centroids + d2 * scale;  % End points
+            
+            % Call addLine with all segments
+            comp.addLine(...
+                'Name', opts.Name, ...
+                'Action', opts.Action, ...
+                'Segments', segments, ...
+                'Color', opts.Color, ...
+                'LineWidth', opts.LineWidth);
+        end
+        
+        function addParticleFlow(comp, vectorField, varargin)
+            % addParticleFlow - Visualize flow field with advected particles on surface
+            %
+            % Syntax:
+            %   comp.addParticleFlow(vectorField)
+            %   comp.addParticleFlow(vectorField, 'NumParticles', 1000)
+            %   comp.addParticleFlow(vectorField, 'ParticleSize', 3, 'Color', 0x00ffff)
+            %
+            % Inputs:
+            %   vectorField - [N×3] vector field (face-based or vertex-based)
+            %
+            % Parameters:
+            %   'Name'         - Layer name (default: auto-generated)
+            %   'Support'      - 'face' or 'vertex' (default: 'face')
+            %   'NumParticles' - Number of particles (default: 1000)
+            %   'StepSize'     - Integration step size (default: 0.1)
+            %   'ParticleSize' - Particle size in pixels (default: 2.0)
+            %   'Color'        - Particle color as hex (default: 0x00ffff cyan)
+            %   'Fade'         - Enable particle fade (default: true)
+            %   'FadeTime'     - Fade duration in seconds (default: 2.0)
+            %   'Respawn'      - Respawn particles when they fade (default: true)
+            %   'AutoStart'    - Start animation immediately (default: true)
+            %   'Action'       - 'set' (replace) or 'add' (keep existing)
+            %
+            % Examples:
+            %   % Visualize heat diffusion gradient
+            %   M = bct.data.load(Dataset="fsaverage6", Hemi="rh", Surface="pial");
+            %   [~, U] = M.eigenmodes(100);
+            %   u = U(:, 10);  % Select mode 10
+            %   gradU = bct.field.generate.faceGradient(M, u);
+            %   
+            %   viewer = bct.ui.show(M);
+            %   viewer.addParticleFlow(gradU, 'NumParticles', 2000, ...
+            %       'ParticleSize', 3, 'Color', 0xff0000);
+            %   
+            %   % Add multiple particle flows with different fields
+            %   viewer.addParticleFlow(field1, 'Name', 'heat', 'Color', 0xff0000);
+            %   viewer.addParticleFlow(field2, 'Name', 'wave', 'Color', 0x00ff00, 'Action', 'add');
+            %
+            % Notes:
+            %   - Particles are transported along the vector field
+            %   - Integration performed on GPU via three.js animation loop
+            %   - Particles stay on mesh surface via tangent plane projection
+            %   - Boundary crossing handled via face adjacency
+            %   - Fade and respawn create continuous visualization
+            %
+            % See also: bct.field.generate.faceGradient, addVector
+            
+            p = inputParser();
+            p.addParameter('Name', sprintf('particleFlow_%d', randi(1e6)), @ischar);
+            p.addParameter('Support', 'face', @(x) ismember(lower(x), {'face', 'vertex'}));
+            p.addParameter('NumParticles', 1000, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('StepSize', 0.1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('ParticleSize', 2.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Color', 0x00ffff, @(x) isnumeric(x) && isscalar(x));
+            p.addParameter('Fade', true, @islogical);
+            p.addParameter('FadeTime', 2.0, @(x) isnumeric(x) && isscalar(x) && x > 0);
+            p.addParameter('Respawn', true, @islogical);
+            p.addParameter('AutoStart', true, @islogical);
+            p.addParameter('Action', 'set', @(x) ismember(x, {'set', 'add', 'clear'}));
+            p.parse(varargin{:});
+            
+            opts = p.Results;
+            
+            % Handle clear action
+            if strcmp(opts.Action, 'clear')
+                particlePayload = struct(...
+                    'action', 'clear', ...
+                    'name', opts.Name);
+                if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                    comp.HTMLComponent.Data = struct('particleFlow', particlePayload);
+                end
+                return;
+            end
+            
+            % Validate vector field
+            if isempty(vectorField)
+                warning('bct:ui:manifold:Viewer:EmptyVectorField', 'Empty vector field provided');
+                return;
+            end
+            
+            validateattributes(vectorField, {'double'}, {'real', 'finite', 'ncols', 3}, ...
+                'addParticleFlow', 'vectorField');
+            
+            % Validate mesh loaded
+            if isempty(comp.Vertices)
+                error('bct:ui:manifold:Viewer:NoMesh', ...
+                    'No mesh loaded. Call setMesh first.');
+            end
+            
+            % Flatten vector field data
+            vectorFlat = reshape(vectorField.', 1, []);
+            
+            % Build payload
+            particlePayload = struct(...
+                'action', opts.Action, ...
+                'name', opts.Name, ...
+                'vectorField', struct(...
+                    'support', lower(opts.Support), ...
+                    'data', vectorFlat), ...
+                'numParticles', opts.NumParticles, ...
+                'stepSize', opts.StepSize, ...
+                'particleSize', opts.ParticleSize, ...
+                'particleColor', opts.Color, ...
+                'fade', opts.Fade, ...
+                'fadeTime', opts.FadeTime, ...
+                'respawn', opts.Respawn, ...
+                'autoStart', opts.AutoStart);
+            
+            % Send to JavaScript
+            if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
+                comp.HTMLComponent.Data = struct('particleFlow', particlePayload);
+            else
+                warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
+                    'HTMLComponent not ready. Particle flow data not sent.');
+            end
+        end
+        
         function background(comp, varargin)
             % background - Set scene background color
             %
@@ -1004,14 +1237,8 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
             
             colorValue = p.Results.Color;
             
-            % Convert color to appropriate format
-            if ischar(colorValue)
-                % Named colors or 'none'
-                colorPayload = struct('color', colorValue);
-            else
-                % Numeric color (hex)
-                colorPayload = struct('color', colorValue);
-            end
+            % Build payload (same format for both char and numeric)
+            colorPayload = struct('color', colorValue);
             
             % Send to JavaScript
             if ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent)
@@ -1020,6 +1247,56 @@ classdef Viewer < matlab.ui.componentcontainer.ComponentContainer
                 warning('bct:ui:manifold:Viewer:HTMLComponentNotReady', ...
                     'HTMLComponent not ready. Background command not sent.');
             end
+        end
+        
+        function status = getStatus(comp)
+            % getStatus - Diagnostic function to check viewer connection
+            %
+            % Syntax:
+            %   status = viewer.getStatus()
+            %
+            % Returns:
+            %   status - Struct with diagnostic information
+            %
+            % Example:
+            %   viewer = bct.ui.show(M);
+            %   status = viewer.getStatus()
+            
+            status = struct();
+            status.HTMLComponentExists = ~isempty(comp.HTMLComponent);
+            status.HTMLComponentValid = ~isempty(comp.HTMLComponent) && isvalid(comp.HTMLComponent);
+            status.HasMeshData = ~isempty(comp.Vertices) && ~isempty(comp.Faces);
+            status.VertexCount = size(comp.Vertices, 1);
+            status.FaceCount = size(comp.Faces, 1);
+            
+            if status.HTMLComponentValid
+                status.HTMLSource = comp.HTMLComponent.HTMLSource;
+                try
+                    % Try to send a test ping (use valid field name without underscore)
+                    comp.HTMLComponent.Data = struct('ping', true);
+                    status.CanSendData = true;
+                catch ME
+                    status.CanSendData = false;
+                    status.SendError = ME.message;
+                end
+            else
+                status.HTMLSource = 'N/A';
+                status.CanSendData = false;
+            end
+            
+            % Display status
+            fprintf('\n=== Viewer Status ===\n');
+            fprintf('HTMLComponent exists: %d\n', status.HTMLComponentExists);
+            fprintf('HTMLComponent valid: %d\n', status.HTMLComponentValid);
+            fprintf('Can send data: %d\n', status.CanSendData);
+            fprintf('Has mesh data: %d\n', status.HasMeshData);
+            fprintf('Vertices: %d\n', status.VertexCount);
+            fprintf('Faces: %d\n', status.FaceCount);
+            fprintf('HTML source: %s\n', status.HTMLSource);
+            if ~status.CanSendData && isfield(status, 'SendError')
+                fprintf('Send error: %s\n', status.SendError);
+            end
+            fprintf('====================\n\n');
         end
     end
 end

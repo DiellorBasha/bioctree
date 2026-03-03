@@ -14,9 +14,13 @@ import { StateManager, StateEvent, AppState } from './core/stateManager.js';
 import { createVectorLineSegments } from './visualization/lineSegments.js';
 import { createLineSegments3D } from './visualization/lineSegments3D.js';
 import { createPointCloud } from './visualization/pointCloud.js';
+import { ParticleAdvection } from './visualization/particleAdvection.js';
 
 // Application state manager
 let stateManager = null;
+
+// Particle advection systems
+let particleFlows = new Map();  // name -> ParticleAdvection instance
 
 // Core rendering system
 let viewerCore = null;
@@ -45,6 +49,54 @@ let targetMarker = null; // follows controls.target (rotation anchor)
 let pickingSystem = null;
 let selectionFX = null;
 let pin = null;
+
+/**
+ * Get diagnostic information about the viewer state
+ */
+export function getDiagnostics() {
+  const diagnostics = {
+    viewerInitialized: viewerCore !== null,
+    rendererExists: renderer !== null,
+    sceneExists: scene !== null,
+    cameraExists: camera !== null,
+    meshManagerExists: meshManager !== null,
+    hasMesh: meshManager !== null && meshManager.hasLoaded(),
+    sceneChildCount: scene ? scene.children.length : 0,
+    meshRootChildren: viewerCore ? {
+      matlab: viewerCore.roots.matlab.children.length,
+      threejs: viewerCore.roots.threejs.children.length
+    } : null,
+    cameraPosition: camera ? {
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z
+    } : null,
+    renderingActive: viewerCore ? viewerCore.isRunning : false
+  };
+  
+  console.log('[Diagnostics] Full viewer state:', diagnostics);
+  
+  // Try to find mesh in scene
+  if (scene) {
+    const meshes = [];
+    scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        meshes.push({
+          name: obj.name,
+          visible: obj.visible,
+          vertexCount: obj.geometry.attributes.position ? 
+            obj.geometry.attributes.position.count : 0,
+          hasNormals: obj.geometry.attributes.normal !== undefined,
+          hasMaterial: obj.material !== null
+        });
+      }
+    });
+    diagnostics.meshesInScene = meshes;
+    console.log('[Diagnostics] Meshes in scene:', meshes);
+  }
+  
+  return diagnostics;
+}
 
 /* -------------------- Defaults -------------------- */
 
@@ -195,6 +247,13 @@ export async function initViewer({ canvasEl, hudEl, glbUrl = null }) {
     // Update normals/tangents helpers if active (via vizManager)
     vizManager?.updateNormalsHelpers();
     vizManager?.updateTangentsHelpers();
+
+    // Update particle advection systems
+    particleFlows.forEach(flow => {
+      if (flow.isAnimating) {
+        flow.step(0.016);  // ~60 FPS timestep
+      }
+    });
   });
 
   // Start render loop
@@ -271,6 +330,12 @@ function updateLineMaterialResolutions() {
 function handlePostLoad() {
   const loadedScene = meshManager.getLoadedScene();
   const bounds = meshManager.getBounds();
+  
+  console.log('[handlePostLoad] Post-load setup:', {
+    hasScene: !!loadedScene,
+    bounds: bounds,
+    pivotMode: PIVOT_MODE
+  });
 
   // Set orbit pivot
   setPivotMode(PIVOT_MODE);
@@ -288,6 +353,8 @@ function handlePostLoad() {
   if (pin) {
     pin.setLength(bounds.radius * 0.1);
   }
+  
+  console.log('[handlePostLoad] Post-load complete');
 }
 
 export async function loadGLB(url) {
@@ -360,6 +427,15 @@ export function setPickingEnabled(enabled) {
  */
 export function setMeshFromData(meshData) {
   const tTotal = performance.now();
+  
+  console.log('[setMeshFromData] Called with data:', {
+    hasVertices: !!(meshData && meshData.vertices),
+    hasFaces: !!(meshData && meshData.faces),
+    vertexCount: meshData && meshData.vertices ? meshData.vertices.length / 3 : 0,
+    faceCount: meshData && meshData.faces ? meshData.faces.length / 3 : 0,
+    frame: meshData && meshData.frame,
+    indexBase: meshData && meshData.indexBase
+  });
   
   if (!meshManager || !stateManager) {
     console.error('[setMeshFromData] Viewer not initialized. Call initViewer first.');
@@ -1191,13 +1267,23 @@ function setPivotMode(mode) {
     }
   }
 
-  // Keep your canonical view direction relative to pivot
+  // Position camera at distance proportional to mesh size
+  const bounds = meshManager?.getBounds();
+  const distance = bounds ? bounds.radius * 2.5 : 300;  // 2.5x radius or default 300
+  
   const t = controls.target;
-  camera.position.set(t.x - 300, t.y, t.z);
+  camera.position.set(t.x - distance, t.y, t.z);
   camera.lookAt(t);
 
   controls.update();
   updateTargetMarker();
+  
+  console.log('[setPivotMode] Camera positioned:', {
+    target: controls.target,
+    cameraPosition: camera.position,
+    distance: distance,
+    meshRadius: bounds?.radius
+  });
 }
 
 /* -------------------- Pivot marker -------------------- */
@@ -1241,4 +1327,124 @@ export function getStateSnapshot() {
  */
 export function getStateHistory() {
   return stateManager?.getHistory() || [];
+}
+
+/**
+ * Set up particle flow advection system
+ * Called from MATLAB via HTMLComponent.Data = {particleFlow: flowData}
+ * @param {Object} flowData - Particle flow configuration
+ */
+export function setParticleFlow(flowData) {
+  try {
+    if (!viewerCore) {
+      console.error('[setParticleFlow] Viewer not initialized');
+      return;
+    }
+
+    const name = flowData.name || 'default';
+    const action = flowData.action || 'set';
+
+    if (action === 'clear') {
+      // Clear particle flow
+      if (particleFlows.has(name)) {
+        const flow = particleFlows.get(name);
+        flow.stop();
+        const particleSystem = flow.getParticleSystem();
+        if (particleSystem && particleSystem.parent) {
+          particleSystem.parent.remove(particleSystem);
+        }
+        particleFlows.delete(name);
+        console.log(`[setParticleFlow] Cleared particle flow: ${name}`);
+      }
+      return;
+    }
+
+    // Get mesh
+    const loadedScene = meshManager.getLoadedScene();
+    if (!loadedScene) {
+      console.error('[setParticleFlow] No mesh loaded');
+      return;
+    }
+
+    let mesh = null;
+    loadedScene.traverse(obj => {
+      if (obj.isMesh && !mesh) {
+        mesh = obj;
+      }
+    });
+
+    if (!mesh) {
+      console.error('[setParticleFlow] No mesh found in scene');
+      return;
+    }
+
+    // Parse vector field
+    const { vectorField, numParticles = 1000, stepSize = 0.1, particleSize = 2.0, 
+            particleColor = 0x00ffff, fade = true, fadeTime = 2.0, respawn = true,
+            autoStart = true } = flowData;
+
+    if (!vectorField || !vectorField.data) {
+      console.error('[setParticleFlow] No vector field provided');
+      return;
+    }
+
+    // Create or update particle flow
+    if (particleFlows.has(name) && action === 'add') {
+      console.warn('[setParticleFlow] Particle flow already exists, replacing:', name);
+    }
+
+    // Clear old flow if exists
+    if (particleFlows.has(name)) {
+      const oldFlow = particleFlows.get(name);
+      oldFlow.stop();
+      const oldSystem = oldFlow.getParticleSystem();
+      if (oldSystem && oldSystem.parent) {
+        oldSystem.parent.remove(oldSystem);
+      }
+    }
+
+    // Create new flow
+    const flow = new ParticleAdvection({
+      mesh: mesh,
+      vectorField: {
+        support: vectorField.support || 'face',
+        data: new Float32Array(vectorField.data)
+      },
+      numParticles: numParticles,
+      stepSize: stepSize,
+      particleSize: particleSize,
+      particleColor: particleColor,
+      fade: fade,
+      fadeTime: fadeTime,
+      respawn: respawn
+    });
+
+    // Add particle system to scene
+    const particleSystem = flow.getParticleSystem();
+    if (particleSystem) {
+      scene.add(particleSystem);
+    }
+
+    // Store flow
+    particleFlows.set(name, flow);
+
+    // Start animation if requested
+    if (autoStart) {
+      flow.start();
+    }
+
+    console.log(`[setParticleFlow] Created particle flow '${name}': ${numParticles} particles, support=${vectorField.support}`);
+
+  } catch (err) {
+    console.error('[setParticleFlow] Error:', err);
+    console.error(err.stack);
+  }
+}
+
+/**
+ * Get particle flows (for animation loop integration)
+ * @returns {Map} Map of particle advection systems
+ */
+export function getParticleFlows() {
+  return particleFlows;
 }

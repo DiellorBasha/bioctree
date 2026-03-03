@@ -134,7 +134,8 @@ classdef Manifold < handle
                 'operators', struct('data', struct(), 'meta', struct()), ...
                 'eigenmodes', struct('data', struct(), 'meta', struct()), ...
                 'health', struct('data', struct(), 'meta', struct()), ...
-                'solvers', struct('data', struct(), 'meta', struct()));
+                'solvers', struct('data', struct(), 'meta', struct()), ...
+                'connection', struct('data', struct(), 'meta', struct()));
         end
 
         % ===============================================================
@@ -556,11 +557,12 @@ classdef Manifold < handle
         % ===============================================================
         
         function conn = connection(obj, varargin)
-            %CONNECTION Compute connections on the manifold
+            %CONNECTION Compute connections on the manifold (cached)
             %
             % Syntax:
             %   conn = M.connection(type, ...)
             %   conn = M.connection('trivial', 'singularities', indices)
+            %   conn = M.connection('Force', true, ...)
             %
             % Inputs:
             %   type - Connection type: 'trivial' (default)
@@ -568,17 +570,32 @@ classdef Manifold < handle
             % Name-Value Arguments (for 'trivial' type):
             %   'singularities' - Vertex indices where singularities are placed
             %   'weights'       - Weights for each singularity (default: all 1)
+            %   'Force'         - Force recomputation, ignore cache (default: false)
             %
             % Outputs:
-            %   conn - Connection structure with type-specific fields
-            %     For 'trivial': .trivialConnection, .connectionEdge, .scalarPotential, .singularityVector
+            %   conn - Connection structure with type-specific fields (cached)
+            %     For 'trivial': 
+            %       .trivialConnection - Halfedge 1-form
+            %       .connectionEdge - Edge 1-form
+            %       .scalarPotential - Scalar potential β
+            %       .singularityVector - Singularity weights
+            %       .combinedTransport - Combined transport (geometric - connection)
+            %       .geometricTransport - Geometric transport
+            %       .connectionTransport - Connection transport
+            %       .transport - Full transport structure
             %
             % Description:
-            %   Wrapper for bct.manifold.connection() that computes various
-            %   types of connections on the manifold surface.
+            %   Wrapper for bct.manifold.connection() that computes and caches
+            %   connections on the manifold surface. The connection includes both
+            %   the connection 1-form and the combined transport (geometric + connection).
+            %
+            %   Caching behavior:
+            %   - First call: Computes and caches connection with given parameters
+            %   - Subsequent calls: Returns cached result if parameters match
+            %   - Use 'Force', true to invalidate cache and recompute
             %
             % Examples:
-            %   % Trivial connection with two singularities
+            %   % Trivial connection with two singularities (cached)
             %   conn = M.connection('trivial', ...
             %       'singularities', [6653, 978], 'weights', [1, 1]);
             %   
@@ -586,17 +603,64 @@ classdef Manifold < handle
             %   connectionEdge = conn.connectionEdge.value;
             %   trivialConn = conn.trivialConnection.value;
             %   
+            %   % Access combined transport (automatically computed)
+            %   combined = conn.combinedTransport.value;
+            %   
             %   % Default type is trivial
             %   conn = M.connection('singularities', [100, 500]);
             %   
-            %   % Combined transport (geometric + connection)
-            %   trans = bct.manifold.connection.transport(M, conn);
-            %   combined = trans.combinedTransport.value;
+            %   % Force recomputation
+            %   conn = M.connection('Force', true, ...
+            %       'singularities', [6653, 978], 'weights', [1, 1]);
             %
             % See also: bct.manifold.connection, bct.manifold.connection.trivial,
-            %           bct.manifold.connection.transport
+            %           bct.manifold.connection.transport, bct.field.direction
             
-            conn = bct.manifold.connection(obj, varargin{:});
+            % Parse inputs to extract Force flag
+            p = inputParser;
+            p.KeepUnmatched = true;
+            p.addParameter('Force', false, @islogical);
+            p.parse(varargin{:});
+            
+          force = p.Results.Force;
+            
+            % Build cache key from parameters (excluding Force)
+            remainingArgs = struct2cell(p.Unmatched);
+            remainingNames = fieldnames(p.Unmatched);
+            cacheKeyStruct = p.Unmatched;
+            
+            % Check if cache namespace exists (for backwards compatibility)
+            if ~isfield(obj.Cache, 'connection')
+                obj.Cache.connection = struct('data', struct(), 'meta', struct());
+            end
+            
+            % Check if we have a cached connection and not forcing recomputation
+            if ~force && ~isempty(fieldnames(obj.Cache.connection.data))
+                cachedConn = obj.Cache.connection.data;
+                cachedMeta = obj.Cache.connection.meta;
+                
+                % Simple validation: check if cache has required fields
+                if isfield(cachedConn, 'trivialConnection') && ...
+                   isfield(cachedConn, 'combinedTransport') && ...
+                   isfield(cachedMeta, 'parameters') && ...
+                   isequal(cachedMeta.parameters, cacheKeyStruct)
+                    conn = cachedConn;
+                    return;
+                end
+            end
+            
+            % Compute connection (includes transport automatically)
+            nameValuePairs = [remainingNames'; remainingArgs'];
+            nameValuePairs = nameValuePairs(:)';
+            
+            % Call bct.manifold.connection with the collected arguments
+            % No need to prepend 'trivial' - it's the default in bct.manifold.connection
+            conn = bct.manifold.connection(obj, nameValuePairs{:});
+            
+            % Cache the result
+            obj.Cache.connection.data = conn;
+            obj.Cache.connection.meta.computed = datetime('now');
+            obj.Cache.connection.meta.parameters = cacheKeyStruct;
         end
         
         % ===============================================================

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Surface Particle Flow - bioctree</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: monospace; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong>WebGPU Surface Particle Flow</strong><br>
+        GPU-accelerated particle advection on manifold surface<br>
+        <span id="stats"></span>
+    </div>
+    <div id="controls">
+        <button id="togglePlay">Pause</button>
+        <button id="resetParticles">Reset Particles</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.webgpu.js",
+            "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.webgpu.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { uniform, float, vec2, vec3, vec4, uint, Fn, instanceIndex, storage, If, hash, instancedArray } from 'three/tsl';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+        // Configuration
+        const config = {
+            numParticles: 10000,
+            particleSize: 2.5,
+            stepSize: 0.08,
+            heatDecay: 3.0,
+            velocityScale: 2.0,
+            fadeEnabled: true,
+            fadeTime: 2.5,
+            paused: false
+        };
+
+        // Scene setup
+        let camera, scene, renderer, controls;
+        let mesh, particleMesh;
+        let updateCompute;
+        let startTime = Date.now();
+
+        // Geometry data
+        let vertices, faces;
+        let faceNormals, faceCentroids;
+        let numVertices, numFaces;
+
+        // Particle buffers (GPU storage)
+        let particleBuffer;  // vec4: [faceIdx, baryU, baryV, life]
+        let velocityBuffer;  // float: velocity magnitude
+        
+        // Mesh data storage buffers for GPU access
+        let faceCentroidsBuffer, faceNormalsBuffer;
+
+        // Uniforms
+        let timeUniform, deltaTimeUniform, stepSizeUniform;
+        let heatDecayUniform, velocityScaleUniform;
+        let fadeEnabledUniform, fadeTimeUniform;
+
+        init();
+
+        async function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 150);
+
+            // Renderer (WebGPU)
+            renderer = new THREE.WebGPURenderer({ 
+                antialias: true,
+                forceWebGL: false 
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Initialize WebGPU backend
+            await renderer.init();
+            
+            renderer.setAnimationLoop(animate);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // Load mesh
+            await loadMesh('../data/mesh/fsaverage5.obj');
+
+            // Create mesh visualization
+            createMeshVisualization();
+
+            // Initialize particles on GPU
+            initializeParticles();
+
+            // Create particle visualization
+            createParticleVisualization();
+
+            // Setup compute shader
+            setupComputeShader();
+
+            // Setup GUI
+            setupGUI();
+
+            // Setup controls
+            setupControls();
+
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+
+            console.log('WebGPU Surface Flow initialized');
+            console.log(`Particles: ${config.numParticles}`);
+            console.log(`Faces: ${numFaces}`);
+        }
+
+        async function loadMesh(path) {
+            const response = await fetch(path);
+            const text = await response.text();
+            const lines = text.split('\n');
+
+            const vertexData = [];
+            const faceData = [];
+
+            for (const line of lines) {
+                const parts = line.trim().split(/\s+/);
+                if (parts[0] === 'v') {
+                    vertexData.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+                } else if (parts[0] === 'f') {
+                    // OBJ faces are 1-indexed, convert to 0-indexed
+                    const i0 = parseInt(parts[1].split('/')[0]) - 1;
+                    const i1 = parseInt(parts[2].split('/')[0]) - 1;
+                    const i2 = parseInt(parts[3].split('/')[0]) - 1;
+                    faceData.push(i0, i1, i2);
+                }
+            }
+
+            vertices = new Float32Array(vertexData);
+            faces = new Uint32Array(faceData);
+            numVertices = vertices.length / 3;
+            numFaces = faces.length / 3;
+
+            console.log(`Loaded mesh: ${numVertices} vertices, ${numFaces} faces`);
+
+            // Compute face geometry
+            computeFaceGeometry();
+        }
+
+        function computeFaceGeometry() {
+            faceNormals = new Float32Array(numFaces * 3);
+            faceCentroids = new Float32Array(numFaces * 3);
+
+            for (let i = 0; i < numFaces; i++) {
+                const i0 = faces[i * 3];
+                const i1 = faces[i * 3 + 1];
+                const i2 = faces[i * 3 + 2];
+
+                // Get vertices
+                const v0 = new THREE.Vector3(vertices[i0 * 3], vertices[i0 * 3 + 1], vertices[i0 * 3 + 2]);
+                const v1 = new THREE.Vector3(vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+                const v2 = new THREE.Vector3(vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+
+                // Centroid
+                const centroid = new THREE.Vector3().addVectors(v0, v1).add(v2).divideScalar(3);
+                faceCentroids[i * 3] = centroid.x;
+                faceCentroids[i * 3 + 1] = centroid.y;
+                faceCentroids[i * 3 + 2] = centroid.z;
+
+                // Normal
+                const e1 = new THREE.Vector3().subVectors(v1, v0);
+                const e2 = new THREE.Vector3().subVectors(v2, v0);
+                const normal = new THREE.Vector3().crossVectors(e1, e2).normalize();
+                faceNormals[i * 3] = normal.x;
+                faceNormals[i * 3 + 1] = normal.y;
+                faceNormals[i * 3 + 2] = normal.z;
+            }
+        }
+
+        function createMeshVisualization() {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geometry.setIndex(new THREE.BufferAttribute(faces, 1));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardNodeMaterial({
+                color: 0x444444,
+                roughness: 0.8,
+                metalness: 0.2,
+                side: THREE.DoubleSide
+            });
+
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7.5);
+            scene.add(dirLight);
+        }
+
+        function initializeParticles() {
+            const particleData = new Float32Array(config.numParticles * 4);
+            const velocityData = new Float32Array(config.numParticles);
+
+            for (let i = 0; i < config.numParticles; i++) {
+                // Random face
+                const faceIdx = Math.floor(Math.random() * numFaces);
+
+                // Random barycentric coordinates (ensure u+v+w=1)
+                let u = Math.random();
+                let v = Math.random() * (1 - u);
+                // w = 1 - u - v (computed in shader)
+
+                // Initial life (random for staggered fade)
+                const life = Math.random();
+
+                particleData[i * 4] = faceIdx;
+                particleData[i * 4 + 1] = u;
+                particleData[i * 4 + 2] = v;
+                particleData[i * 4 + 3] = life;
+
+                // Random velocity
+                velocityData[i] = 0.5 + Math.random() * 0.5;
+            }
+
+            // Create instanced storage arrays (TSL)
+            particleBuffer = instancedArray(particleData, 'vec4');
+            velocityBuffer = instancedArray(velocityData, 'float');
+            
+            // Create mesh data storage buffers
+            faceCentroidsBuffer = instancedArray(faceCentroids, 'vec3');
+            faceNormalsBuffer = instancedArray(faceNormals, 'vec3');
+        }
+
+        function createParticleVisualization() {
+            // Create instanced mesh for particles
+            const particleGeometry = new THREE.SphereGeometry(0.2, 4, 4);
+            const particleMaterial = new THREE.MeshBasicNodeMaterial({
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            // Position computed from particle data (use face centroid for simplicity)
+            particleMaterial.positionNode = Fn(() => {
+                const particle = particleBuffer.element(instanceIndex);
+                const faceIdx = uint(particle.x);
+                
+                // Get face centroid from storage buffer
+                const centroid = faceCentroidsBuffer.element(faceIdx);
+                
+                return centroid;
+            })();
+
+            // Color by velocity and life
+            particleMaterial.colorNode = Fn(() => {
+                const particle = particleBuffer.element(instanceIndex);
+                const vel = velocityBuffer.element(instanceIndex);
+                const life = particle.w;
+
+                // Heat color map
+                const r = vel.mul(2.0).clamp(0.0, 1.0);
+                const g = vel.mul(1.5).clamp(0.0, 1.0);
+                const b = float(1.0).sub(vel).mul(0.8);
+                
+                return vec4(r, g, b, life);
+            })();
+
+            particleMesh = new THREE.InstancedMesh(particleGeometry, particleMaterial, config.numParticles);
+            particleMesh.scale.setScalar(config.particleSize);
+            scene.add(particleMesh);
+        }
+
+        function setupComputeShader() {
+            // Create uniforms
+            timeUniform = uniform(0);
+            deltaTimeUniform = uniform(0);
+            stepSizeUniform = uniform(config.stepSize);
+            heatDecayUniform = uniform(config.heatDecay);
+            velocityScaleUniform = uniform(config.velocityScale);
+            fadeEnabledUniform = uniform(config.fadeEnabled ? 1.0 : 0.0);
+            fadeTimeUniform = uniform(config.fadeTime);
+
+            // Compute shader function
+            const computeParticles = Fn(() => {
+                const particle = particleBuffer.element(instanceIndex);
+                const vel = velocityBuffer.element(instanceIndex);
+                
+                // Extract particle data
+                const faceIdx = uint(particle.x);
+                const baryU = particle.y;
+                const baryV = particle.z;
+                const life = particle.w;
+
+                // Get face centroid and normal from storage buffers
+                const pos = faceCentroidsBuffer.element(faceIdx);
+                const n0 = faceNormalsBuffer.element(faceIdx);
+
+                // Heat field: distance from north pole
+                const northPole = vec3(0, 100, 0);
+                const distToPole = pos.distance(northPole);
+                const heatValue = distToPole.mul(heatDecayUniform).mul(-0.01).exp();
+
+                // Heat gradient (simplified: direction away from pole)
+                const towardsFlow = pos.sub(northPole).normalize();
+                const gradient = towardsFlow.mul(heatValue).mul(10.0);
+
+                // Project gradient to tangent plane
+                const normalComponent = gradient.dot(n0);
+                const tangentGradient = gradient.sub(n0.mul(normalComponent));
+
+                // Advect in tangent direction
+                const dt = deltaTimeUniform.mul(stepSizeUniform).mul(velocityScaleUniform);
+                const flowDir = tangentGradient.normalize();
+                const step = flowDir.mul(dt).mul(vel);
+
+                // Update barycentric coordinates (simplified - no face walking)
+                const newBaryU = baryU.add(step.x.mul(0.001));
+                const newBaryV = baryV.add(step.y.mul(0.001));
+
+                // Keep in valid barycentric range
+                const clampedU = newBaryU.clamp(0.0, 1.0);
+                const clampedV = newBaryV.clamp(0.0, float(1.0).sub(clampedU));
+
+                // Update life
+                const fadeRate = fadeEnabledUniform.mul(deltaTimeUniform.div(fadeTimeUniform));
+                const newLife = life.sub(fadeRate);
+
+                // Respawn or update
+                const shouldRespawn = newLife.lessThanEqual(0.0);
+                
+                // Use hash for pseudo-random respawn
+                const randomSeed = hash(vec2(instanceIndex, timeUniform));
+                const randomFace = randomSeed.mul(numFaces).floor();
+                const randomU = hash(vec2(instanceIndex.add(1), timeUniform));
+                const randomV = hash(vec2(instanceIndex.add(2), timeUniform)).mul(float(1.0).sub(randomU));
+
+                const respawnParticle = vec4(randomFace, randomU, randomV, float(1.0));
+                const updateParticle = vec4(faceIdx, clampedU, clampedV, newLife.max(0.0));
+
+                // Conditional assign
+                particleBuffer.element(instanceIndex).assign(
+                    shouldRespawn.cond(respawnParticle, updateParticle)
+                );
+            });
+
+            // Create compute operation
+            updateCompute = computeParticles().compute(config.numParticles);
+        }
+
+        function setupGUI() {
+            const gui = new GUI();
+            gui.add(config, 'stepSize', 0.01, 0.5).name('Step Size').onChange(v => {
+                stepSizeUniform.value = v;
+            });
+            gui.add(config, 'heatDecay', 0.5, 10.0).name('Heat Decay').onChange(v => {
+                heatDecayUniform.value = v;
+            });
+            gui.add(config, 'velocityScale', 0.1, 5.0).name('Velocity Scale').onChange(v => {
+                velocityScaleUniform.value = v;
+            });
+            gui.add(config, 'fadeEnabled').name('Fade Enabled').onChange(v => {
+                fadeEnabledUniform.value = v ? 1 : 0;
+            });
+            gui.add(config, 'fadeTime', 0.5, 10.0).name('Fade Time').onChange(v => {
+                fadeTimeUniform.value = v;
+            });
+            gui.add(config, 'particleSize', 1.0, 10.0).name('Particle Size').onChange(v => {
+                particleMesh.scale.setScalar(v);
+            });
+        }
+
+        function setupControls() {
+            document.getElementById('togglePlay').addEventListener('click', () => {
+                config.paused = !config.paused;
+                document.getElementById('togglePlay').textContent = config.paused ? 'Play' : 'Pause';
+            });
+
+            document.getElementById('resetParticles').addEventListener('click', () => {
+                initializeParticles();
+                setupComputeShader();
+                console.log('Particles reset');
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - startTime) / 1000;
+            const deltaTime = Math.min(1 / 30, elapsedTime - (timeUniform.value || 0));
+
+            if (!config.paused) {
+                // Update uniforms
+                timeUniform.value = elapsedTime;
+                deltaTimeUniform.value = deltaTime;
+
+                // Run compute shader
+                renderer.compute(updateCompute);
+            }
+
+            // Update controls
+            controls.update();
+
+            // Render scene
+            renderer.render(scene, camera);
+
+            // Update stats
+            const fps = Math.round(1 / deltaTime);
+            document.getElementById('stats').innerHTML = 
+                `FPS: ${fps}<br>` +
+                `Particles: ${config.numParticles}<br>` +
+                `Time: ${elapsedTime.toFixed(1)}s`;
+        }
+    </script>
+</body>
+</html>

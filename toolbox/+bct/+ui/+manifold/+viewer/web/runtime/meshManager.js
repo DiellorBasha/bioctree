@@ -220,6 +220,14 @@ export class MeshManager {
       indexBase = 0, 
       frame = 'matlab' 
     } = meshData;
+    
+    console.log('[MeshManager] setMeshFromBuffers called:', {
+      vertexCount: vertices ? vertices.length / 3 : 0,
+      faceCount: faces ? faces.length / 3 : 0,
+      hasNormals: !!normals,
+      indexBase,
+      frame
+    });
 
     // Validate input
     if (!vertices || !faces) {
@@ -260,6 +268,11 @@ export class MeshManager {
     if (normals) {
       const normalArray = new Float32Array(normals);
       geometry.setAttribute('normal', new THREE.BufferAttribute(normalArray, 3));
+      console.log('[MeshManager] Using provided normals');
+    } else {
+      // Compute normals if not provided
+      geometry.computeVertexNormals();
+      console.log('[MeshManager] Computed vertex normals (none provided)');
     }
     
     // Store pre-computed geometry cache in userData for reuse
@@ -282,6 +295,11 @@ export class MeshManager {
     // MATLAB (bct package) should provide pre-computed attributes via future setNormals() etc.
     const t4 = performance.now();
     validateGeometryAttributes(geometry);
+    
+    // Compute bounding box for camera positioning
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    
     const t5 = performance.now();
 
     // Create materials (match GLB/JSON loading exactly)
@@ -314,12 +332,21 @@ export class MeshManager {
     // Add to appropriate root based on frame parameter
     if (frame === 'threejs') {
       this.viewerCore.roots.threejs.add(this.modelRoot);
+      console.log('[MeshManager] Added mesh to threejs root');
     } else {
       // Default to matlab frame (applies Z-up → Y-up transform)
       this.viewerCore.roots.matlab.add(this.modelRoot);
+      console.log('[MeshManager] Added mesh to matlab root (Z-up → Y-up)');
     }
 
     const t6 = performance.now();
+    
+    console.log('[MeshManager] Mesh created successfully:', {
+      vertexCount: geometry.attributes.position.count,
+      faceCount: geometry.index.count / 3,
+      hasNormals: !!geometry.attributes.normal,
+      bounds: geometry.boundingBox
+    });
 
     return this.loadedScene;
   }
