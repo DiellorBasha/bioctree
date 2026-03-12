@@ -55,7 +55,7 @@ outputRoot = fullfile(analysisRoot, protocolName);
 results = struct('subject', {}, 'outPath', {}, 'cwtPath', {}, ...
     'hilbertPath', {}, 'status', {}, 'error', {}, 'elapsed', {});
 
-for si = 3
+for si = 4:5
     subj = db.subjects(si);
     subjName = subj.name;
 
@@ -137,7 +137,7 @@ for si = 3
 
             fprintf('  [5/5] Writing Hilbert bands...\n');
             hilbertPath = writeHilbertBands(amplitude, phase, bInfo, outPath, ...
-                ScaleFactor=scaleFactor, Overwrite=overwrite);
+                ScaleFactor=scaleFactor, Overwrite=false);
 
             clear amplitude phase hTds cwtStore;  % free memory
         end
@@ -188,4 +188,131 @@ if nErrors > 0
 end
 
 fprintf('\nOutput root: %s\n', outputRoot);
+fprintf('========================================\n');
+
+%% ===== PATCH: WRITE PER-BAND CWT FILES =====
+%  Splits the existing CWT datastore (channel files with [nSamples × nBands])
+%  into per-band folders of per-channel [nSamples × 1] files for fast reload.
+%  Run this once to update subjects that were processed before writeCWTBands existed.
+
+fprintf('\n========================================\n');
+fprintf('PATCHING: Write per-band CWT files\n');
+fprintf('========================================\n');
+
+patchOverwrite = false;  % set true to re-write existing cwt_bands
+
+for si = 2:nSubjects
+    subj = db.subjects(si);
+    subjName = subj.name;
+    subjectOut = fullfile(outputRoot, subjName);
+
+    cwtPath      = fullfile(subjectOut, "cwt");
+    cwtBandsPath = fullfile(subjectOut, "cwt_bands");
+
+    % Skip if subject folder or CWT doesn't exist
+    if ~isfolder(subjectOut)
+        fprintf('  [skip] %s — no output folder\n', subjName);
+        continue;
+    end
+    if ~isfolder(cwtPath) || ~isfile(fullfile(cwtPath, "provenance.mat"))
+        fprintf('  [skip] %s — no CWT data\n', subjName);
+        continue;
+    end
+
+    % Skip if already patched
+    if isfolder(cwtBandsPath) && ~patchOverwrite
+        fprintf('  [skip] %s — cwt_bands already exists\n', subjName);
+        continue;
+    end
+
+    fprintf('  [patch] %s ...\n', subjName);
+    try
+        tPatch = tic;
+        writeCWTBands(cwtPath, subjectOut, Overwrite=patchOverwrite);
+        fprintf('  [done] %s (%.1f s)\n', subjName, toc(tPatch));
+    catch ME
+        fprintf('  [ERROR] %s: %s\n', subjName, ME.message);
+    end
+end
+
+fprintf('========================================\n');
+fprintf('CWT band patch complete.\n');
+fprintf('========================================\n');
+
+%% ===== PATCH: UPDATE PROVENANCE WITH SURFACE & REG.SPHERE =====
+%  Adds Reg.Sphere, surfaceVertices, surfaceFaces, surfaceFullPath, and
+%  SurfaceFile to each subject's provenance.mat from the Brainstorm
+%  anatomy surface referenced by the imaging kernel.
+%
+%  SAFETY: Only inserts/updates the specific surface-related fields.
+%  All other provenance fields are left untouched.
+
+fprintf('\n========================================\n');
+fprintf('PATCHING: Update provenance with Reg.Sphere\n');
+fprintf('========================================\n');
+
+for si = 2:nSubjects
+    subj = db.subjects(si);
+    subjName = subj.name;
+    subjectOut = fullfile(outputRoot, subjName);
+    provenanceFile = fullfile(subjectOut, "provenance.mat");
+
+    % Skip if subject output doesn't exist
+    if ~isfile(provenanceFile)
+        fprintf('  [skip] %s — no provenance.mat\n', subjName);
+        continue;
+    end
+
+    % Skip if no sourceMapping from Brainstorm
+    if ~isfield(subj, 'sourceMapping') || isempty(subj.sourceMapping)
+        fprintf('  [skip] %s — no sourceMapping in db\n', subjName);
+        continue;
+    end
+    sm = subj.sourceMapping;
+
+    % Check that Reg.Sphere exists in the sourceMapping
+    if ~isfield(sm, 'Reg') || ~isfield(sm.Reg, 'Sphere') || ...
+       ~isfield(sm.Reg.Sphere, 'Vertices') || isempty(sm.Reg.Sphere.Vertices)
+        fprintf('  [skip] %s — sourceMapping has no Reg.Sphere\n', subjName);
+        continue;
+    end
+
+    % Load existing provenance — keep everything
+    tmp = load(provenanceFile, 'provenance');
+    provenance = tmp.provenance;
+
+    % Check if already patched (Reg.Sphere present and same size)
+    if isfield(provenance, 'Reg') && isfield(provenance.Reg, 'Sphere') && ...
+       isfield(provenance.Reg.Sphere, 'Vertices') && ...
+       ~isempty(provenance.Reg.Sphere.Vertices)
+        fprintf('  [skip] %s — Reg.Sphere already present (%d vertices)\n', ...
+            subjName, size(provenance.Reg.Sphere.Vertices, 1));
+        continue;
+    end
+
+    % ---- Inject surface fields (add/update only these) ----
+    provenance.Reg = sm.Reg;
+
+    if isfield(sm, 'surfaceVertices') && ~isempty(sm.surfaceVertices)
+        provenance.surfaceVertices = sm.surfaceVertices;
+    end
+    if isfield(sm, 'surfaceFaces') && ~isempty(sm.surfaceFaces)
+        provenance.surfaceFaces = sm.surfaceFaces;
+    end
+    if isfield(sm, 'surfaceFullPath') && ~isempty(sm.surfaceFullPath)
+        provenance.surfaceFullPath = string(sm.surfaceFullPath);
+    end
+    if isfield(sm, 'SurfaceFile') && ~isempty(sm.SurfaceFile)
+        provenance.surfaceFile = string(sm.SurfaceFile);
+    end
+
+    % ---- Save back (preserves all other fields) ----
+    save(provenanceFile, 'provenance', '-v7.3');
+
+    fprintf('  [patched] %s — Reg.Sphere (%d vertices), surface: %s\n', ...
+        subjName, size(sm.Reg.Sphere.Vertices, 1), sm.SurfaceFile);
+end
+
+fprintf('========================================\n');
+fprintf('Reg.Sphere provenance patch complete.\n');
 fprintf('========================================\n');

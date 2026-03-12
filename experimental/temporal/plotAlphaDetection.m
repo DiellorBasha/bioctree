@@ -36,7 +36,6 @@ function plotAlphaDetection(result, frameInfo, opts)
     % Panel 1: Global alpha index
     subplot(3,1,1);
     plot(tFrames, result.alphaGlobal);
-    grid on;
     xlabel('Time (s)');
     ylabel('median log(\alpha power)');
     title('Global alpha index (per frame)');
@@ -44,7 +43,7 @@ function plotAlphaDetection(result, frameInfo, opts)
     % Panel 2: Robust z-score
     subplot(3,1,2);
     plot(tFrames, result.z);
-    hold on; grid on;
+    hold on;
     yline(P.thrOn,  '--r', 'thrOn');
     yline(P.thrOff, '--b', 'thrOff');
     xlabel('Time (s)');
@@ -54,7 +53,6 @@ function plotAlphaDetection(result, frameInfo, opts)
     % Panel 3: Burst mask + window markers
     subplot(3,1,3);
     stairs(tFrames, double(result.burstMask), 'LineWidth', 1);
-    grid on;
     xlabel('Time (s)');
     ylabel('burst mask');
     title('Raw hysteresis mask (pre signalMask cleanup)');
@@ -64,4 +62,6 @@ function plotAlphaDetection(result, frameInfo, opts)
         xline(result.win.start_s, '-g', 'win start', 'LineWidth', 1.5);
         xline(result.win.end_s,   '-g', 'win end',   'LineWidth', 1.5);
     end
+
+    applyPlotDefaults(gcf);
 end

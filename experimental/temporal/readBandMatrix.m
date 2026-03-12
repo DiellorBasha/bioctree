@@ -45,19 +45,21 @@ function [mat, chanNames, sfreq] = readBandMatrix(sds)
     nChannels = numel(chanNames);
     sfreq     = sds.SampleRate;
 
-    % Read first channel to get sample count
+    % Read all channels using hasdata/read pattern
     reset(sds);
-    x1 = read(sds);
-    if iscell(x1), x1 = x1{1}; end
-    nSamples = numel(x1);
-
-    % Pre-allocate and fill
-    mat = zeros(nChannels, nSamples);
-    mat(1, :) = x1(:)';
-
-    for ci = 2:nChannels
+    mat = [];
+    ci = 0;
+    while hasdata(sds)
         x = read(sds);
         if iscell(x), x = x{1}; end
+        ci = ci + 1;
+
+        % Pre-allocate on first read
+        if ci == 1
+            nSamples = numel(x);
+            mat = zeros(nChannels, nSamples);
+        end
+
         mat(ci, :) = x(:)';
     end
     reset(sds);

@@ -65,13 +65,23 @@ arguments
     options.NumModes = []
 end
 
-%% Validate file exists
+%% Detect format: Zarr directory store vs HDF5 file
+[~, ~, ext] = fileparts(file);
+isZarr = strcmpi(ext, '.zarr') && isfolder(file);
+
+if isZarr
+    % Dispatch to Zarr reader
+    M = readManifoldFromZarr(file, options);
+    return;
+end
+
+%% Validate HDF5 file exists
 if ~isfile(file)
     error('bct:file:read:manifold:FileNotFound', ...
         'File "%s" does not exist.', file);
 end
 
-%% Determine what to read
+%% Determine what to read (HDF5 path)
 readCore = resolveAutoFlag(options.Core, file, '/manifold');
 readGeom = resolveAutoFlag(options.Geometry, file, '/geometry');
 readTopo = resolveAutoFlag(options.Topology, file, '/topology');
@@ -187,4 +197,168 @@ catch
     exists = false;
 end
 
+end
+
+%% ========================================================================
+%% ZARR READER
+%% ========================================================================
+function M = readManifoldFromZarr(zarrPath, options)
+%READMANIFOLDFROMZARR Read complete Manifold from Zarr directory store.
+%   Reads core mesh, then populates the Manifold cache with any available
+%   geometry, topology, operators, eigenmodes groups.
+
+if ~isfolder(zarrPath)
+    error('bct:file:read:manifold:ZarrNotFound', ...
+        'Zarr store not found: %s', zarrPath);
+end
+
+fprintf('Reading Manifold from Zarr: %s\n', zarrPath);
+
+%% 1. Read core (vertices, faces) via existing zarr reader
+M = bct.file.manifold.read.zarr(zarrPath);
+fprintf('  ✓ Core: %d vertices, %d faces\n', ...
+    size(M.Vertices, 1), size(M.Faces, 1));
+
+%% 2. Auto-detect available groups
+zarrGroupExists = @(g) isfolder(fullfile(zarrPath, 'manifold', g));
+
+readEigen = resolveZarrAutoFlag(options.Eigenmodes, zarrGroupExists('eigenmodes'));
+
+%% 3. Read eigenmodes
+if readEigen
+    try
+        eigenPath = fullfile('manifold', 'eigenmodes');
+
+        % Read eigenvalues [k × 1]
+        lambda = bct.file.zarr.readArray(zarrPath, fullfile(eigenPath, 'eigenvalues'));
+        lambda = double(lambda(:));  % ensure column vector
+
+        % Read eigenvectors [N × k]
+        U = bct.file.zarr.readArray(zarrPath, fullfile(eigenPath, 'eigenvectors'));
+        U = double(U);
+
+        % Read metadata
+        eigenAttrs = bct.file.zarr.readAttrs(zarrPath, eigenPath);
+
+        % Respect NumModes option
+        kAvailable = numel(lambda);
+        if ~isempty(options.NumModes) && options.NumModes < kAvailable
+            k = options.NumModes;
+            lambda = lambda(1:k);
+            U = U(:, 1:k);
+        else
+            k = kAvailable;
+        end
+
+        % Build schema-compliant eigen struct and inject into cache
+        eigenStruct = struct();
+        eigenStruct.eigenvalues = struct('value', lambda, ...
+            'attributes', struct('shape', [k 1], 'dtype', 'float64'));
+        eigenStruct.eigenvectors = struct('value', U, ...
+            'attributes', struct('shape', [size(U,1) k], 'dtype', 'float64'));
+        eigenStruct.attributes = eigenAttrs;
+        eigenStruct.attributes.numModes = k;
+
+        M.loadCache('eigenmodes', eigenStruct);
+
+        fprintf('  ✓ Eigenmodes: %d modes\n', k);
+    catch ME
+        if islogical(options.Eigenmodes) && options.Eigenmodes
+            rethrow(ME);
+        end
+        fprintf('  - Eigenmodes: %s\n', ME.message);
+    end
+end
+
+%% 4. Read operators (mass, stiffness, etc.)
+readOps = resolveZarrAutoFlag(options.Operators, zarrGroupExists('operators'));
+if readOps
+    try
+        opsPath = fullfile('manifold', 'operators');
+        opsDir = fullfile(zarrPath, opsPath);
+        opGroups = dir(opsDir);
+        opGroups = opGroups([opGroups.isdir] & ~startsWith({opGroups.name}, '.'));
+
+        opsStruct = struct();
+        for i = 1:numel(opGroups)
+            opName = opGroups(i).name;
+            try
+                opData = readSparseOrDenseFromZarr(zarrPath, fullfile(opsPath, opName));
+                opsStruct.(opName) = opData;
+            catch
+                % Skip operators that fail to read
+            end
+        end
+
+        M.loadCache('operators', opsStruct);
+
+        fprintf('  ✓ Operators: %s\n', strjoin(string(fieldnames(opsStruct)), ', '));
+    catch ME
+        if islogical(options.Operators) && options.Operators
+            rethrow(ME);
+        end
+        fprintf('  - Operators: %s\n', ME.message);
+    end
+end
+
+fprintf('✓ Zarr read complete\n');
+
+end
+
+%% ========================================================================
+%% ZARR HELPERS
+%% ========================================================================
+function shouldRead = resolveZarrAutoFlag(flag, groupPresent)
+%RESOLVEZARRAUTO Resolve auto/true/false flag against group existence.
+if islogical(flag)
+    shouldRead = flag;
+elseif isstring(flag) || ischar(flag)
+    if strcmpi(flag, 'auto')
+        shouldRead = groupPresent;
+    else
+        shouldRead = false;
+    end
+else
+    shouldRead = false;
+end
+end
+
+function data = readSparseOrDenseFromZarr(zarrPath, arrayPath)
+%READSPARSEORDENSEFROMZARR Read an operator that may be stored as COO sparse.
+%   Checks for row_ind/col_ind/values subgroups (COO format) or reads as dense.
+
+fullDir = fullfile(zarrPath, arrayPath);
+hasCOO = isfolder(fullfile(fullDir, 'row_ind')) && ...
+         isfolder(fullfile(fullDir, 'col_ind')) && ...
+         isfolder(fullfile(fullDir, 'values'));
+
+if hasCOO
+    % Read COO components
+    rowInd = bct.file.zarr.readArray(zarrPath, fullfile(arrayPath, 'row_ind'));
+    colInd = bct.file.zarr.readArray(zarrPath, fullfile(arrayPath, 'col_ind'));
+    vals   = bct.file.zarr.readArray(zarrPath, fullfile(arrayPath, 'values'));
+
+    % Read shape from attributes
+    attrs = bct.file.zarr.readAttrs(zarrPath, arrayPath);
+    if isfield(attrs, 'shape')
+        nRows = attrs.shape(1);
+        nCols = attrs.shape(2);
+    else
+        nRows = double(max(rowInd)) + 1;
+        nCols = double(max(colInd)) + 1;
+    end
+
+    % COO is 0-based → convert to 1-based
+    rowInd = double(rowInd(:)) + 1;
+    colInd = double(colInd(:)) + 1;
+    vals   = double(vals(:));
+
+    S = sparse(rowInd, colInd, vals, nRows, nCols);
+    data = struct('value', S, 'attributes', attrs);
+else
+    % Try reading as dense array
+    arr = bct.file.zarr.readArray(zarrPath, arrayPath);
+    attrs = bct.file.zarr.readAttrs(zarrPath, arrayPath);
+    data = struct('value', double(arr), 'attributes', attrs);
+end
 end

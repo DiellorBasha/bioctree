@@ -1032,6 +1032,33 @@ classdef Manifold < handle
             end
         end
         
+        function loadCache(obj, namespace, data)
+            %LOADCACHE Inject pre-computed data into a cache namespace.
+            %
+            %   Used by file readers (e.g. Zarr) to populate the cache with
+            %   data loaded from disk instead of recomputing.
+            %
+            % Syntax:
+            %   M.loadCache('eigenmodes', eigenStruct)
+            %   M.loadCache('operators', opsStruct)
+            %
+            % Inputs:
+            %   namespace - 'eigenmodes', 'operators', 'geometry', 'topology', etc.
+            %   data      - struct matching cache conventions for that namespace
+            %
+            % See also: hasCached, cacheStatus
+            
+            arguments
+                obj
+                namespace {mustBeTextScalar, mustBeMember(namespace, ...
+                    ["operators", "geometry", "topology", "eigenmodes", ...
+                     "health", "halfedge", "solvers", "connection"])}
+                data (1,1) struct
+            end
+            
+            obj.Cache.(string(namespace)).data = data;
+        end
+        
         function status = cacheStatus(obj)
             %CACHESTATUS Get summary of cache state across all namespaces
             %

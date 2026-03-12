@@ -81,7 +81,6 @@ fs5pathLeft='C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage5
 [verticesL, facesL] = freesurfer_read_surf(fs5pathLeft);
 fs5pathRight='C:\CodingProjects\bioctree\data\mesh\external\freesurfer\fsaverage5\surf\rh.pial'
 [verticesR, facesR] = freesurfer_read_surf(fs5pathRight);
-
 MLeft=bct.Manifold(vertices,faces);
 % Load fsaverage5 path
 fs5root = "data/mesh/external/freesurfer/fsaverage5/surf";

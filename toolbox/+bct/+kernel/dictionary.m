@@ -36,7 +36,8 @@ function D = dictionary()
     %% =========================================================
 
     % Heat kernel (exponential decay)
-    D("Heat") = @(x, tau) exp(-tau .* x);
+    %   g(λ) = exp(−τ·λ/λ_max)  — matches GSPBox gsp_design_heat
+    D("Heat") = @(x, tau) exp(-tau .* x ./ max(x));
 
     % Gaussian
     D("Gaussian") = @(x, mu, sigma) ...
@@ -59,8 +60,9 @@ function D = dictionary()
         (1 - (x.^2 ./ sigma^2)) .* exp(-x.^2 ./ (2*sigma^2));
 
     % Spectral Mexican Hat (GSP-style)
+    %   gb(τλ) = (τλ)·exp(−τλ)  — matches GSPBox gsp_design_mexican_hat
     D("SpectralMexicanHat") = @(x, tau) ...
-        x .* exp(-tau .* x);
+        (tau .* x) .* exp(-tau .* x);
 
     % Morlet wavelet
     D("Morlet") = @(x, mu, sigma, omega) ...

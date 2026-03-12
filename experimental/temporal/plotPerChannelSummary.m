@@ -35,7 +35,6 @@ function plotPerChannelSummary(result, frameInfo, opts)
     % Panel 1: Channel count per frame
     subplot(3,1,1);
     area(tFrames, result.chanCount, 'FaceAlpha', 0.5);
-    grid on;
     xlabel('Time (s)');
     ylabel('# active channels');
     title('Active channel count per frame');
@@ -53,7 +52,6 @@ function plotPerChannelSummary(result, frameInfo, opts)
     % Panel 2: Global mask
     subplot(3,1,2);
     stairs(tFrames, double(result.globalMask), 'LineWidth', 1);
-    grid on;
     xlabel('Time (s)');
     ylabel('global mask');
     title('Global burst mask (channel-merged)');
@@ -73,4 +71,5 @@ function plotPerChannelSummary(result, frameInfo, opts)
     ylabel('Channel index');
     title(sprintf('Active-channel raster (first %d channels)', nShow));
     set(gca, 'YDir', 'normal');
+    applyPlotDefaults(gcf);
 end

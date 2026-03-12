@@ -96,7 +96,7 @@ function fig = plotBandpower(bandStore, tWindows, psdInfo, opts)
     % Channel counter text
     hCounter = uicontrol('Style','text', 'String','', ...
         'Units','normalized', 'Position',[0.20 0.01 0.15 0.04], ...
-        'HorizontalAlignment','left', 'FontSize',9);
+        'HorizontalAlignment','left', 'FontSize',14);
 
     ax = axes('Position',[0.08 0.10 0.88 0.85]);
 
@@ -140,7 +140,6 @@ function fig = plotBandpower(bandStore, tWindows, psdInfo, opts)
         end
 
         hold(ax, 'off');
-        grid(ax, 'on');
         xlabel(ax, 'Time (s)');
 
         if opts.LogScale && ~opts.Normalize
@@ -152,7 +151,8 @@ function fig = plotBandpower(bandStore, tWindows, psdInfo, opts)
         end
 
         title(ax, sprintf('Channel %d / %d: %s', idx, nChans, chanNames(ci)));
-        legend(ax, legendLabels, 'Location', 'eastoutside', 'FontSize', 8);
+        legend(ax, legendLabels, 'Location', 'eastoutside', 'FontSize', 14);
+        applyPlotDefaults(fig);
         hCounter.String = sprintf('%d / %d', idx, nChans);
     end
 

@@ -115,7 +115,7 @@ function fig = plotCWTSpectrogram(bandStore, t, cwtInfo, opts)
         'Callback', @(~,~) navigate(1));
     hCounter = uicontrol('Style','text', 'String','', ...
         'Units','normalized', 'Position',[0.20 0.01 0.15 0.04], ...
-        'HorizontalAlignment','left', 'FontSize',9);
+        'HorizontalAlignment','left', 'FontSize',14);
 
     ax = axes('Position',[0.10 0.12 0.82 0.80]);
 
@@ -194,6 +194,7 @@ function fig = plotCWTSpectrogram(bandStore, t, cwtInfo, opts)
         ylabel(ax, 'Band');
         title(ax, sprintf('Channel %d / %d: %s', idx, nChans, chanNames(ci)));
         hCounter.String = sprintf('%d / %d', idx, nChans);
+        applyPlotDefaults(fig);
     end
 
     function navigate(step)

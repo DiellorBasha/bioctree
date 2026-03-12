@@ -109,7 +109,7 @@ function fig = plotCWTEnvelope(bandStore, t, cwtInfo, opts)
         'Callback', @(~,~) navigate(1));
     hCounter = uicontrol('Style','text', 'String','', ...
         'Units','normalized', 'Position',[0.20 0.01 0.15 0.04], ...
-        'HorizontalAlignment','left', 'FontSize',9);
+        'HorizontalAlignment','left', 'FontSize',14);
 
     % Create axes
     if opts.Layout == "subplots"
@@ -143,11 +143,9 @@ function fig = plotCWTEnvelope(bandStore, t, cwtInfo, opts)
                 plot(ax, tPlot, env, 'Color', colors(bi,:), 'LineWidth', 1.2);
 
                 hold(ax, 'off');
-                grid(ax, 'on');
 
                 bRange = cwtInfo.bandRanges.(bandNames(bi));
-                ylabel(ax, sprintf('%s\n[%g–%g]', bandNames(bi), bRange(1), bRange(2)), ...
-                    'FontSize', 8);
+                ylabel(ax, sprintf('%s\n[%g\u2013%g]', bandNames(bi), bRange(1), bRange(2)));
 
                 if bi < nBands
                     set(ax, 'XTickLabel', []);
@@ -155,7 +153,8 @@ function fig = plotCWTEnvelope(bandStore, t, cwtInfo, opts)
                     xlabel(ax, 'Time (s)');
                 end
             end
-            sgtitle(fig, sprintf('Channel %d / %d: %s', idx, nChans, chanNames(ci)));
+            sgtitle(fig, sprintf('Channel %d / %d: %s', idx, nChans, chanNames(ci)), ...
+                'FontSize', 16);
 
         else  % overlay
             ax = axArr;
@@ -175,7 +174,6 @@ function fig = plotCWTEnvelope(bandStore, t, cwtInfo, opts)
             end
 
             hold(ax, 'off');
-            grid(ax, 'on');
             xlabel(ax, 'Time (s)');
 
             if opts.LogScale
@@ -187,9 +185,10 @@ function fig = plotCWTEnvelope(bandStore, t, cwtInfo, opts)
             end
 
             title(ax, sprintf('Channel %d / %d: %s', idx, nChans, chanNames(ci)));
-            legend(ax, legendEntries, legendLabels, 'Location','eastoutside', 'FontSize',8);
+            legend(ax, legendEntries, legendLabels, 'Location','eastoutside', 'FontSize',14);
         end
 
+        applyPlotDefaults(fig);
         hCounter.String = sprintf('%d / %d', idx, nChans);
     end
 

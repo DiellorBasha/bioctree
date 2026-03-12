@@ -59,6 +59,7 @@ function plotGlobalROIs(alphaMask, sigs, fs, frameInfo, opts)
         figure('Name', 'Global alpha ROIs over alpha index');
         plotsigroi(alphaMask, alphaGlobal_samp);
         title('Global alpha ROIs over alpha power index');
+        applyPlotDefaults(gcf);
     end
 
     % ---- Individual channels ----
@@ -78,5 +79,6 @@ function plotGlobalROIs(alphaMask, sigs, fs, frameInfo, opts)
         figure('Name', sprintf('Alpha ROIs — %s', chName));
         plotsigroi(alphaMask, x);
         title(sprintf('Global alpha ROIs — channel %d (%s)', ci, chName));
+        applyPlotDefaults(gcf);
     end
 end
