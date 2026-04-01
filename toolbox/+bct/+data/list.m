@@ -10,6 +10,7 @@ function ids = list(options)
 %   Hemi     - Filter by hemisphere: "lh" | "rh"
 %   Surface  - Filter by surface type: "pial" | "white" | "inflated"
 %   Tags     - Filter by tags (string array)
+%   Atlas    - Filter to assets with canonical atlas file available (e.g., "aparc")
 %
 % Outputs:
 %   ids - String array of asset IDs
@@ -37,6 +38,7 @@ arguments
     options.Hemi (1,1) string = ""
     options.Surface (1,1) string = ""
     options.Tags (1,:) string = string.empty
+    options.Atlas (1,1) string = ""
 end
 
 % Get catalog
@@ -68,6 +70,23 @@ if ~isempty(options.Tags)
         end
     end
     mask = mask & tag_mask;
+end
+
+if options.Atlas ~= ""
+    data_dir = fileparts(mfilename('fullpath'));
+    assets_dir = fullfile(data_dir, 'assets');
+    atlas_mask = false(size(catalog));
+
+    for i = 1:numel(catalog)
+        if startsWith(catalog(i).Dataset, "fsaverage") && ismember(catalog(i).Hemi, ["lh", "rh"])
+            atlasFile = sprintf('%s_hemi-%s_atlas-%s.mat', ...
+                catalog(i).Dataset, catalog(i).Hemi, options.Atlas);
+            atlasPath = fullfile(assets_dir, catalog(i).Dataset, 'surf', atlasFile);
+            atlas_mask(i) = exist(atlasPath, 'file') == 2;
+        end
+    end
+
+    mask = mask & atlas_mask;
 end
 
 % Extract IDs

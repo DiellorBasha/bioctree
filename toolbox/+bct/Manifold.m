@@ -35,6 +35,10 @@ classdef Manifold < handle
         Attributes       % Group-level and dataset-level metadata (schema-driven)
     end
 
+    properties (SetAccess = public)
+        Atlas = []       % Optional atlas struct (e.g., from bct.data.load or freesurfer_get_atlas)
+    end
+
     properties (Access = private)
         Cache  % Unified cache structure with namespaces: geometry, topology, operators, eigenmodes
     end
@@ -278,6 +282,11 @@ classdef Manifold < handle
             
             if obj.hasCached('eigenmodes')
                 S.eigenmodes = obj.eigenmodes;
+            end
+            
+            % Add atlas if present
+            if ~isempty(obj.Atlas)
+                S.atlas = localAtlasToSchema(obj.Atlas);
             end
         end
 
@@ -3000,4 +3009,95 @@ classdef Manifold < handle
             modulatedSignal = bct.manifold.operator.modulate(obj, signal, eigenmodeSpec, varargin{:});
         end
     end
+end
+
+%% LOCAL HELPER FUNCTION
+function S = localAtlasToSchema(AtlasStruct)
+%LOCALATLASTOSCHEMA Convert atlas struct to schema-compliant structure for zarr
+%
+% Converts freesurfer_get_atlas or bct.data.load Atlas output to format
+% suitable for zarr serialization via zarr.writeFromSchema.
+%
+% Atlas struct expected fields:
+%   .SubjectDir         - Path to FreeSurfer subject directory
+%   .SubjectName        - Subject name (e.g., "fsaverage6")
+%   .Hemi               - "lh" or "rh"
+%   .Name               - Atlas name (e.g., "aparc", "aparc.a2009s")
+%   .AnnotPath          - Path to source .annot file
+%   .RegionNames        - [nR×1] string array of region names
+%   .RegionCodes        - [nR×1] uint32 array of region ID codes
+%   .RegionColorRGBA    - [nR×4] uint8 array of RGBA colors
+%   .VertexRegionIndex  - [nV×1] int32 array, region index per vertex (0=unmapped)
+%   .UnknownVertices    - [k×1] int32 array of unmapped vertex indices
+%   .ColorTable         - FreeSurfer colortable struct (optional)
+
+S = struct();
+
+% Top-level attributes (scalar strings/values: stored in group .zattrs)
+S.Attributes = struct(...
+    'SubjectDir', char(string(AtlasStruct.SubjectDir)), ...
+    'SubjectName', char(string(AtlasStruct.SubjectName)), ...
+    'Hemi', char(string(AtlasStruct.Hemi)), ...
+    'Name', char(string(AtlasStruct.Name)), ...
+    'AnnotPath', char(string(AtlasStruct.AnnotPath)));
+
+% Numeric dataset: VertexRegionIndex (critical field)
+if isfield(AtlasStruct, 'VertexRegionIndex')
+    S.VertexRegionIndex = struct(...
+        'value', int32(AtlasStruct.VertexRegionIndex), ...
+        'attributes', struct(...
+            'dtype', 'int32', ...
+            'support', 'vertex', ...
+            'description', 'Region index per vertex (0=unmapped)', ...
+            'num_regions', int32(max(AtlasStruct.VertexRegionIndex))));
+end
+
+% String fields stored as cell char arrays (zarr-compatible via JSON attributes)
+if isfield(AtlasStruct, 'RegionNames')
+    % Convert string array to cell char for zarr compatibility
+    regionNames = AtlasStruct.RegionNames;
+    if isstring(regionNames)
+        regionNames = cellstr(regionNames);
+    end
+    S.Attributes.RegionNames = regionNames;
+    S.Attributes.NumRegions = int32(length(regionNames));
+end
+
+% Numeric field: RegionCodes
+if isfield(AtlasStruct, 'RegionCodes')
+    codes = int32(AtlasStruct.RegionCodes);
+    S.Attributes.RegionCodes = codes;
+end
+
+% Numeric field: RegionColorRGBA
+if isfield(AtlasStruct, 'RegionColorRGBA')
+    % Write as dataset (not attribute) since it's potentially large
+    S.RegionColorRGBA = struct(...
+        'value', uint8(AtlasStruct.RegionColorRGBA), ...
+        'attributes', struct(...
+            'dtype', 'uint8', ...
+            'shape', 'nR×4', ...
+            'description', 'Region RGBA colors from FreeSurfer colortable'));
+end
+
+% Optional: UnknownVertices (unmapped vertex indices)
+if isfield(AtlasStruct, 'UnknownVertices') && ~isempty(AtlasStruct.UnknownVertices)
+    S.UnknownVertices = struct(...
+        'value', int32(AtlasStruct.UnknownVertices), ...
+        'attributes', struct(...
+            'dtype', 'int32', ...
+            'description', 'Vertex indices not assigned to any region'));
+end
+
+% Optional: ColorTable metadata (stored as attributes to avoid type issues)
+if isfield(AtlasStruct, 'ColorTable') && ~isempty(AtlasStruct.ColorTable)
+    ctab = AtlasStruct.ColorTable;
+    if isfield(ctab, 'numEntries')
+        S.Attributes.ColorTable_numEntries = int32(ctab.numEntries);
+    end
+    if isfield(ctab, 'orig_tab')
+        S.Attributes.ColorTable_orig_tab = char(string(ctab.orig_tab));
+    end
+end
+
 end

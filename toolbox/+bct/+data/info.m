@@ -17,6 +17,7 @@ function info = info(id)
 %          .FullPath    - Absolute file path
 %          .Default     - Whether this is the default asset
 %          .Tags        - Descriptive tags
+%          .AvailableAtlases - Available atlas names (e.g., ["aparc", "aparc.a2009s"])
 %          .Exists      - Whether file exists on disk
 %          .NumVertices - Number of vertices (if file exists)
 %          .NumFaces    - Number of faces (if file exists)
@@ -60,6 +61,7 @@ info.Surface = entry.Surface;
 info.Path = entry.Path;
 info.Default = entry.Default;
 info.Tags = entry.Tags;
+info.AvailableAtlases = entry.AvailableAtlases;
 
 % Build full path
 data_dir = fileparts(mfilename('fullpath'));

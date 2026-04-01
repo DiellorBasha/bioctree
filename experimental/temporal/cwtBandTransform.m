@@ -232,3 +232,4 @@ function [tds, t, cwtInfo] = cwtBandTransform(sds, opts)
         fprintf('  Mode: lazy TransformedDatastore (channels processed on read)\n');
     end
 end
+

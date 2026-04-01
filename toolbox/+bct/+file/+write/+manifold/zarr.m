@@ -33,6 +33,7 @@ function zarr(zarrPath, M, options)
 %     topology/          (adjacency, boundary, halfedge - sparse as COO)
 %     operators/         (mass, stiffness, DEC - sparse as COO)
 %     eigenmodes/        (eigenvalues, eigenvectors - chunked by 100 modes)
+%     atlas/             (optional: FreeSurfer atlas with region mappings)
 %
 % Examples:
 %   % Write everything available (auto-detect from cache)
@@ -40,6 +41,13 @@ function zarr(zarrPath, M, options)
 %   geom = M.geometry();
 %   ops = M.operators();
 %   bct.file.write.manifold.zarr('mesh.zarr', M);
+%
+%   % Write with atlas (attach before write)
+%   mesh = bct.data.load('Id', 'fsaverage_rh_pial');  % mesh includes atlas
+%   M = bct.Manifold(mesh);
+%   M.Atlas = mesh.Atlas;       % Attach FreeSurfer atlas for region mapping
+%   geom = M.geometry();
+%   bct.file.write.manifold.zarr('mesh_with_atlas.zarr', M);
 %
 %   % Force compute and write specific groups
 %   bct.file.write.manifold.zarr('mesh.zarr', M, ...

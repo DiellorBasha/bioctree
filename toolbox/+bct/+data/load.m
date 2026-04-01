@@ -13,6 +13,8 @@ function mesh = load(id, options)
 %   Dataset  - Dataset name (e.g., "fsaverage6", "brainstorm")
 %   Hemi     - Hemisphere: "lh" | "rh" | "both"
 %   Surface  - Surface type: "pial" | "white" | "mid" | "head" | "innerskull" | "outerskull"
+%   Atlas    - Atlas name to load when canonical atlas exists (default: "aparc")
+%   IncludeAtlas - true (default) to attach atlas as mesh.Atlas when available
 %
 % Outputs:
 %   mesh - Struct with fields:
@@ -44,6 +46,8 @@ arguments
     options.Dataset (1,1) string = ""
     options.Hemi (1,1) string = ""
     options.Surface (1,1) string = ""
+    options.Atlas (1,1) string = "aparc"
+    options.IncludeAtlas (1,1) logical = true
 end
 
 % Get catalog
@@ -179,6 +183,20 @@ if isfield(data, 'Atlas')
     meta.HasAtlas = true;
 end
 
+% Load canonical atlas (if available) for fsaverage hemisphere assets.
+atlas = [];
+if options.IncludeAtlas
+    atlas = localLoadAtlas(assets_dir, entry, options.Atlas);
+    if ~isempty(atlas)
+        meta.HasAtlas = true;
+        if isfield(atlas, 'Name')
+            meta.AtlasName = string(atlas.Name);
+        else
+            meta.AtlasName = options.Atlas;
+        end
+    end
+end
+
 % Construct output struct
 mesh = struct();
 mesh.Vertices = V;
@@ -195,6 +213,42 @@ if isfield(data, 'VertNormals')
 end
 if isfield(data, 'Curvature')
     mesh.Curvature = data.Curvature;
+end
+
+if ~isempty(atlas)
+    mesh.Atlas = atlas;
+end
+
+end
+
+function atlas = localLoadAtlas(assets_dir, entry, atlasName)
+atlas = [];
+
+if ~startsWith(entry.Dataset, "fsaverage")
+    return;
+end
+
+if ~ismember(entry.Hemi, ["lh", "rh"])
+    return;
+end
+
+atlasFile = sprintf('%s_hemi-%s_atlas-%s.mat', entry.Dataset, entry.Hemi, atlasName);
+atlasPath = fullfile(assets_dir, entry.Dataset, 'surf', atlasFile);
+if ~exist(atlasPath, 'file')
+    return;
+end
+
+atlasData = load(atlasPath);
+if isfield(atlasData, 'Atlas')
+    atlas = atlasData.Atlas;
+    return;
+end
+
+% Backward-compatible fallback if atlas was saved as loose fields.
+atlas = struct();
+fields = fieldnames(atlasData);
+for i = 1:numel(fields)
+    atlas.(fields{i}) = atlasData.(fields{i});
 end
 
 end

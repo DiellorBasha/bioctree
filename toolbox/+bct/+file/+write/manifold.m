@@ -31,16 +31,20 @@ function manifold(file, M, options)
 %   - Zarr stores sparse matrices as COO format
 %
 % Examples:
-%   % Cache desired data first
+%   % Load and cache desired data
 %   M = bct.data.load('Id', 'fsaverage_rh_pial');
 %   geom = M.geometry;    % Cache geometry
 %   topo = M.topology;    % Cache topology
 %   ops = M.operators;    % Cache operators
 %   eigen = M.eigenmodes(100);  % Cache eigenmodes
 %   
-%   % Write everything cached
+%   % Write everything cached (with optional atlas)
+%   mesh = bct.data.load('Id', 'fsaverage_rh_pial');
+%   if isfield(mesh, 'Atlas')
+%       M.Atlas = mesh.Atlas;  % Attach FreeSurfer atlas for region mapping
+%   end
 %   bct.file.write.manifold('mesh.h5', M);    % HDF5
-%   bct.file.write.manifold('mesh.zarr', M);  % Zarr
+%   bct.file.write.manifold('mesh.zarr', M);  % Zarr (with atlas if attached)
 %
 %   % Explicit format
 %   bct.file.write.manifold('mesh', M, 'Format', 'zarr');
@@ -48,11 +52,6 @@ function manifold(file, M, options)
 %   % Write core only (don't cache anything)
 %   M = bct.Manifold(V, F);
 %   bct.file.write.manifold('mesh.h5', M);  % Only V, F, E
-%       'Geometry', true, ...
-%       'Topology', true, ...
-%       'Operators', true, ...
-%       'Eigenmodes', true, ...
-%       'NumModes', 200);
 %
 % Modular Functions:
 %   For writing individual groups, use:
